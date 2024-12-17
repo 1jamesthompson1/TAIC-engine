@@ -7,6 +7,8 @@ from rich import print, table
 
 class assistant:
     def __init__(self, openai_api_key, voyageai_api_key, db_uri):
+        print(f"[bold]Creating Chatbot[/bold]")
+        print(f"connecting to database at {db_uri}")
         self.vector_db = lancedb.connect(db_uri)
         table_name = "all_document_types"
         self.all_document_types_table = self.vector_db.open_table(table_name)

@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "rag-chatbot"
+name = "TAIC smart assistant"
 version = "0.1.0"
-description = ""
+description = "A demo app that uses a vector database of accident investigation reports from TAIC, ATSB and TSB to assist investigators and reearchers."
 authors = ["1jamesthompson1 <1jamesthompson1@gmail.com>"]
 readme = "README.md"
 
@@ -17,6 +17,7 @@ rich = "^13.9.4"
 authlib = "^1.3.2"
 fastapi = "^0.115.6"
 starlette = "^0.41.0"
+itsdangerous = "^2.2.0"
 
 [tool.poetry.scripts]
 chatbot = "app:main"

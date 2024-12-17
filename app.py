@@ -41,7 +41,7 @@ oauth.register(
     access_token_url=f'https://login.microsoftonline.com/{AZURE_TENANT_ID}/oauth2/v2.0/token',
     access_token_params=None,
     refresh_token_url=None,
-    redirect_uri='http://localhost:8000/auth',
+    redirect_uri='/auth',
     client_kwargs={'scope': 'openid profile email'},
 )
 
@@ -68,7 +68,11 @@ async def logout(request: Request):
 
 @app.route('/login')
 async def login(request: Request):
-    redirect_uri = request.url_for('auth')
+    # Forcing deployed url to use https. This is because it seems to default to using http.
+    if "localhost" not in request.url.hostname and "https" not in request.url.scheme:
+        redirect_uri = 'https://' + request.url.hostname + request.url_for('auth').path
+    else:
+        redirect_uri = request.url_for('auth')
     return await oauth.azure.authorize_redirect(request, redirect_uri)
 
 @app.route('/auth')
@@ -81,7 +85,7 @@ async def auth(request: Request):
     request.session['user'] = user
     return RedirectResponse(url='/')
 
-def handle_undo(self, history, undo_data: gr.UndoData):
+def handle_undo(history, undo_data: gr.UndoData):
     return history[:undo_data.index], history[undo_data.index]['content']
 
 def handle_submit(user_input, history=None):
@@ -93,7 +97,7 @@ def handle_submit(user_input, history=None):
 chatbot_instance = assistant.assistant(
     openai_api_key=os.getenv("OPENAI_API_KEY"),
     voyageai_api_key=os.getenv("VOYAGEAI_API_KEY"),
-    db_uri=os.getenv("db_URI")
+    db_uri=os.getenv("VECTORDB_PATH")
 )
 
 def get_welcome_message(request: gr.Request):
@@ -135,6 +139,7 @@ with gr.Blocks(
     )
 
 app = gr.mount_gradio_app(app, assistant_page, path="/assistant", auth_dependency=get_user, show_api=False)
+
 
 with gr.Blocks() as login_page:
     gr.Button("Login", link="/login")
