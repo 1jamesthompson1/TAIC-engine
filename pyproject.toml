@@ -19,9 +19,14 @@ fastapi = "^0.115.6"
 starlette = "^0.41.0"
 itsdangerous = "^2.2.0"
 azure-data-tables = "^12.6.0"
+datasets = "^3.2.0"
 
 [tool.poetry.scripts]
 chatbot = "app:main"
+
+[tool.poetry.group.dev.dependencies]
+huggingface-hub = {extras = ["cli"], version = "^0.27.0"}
+ipykernel = "^6.29.5"
 
 [build-system]
 requires = ["poetry-core"]
