@@ -5,9 +5,10 @@ import lancedb
 from datetime import datetime
 from rich import print, table
 
+
 class assistant:
     def __init__(self, openai_api_key, voyageai_api_key, db_uri):
-        print(f"[bold]Creating Chatbot[/bold]")
+        print("[bold]Creating Chatbot[/bold]")
         print(f"connecting to database at {db_uri}")
         self.vector_db = lancedb.connect(db_uri)
         table_name = "all_document_types"
@@ -15,15 +16,19 @@ class assistant:
         self.openai_client = openai.OpenAI(api_key=openai_api_key)
         self.voyageai_client = voyageai.Client(api_key=voyageai_api_key)
 
-        print(f"[bold]Created Chatbot[/bold]")
+        print("[bold]Created Chatbot[/bold]")
         chatbot_config = table.Table(title="🛠️  Chatbot Configuration 🛠️")
 
         chatbot_config.add_column("Name")
         chatbot_config.add_column("Value")
         chatbot_config.add_row("Database URI", db_uri)
         chatbot_config.add_row("Table Name", table_name)
-        chatbot_config.add_row("Table Size", f"{self.all_document_types_table.count_rows()} rows")
-        chatbot_config.add_row("Columns", ", ".join(self.all_document_types_table.schema.names))
+        chatbot_config.add_row(
+            "Table Size", f"{self.all_document_types_table.count_rows()} rows"
+        )
+        chatbot_config.add_row(
+            "Columns", ", ".join(self.all_document_types_table.schema.names)
+        )
         print(chatbot_config)
 
         if "agency" not in self.all_document_types_table.schema.names:
@@ -34,13 +39,23 @@ class assistant:
             query, model="voyage-large-2-instruct", input_type="query", truncation=False
         ).embeddings[0]
 
-    def knowledge_search(self, query: str, type: str, year_range: tuple[int, int], document_type: list[str], modes: list[str], agencies: list[str]):
+    def knowledge_search(
+        self,
+        query: str,
+        type: str,
+        year_range: tuple[int, int],
+        document_type: list[str],
+        modes: list[str],
+        agencies: list[str],
+    ):
         limit = 100
         where_statement = []
         if year_range:
-            where_statement.append(f"year >= {year_range[0]} and year <= {year_range[1]}")
+            where_statement.append(
+                f"year >= {year_range[0]} and year <= {year_range[1]}"
+            )
         if document_type:
-            document_types = ', '.join(f'"{dt}"' for dt in document_type)
+            document_types = ", ".join(f'"{dt}"' for dt in document_type)
             where_statement.append(f"document_type in ({document_types})")
         if modes and len(modes) > 1:
             where_statement.append(f"mode in {tuple(modes)}")
@@ -51,7 +66,7 @@ class assistant:
         elif agencies and len(agencies) == 1:
             where_statement.append(f"agency = '{agencies[0]}'")
 
-        where_statement = ' AND '.join(where_statement)
+        where_statement = " AND ".join(where_statement)
 
         if query == "" or query is None:
             final_query = None
@@ -61,20 +76,30 @@ class assistant:
             final_query = self.embed_query(query)
         else:
             raise ValueError(f"type must be 'fts' or 'vector' not {type}")
-        
-        query_table = table.Table(title="🔍 Conducting search with 🔍", show_header=True, title_style="bold blue")
+
+        query_table = table.Table(
+            title="🔍 Conducting search with 🔍",
+            show_header=True,
+            title_style="bold blue",
+        )
         query_table.add_column("Parameter")
         query_table.add_column("Value")
-        query_table.add_row("Query", final_query if isinstance(final_query, str) else 'vector embeddings of ' + query)
+        query_table.add_row(
+            "Query",
+            final_query
+            if isinstance(final_query, str)
+            else "vector embeddings of " + query,
+        )
         if where_statement:
             query_table.add_row("Filters", where_statement)
         print(query_table)
 
-        results = (self.all_document_types_table
-            .search(final_query, query_type=type)
+        results = (
+            self.all_document_types_table.search(final_query, query_type=type)
             .where(where_statement, prefilter=True)
             .limit(limit)
-            .to_pandas()).drop(columns=["vector"])
+            .to_pandas()
+        ).drop(columns=["vector"])
 
         return results
 
@@ -82,21 +107,25 @@ class assistant:
         if history == []:
             raise ValueError("history is empty")
 
-        return self.openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"""
+        return (
+            self.openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """
                     You are part of a chatbot that help users add titles to their conversation. You will recieve the conversation and you are too response with no more than 5 works summary of the conversation.
                     Just respond with the title and nothing else.
-                    """
-                },
-                history[-1]
-            ]
-        ).choices[0].message.content
+                    """,
+                    },
+                    history[-1],
+                ],
+            )
+            .choices[0]
+            .message.content
+        )
 
-    def process_input(self,history=[]):
+    def process_input(self, history=[]):
         system_message = {
             "role": "system",
             "content": f"""
@@ -107,8 +136,8 @@ When talking about reports it is important to use the document ID and report IDs
 Here is some more dataset information
 There are {len(self.all_document_types_table.schema.names)} columns with {self.all_document_types_table.count_rows()} rows.
 The columns available are: {"".join(self.all_document_types_table.schema.names)}
-"""}
-
+""",
+        }
 
         response_stream = self.openai_client.chat.completions.create(
             model="gpt-4o",
@@ -118,8 +147,7 @@ The columns available are: {"".join(self.all_document_types_table.schema.names)}
                     "type": "function",
                     "function": {
                         "name": "search",
-                        "description":
-"""Search for safety issues and recommendations from the New Zealand Transport Accident Investigation Commission. This function searches a vector database.
+                        "description": """Search for safety issues and recommendations from the New Zealand Transport Accident Investigation Commission. This function searches a vector database.
 Eample function calls:
 ```json
 {
@@ -149,52 +177,56 @@ Eample function calls:
                             "properties": {
                                 "query": {
                                     "type": "string",
-                                    "description": "The query to search for. If left as an empty string it will return all results that match the other paramters."
+                                    "description": "The query to search for. If left as an empty string it will return all results that match the other paramters.",
                                 },
                                 "type": {
                                     "type": "string",
                                     "enum": ["fts", "vector"],
-                                    "description": "The type of search to perform. fts should be used if the query is asking a specific question about a organisation, organisation etc. Otherwsie for more general information use vector, it will embed your query and search the vector database."
+                                    "description": "The type of search to perform. fts should be used if the query is asking a specific question about a organisation, organisation etc. Otherwsie for more general information use vector, it will embed your query and search the vector database.",
                                 },
                                 "year_range": {
                                     "type": "array",
                                     "description": "An array specifying the start and end years for filtering results. Valid range is 2000-2023.",
-                                    "items": {"type": "number"}
+                                    "items": {"type": "number"},
                                 },
                                 "document_type": {
                                     "type": "array",
                                     "description": "A list of document types to filter the search results. Valid types are 'safety_issue', 'recommendation', 'report_section'.",
-                                    "items": {"type": "string"}
+                                    "items": {"type": "string"},
                                 },
                                 "modes": {
                                     "type": "array",
                                     "description": "A list of modes to filter the search results. Valid modes are 0, 1, and 2. Which are aviation, rail, and marine respectively.",
-                                    "items": {"type": "string"}
+                                    "items": {"type": "string"},
                                 },
                                 "agencies": {
                                     "type": "array",
                                     "description": "A list of agencies to filter the search results. Valid agencies are TSB, ATSB, and TAIC. These are Transport Safety Board (Canada), Australian Transport Safety Board, and Transport Accident Investigation Commission (New Zealand) respectively.",
-                                    "items": {"type": "string"}
-                                }
+                                    "items": {"type": "string"},
+                                },
                             },
-                            "required": ["query", "type", "year_range", "document_type", "modes", "agencies"],
+                            "required": [
+                                "query",
+                                "type",
+                                "year_range",
+                                "document_type",
+                                "modes",
+                                "agencies",
+                            ],
                             "additionalProperties": False,
-                            "strict": True
-                        }
-                    }
+                            "strict": True,
+                        },
+                    },
                 }
             ],
-            stream=True
-        )   
+            stream=True,
+        )
         function_arguments_str = ""
         function_name = ""
         tool_call_id = ""
         is_collecting_function_args = False
 
-        history.append({
-            "role": "assistant",
-            "content": ""
-        })
+        history.append({"role": "assistant", "content": ""})
 
         for part in response_stream:
             delta = part.choices[0].delta
@@ -213,7 +245,7 @@ Eample function calls:
                     tool_call_id = tool_call.id
                 if tool_call.function.name:
                     function_name = tool_call.function.name
-                
+
                 # Process function arguments delta
                 if tool_call.function.arguments:
                     function_arguments_str += tool_call.function.arguments
@@ -222,14 +254,17 @@ Eample function calls:
             if finish_reason == "tool_calls" and is_collecting_function_args:
                 break
 
-
         if not is_collecting_function_args:
             return history
 
         function_arguments = json.loads(function_arguments_str)
 
-        history[-1]["metadata"] = {"title": f"🔍 Searching database for more information" }
-        history[-1]["content"] += f"Using these parameters to search the database: {function_arguments_str}"
+        history[-1]["metadata"] = {
+            "title": "🔍 Searching database for more information"
+        }
+        history[-1]["content"] += (
+            f"Using these parameters to search the database: {function_arguments_str}"
+        )
         yield history
 
         results = self.knowledge_search(**function_arguments)
@@ -242,39 +277,41 @@ Eample function calls:
                     "type": "function",
                     "function": {
                         "name": function_name,
-                        "arguments": function_arguments_str
-                    }
+                        "arguments": function_arguments_str,
+                    },
                 }
-            ]
+            ],
         }
 
-        messages = [system_message] + history + [tool_call_message] + [
+        messages = (
+            [system_message]
+            + history
+            + [tool_call_message]
+            + [
+                {
+                    "role": "tool",
+                    "content": results.to_json(orient="records"),
+                    "tool_call_id": tool_call_id,
+                },
+            ]
+        )
+
+        html_table = f"<style>table {{ width: 100%; font-size: 24px; }} th, td {{ padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }} th {{ background-color: #f2f2f2; }} </style>{results.to_html(index=False)}"
+
+        history.append(
             {
-                "role": "tool",
-                "content": results.to_json(orient="records"),
-                "tool_call_id": tool_call_id
-            },
-        ]
-
-        html_table = f"<style>table {{ width: 100%; font-size: 16px; }} th, td {{ padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }} th {{ background-color: #f2f2f2; }} </style>{results.to_html(index=False)}"
-
-        history.append({
-            "role": "assistant",
-            "content": html_table,
-            "metadata": {"title": f"📖 Reading {results.shape[0]} results"}
-        })
+                "role": "assistant",
+                "content": html_table,
+                "metadata": {"title": f"📖 Reading {results.shape[0]} results"},
+            }
+        )
         yield history
 
         rag_response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            stream=True
+            model="gpt-4o", messages=messages, stream=True
         )
 
-        history.append({
-            "role": "assistant",
-            "content": ""
-        })
+        history.append({"role": "assistant", "content": ""})
 
         for part in rag_response:
             delta = part.choices[0].delta
@@ -284,6 +321,5 @@ Eample function calls:
             if delta.content:
                 history[-1]["content"] += delta.content
                 yield history
-
 
         return history

@@ -199,7 +199,6 @@ def get_user_conversations(request: gr.Request):
     )
 
     print(f"[bold]Found {len(previous_conversations)} user conversations[/bold]")
-    print(previous_conversations)
     return previous_conversations
 
 
