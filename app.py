@@ -106,7 +106,7 @@ def handle_submit(user_input, history=None):
         history = []
     history.append({"role": "user", "content": user_input})
 
-    return "", history
+    return gr.Textbox(interactive=False, value=None), history
 
 
 def create_or_update_conversation(request: gr.Request, conversation_id, history):
@@ -263,6 +263,7 @@ with gr.Blocks(
                 type="messages",
                 height="90%",
                 min_height=400,
+                show_label=False,
                 avatar_images=(
                     None,
                     "https://www.taic.org.nz/themes/custom/taic/favicon/android-icon-192x192.png",
@@ -270,7 +271,9 @@ with gr.Blocks(
             )
 
             input_text = gr.Textbox(
-                placeholder="Type your message here...", show_label=False
+                placeholder="Please type your message here...",
+                show_label=False,
+                submit_btn="Send",
             )
 
     chatbot_interface.undo(
@@ -285,12 +288,6 @@ with gr.Blocks(
         queue=False,
     )
 
-    chatbot_interface.change(
-        create_or_update_conversation,
-        inputs=[conversation_id, chatbot_interface],
-        outputs=None,
-    )
-
     input_text.submit(
         fn=handle_submit,
         inputs=[input_text, chatbot_interface],
@@ -300,6 +297,14 @@ with gr.Blocks(
         assistant_instance.process_input,
         inputs=[chatbot_interface],
         outputs=[chatbot_interface],
+    ).then(
+        create_or_update_conversation,
+        inputs=[conversation_id, chatbot_interface],
+        outputs=None,
+    ).then(
+        lambda: gr.Textbox(interactive=True),
+        None,
+        input_text,
     )
 
 

@@ -296,12 +296,10 @@ Eample function calls:
             ]
         )
 
-        html_table = f"<style>table {{ width: 100%; font-size: 24px; }} th, td {{ padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }} th {{ background-color: #f2f2f2; }} </style>{results.to_html(index=False)}"
-
         history.append(
             {
                 "role": "assistant",
-                "content": html_table,
+                "content": results.to_html(index=False),
                 "metadata": {"title": f"📖 Reading {results.shape[0]} results"},
             }
         )
