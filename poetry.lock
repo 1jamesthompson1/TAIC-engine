@@ -265,6 +265,23 @@ typing-extensions = ">=4.6.0"
 aio = ["aiohttp (>=3.0)"]
 
 [[package]]
+name = "azure-data-tables"
+version = "12.6.0"
+description = "Microsoft Azure Azure Data Tables Client Library for Python"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "azure_data_tables-12.6.0-py3-none-any.whl", hash = "sha256:9869620765142d7caec7a6adca733f617ddcd006a810876f0cf95eea4f5b9692"},
+    {file = "azure_data_tables-12.6.0.tar.gz", hash = "sha256:e0d5598113855f9114fd7671623d35509f83772970cfdc597901b35f42dc3134"},
+]
+
+[package.dependencies]
+azure-core = ">=1.29.4"
+isodate = ">=0.6.1"
+typing-extensions = ">=4.3.0"
+yarl = ">=1.0"
+
+[[package]]
 name = "azure-datalake-store"
 version = "0.0.53"
 description = "Azure Data Lake Store Filesystem Client Library for Python"
@@ -2795,4 +2812,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.13"
-content-hash = "910d0124f7eb2a3957b15ebfaabe6218e93731f9909253d3f9372e70bfc9673a"
+content-hash = "411a1a2f448b72fa71fd4696910fd30771255b5fa0b7e6c04746b3ff4f1db87f"

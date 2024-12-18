@@ -78,6 +78,24 @@ class assistant:
 
         return results
 
+    def provide_conversation_title(self, history=[]):
+        if history == []:
+            raise ValueError("history is empty")
+
+        return self.openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""
+                    You are part of a chatbot that help users add titles to their conversation. You will recieve the conversation and you are too response with no more than 5 works summary of the conversation.
+                    Just respond with the title and nothing else.
+                    """
+                },
+                history[-1]
+            ]
+        ).choices[0].message.content
+
     def process_input(self,history=[]):
         system_message = {
             "role": "system",
