@@ -1504,18 +1504,6 @@ docs = ["myst-parser", "pydata-sphinx-theme", "sphinx-autodoc-typehints", "sphin
 test = ["ipykernel", "pre-commit", "pytest (<8)", "pytest-cov", "pytest-timeout"]
 
 [[package]]
-name = "lance"
-version = "1.2.1"
-description = "A helper package to generate code from declarative json"
-optional = false
-python-versions = ">=3.6"
-groups = ["main"]
-files = [
-    {file = "lance-1.2.1-py3-none-any.whl", hash = "sha256:f9ac09055c7935c8d351bccd5f0deda9ecfce6b31fb1acdf650ef97140114137"},
-    {file = "lance-1.2.1.tar.gz", hash = "sha256:2849817a5eb7f5e610a4cf766bc3bd096d7f9e230bcc5a60c8dd3986510705e4"},
-]
-
-[[package]]
 name = "lancedb"
 version = "0.21.0"
 description = "lancedb"
@@ -2738,6 +2726,34 @@ docs = ["sphinx", "sphinx-rtd-theme", "zope.interface"]
 tests = ["coverage[toml] (==5.0.4)", "pytest (>=6.0.0,<7.0.0)"]
 
 [[package]]
+name = "pylance"
+version = "0.25.0"
+description = "python wrapper for Lance columnar format"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "pylance-0.25.0-cp39-abi3-macosx_10_15_x86_64.whl", hash = "sha256:13d5b8d93ac2200f01a89b257cac80481aeaebab672aacb9f3defee1aece1864"},
+    {file = "pylance-0.25.0-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:b39f4bd7f27d70c8d23d2be26f526ef6262a747312c5ff00fa3d9d91afa3a0dc"},
+    {file = "pylance-0.25.0-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b0a5c46770b2c1b79fb44e1292c21fcabb8664201eb0be3b4ecaf3a21399b882"},
+    {file = "pylance-0.25.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:db88bf60050c6f295a194e7835d4199a4b9dbb084e7249d67f97c2da930a4de3"},
+    {file = "pylance-0.25.0-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:bd0ba044f87af292683cfbd23d509fdeaa63a6c450b919d3a6f7f600cdd20512"},
+    {file = "pylance-0.25.0-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:18f581505550856ff6038bba71b7f18f71b825d32235c2d09c71a6ae5b8018a6"},
+    {file = "pylance-0.25.0-cp39-abi3-win_amd64.whl", hash = "sha256:c4965b86658aed58b81cb7b4c4940f41dd994c2b6ecf9a1cdab64d23ddfa51ee"},
+]
+
+[package.dependencies]
+numpy = ">=1.22"
+pyarrow = ">=14"
+
+[package.extras]
+benchmarks = ["pytest-benchmark"]
+dev = ["pyright", "ruff (==0.4.1)"]
+ray = ["ray[data] (<2.38) ; python_full_version < \"3.12.0\""]
+tests = ["boto3", "datasets", "duckdb", "ml-dtypes", "pandas", "pillow", "polars[pandas,pyarrow]", "pytest", "tensorflow", "tqdm"]
+torch = ["torch"]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 description = "Extensions to the standard Python datetime module"
@@ -3731,4 +3747,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "82a20c4b33ea39611adf7e0d4f4904016066dd584a210b37ac4af5afcb597b60"
+content-hash = "3421731ce8d11eb2e4e5525cc1347bf9908ac1ca9c2efd9335c88e8a9fa609f6"
