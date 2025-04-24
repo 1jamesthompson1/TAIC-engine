@@ -42,7 +42,7 @@ class Searcher:
         where_statement = []
         if year_range:
             where_statement.append(
-                f"year >= {year_range[0]} and year <= {year_range[1]}"
+                f"year >= {int(year_range[0])} and year <= {int(year_range[1])}"
             )
         if document_type:
             document_types = ", ".join(f'"{dt}"' for dt in document_type)
@@ -50,9 +50,9 @@ class Searcher:
         if modes and len(modes) > 1:
             where_statement.append(f"mode in {tuple([str(mode) for mode in modes])}")
         elif modes and len(modes) == 1:
-            where_statement.append(f"mode = '{modes[0]}'")
+            where_statement.append(f"mode = '{int(modes[0])}'")
         if agencies and len(agencies) > 1:
-            where_statement.append(f"agency in {tuple(agencies)}")
+            where_statement.append(f"agency in {tuple(map(int, agencies))}")
         elif agencies and len(agencies) == 1:
             where_statement.append(f"agency = '{agencies[0]}'")
 
@@ -91,6 +91,9 @@ class Searcher:
             .to_pandas()
         ).drop(columns=["vector"])
 
+        print(
+            f"[bold green]Found {len(results)} results for query: {query}[/bold green]"
+        )
         return results
     
     def embed_query(self, query: str):

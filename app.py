@@ -6,6 +6,7 @@ from starlette.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 from authlib.integrations.starlette_client import OAuth, OAuthError
 import gradio as gr
+from gradio_rangeslider import RangeSlider
 import dotenv
 import os
 import uvicorn
@@ -97,6 +98,11 @@ async def auth(request: Request):
     request.session["user"] = user
     return RedirectResponse(url="/")
 
+# =====================================================================
+#
+# Assistant
+#
+# =====================================================================
 
 def handle_undo(history, undo_data: gr.UndoData):
     return history[: undo_data.index], history[undo_data.index]["content"]
@@ -219,13 +225,58 @@ assistant_instance = Assistant.Assistant(
     searcher=searching_instance,
 )
 
+# =====================================================================
+#
+# Knowledge search
+#
+# =====================================================================
+
+def perform_search(
+    query: str,
+    year_range: list[int],
+    document_type: list[str],
+    modes: list[str],
+    agencies: list[str],
+    relevance: float,
+):
+    search_type = (
+        "none"
+        if (query == "" or query is None)
+        else ("fts" if query[0] == '"' and query[-1] == '"' else "vector")
+    )
+    if search_type == "fts":
+        query = query[1:-1]
+
+    document_type_mapping = {
+        "Safety Issues": "safety_issue",
+        "Safety Recommendations": "safety_recommendation",
+        "Report sections": "report_section",
+        "Entire Reports": "report_text",
+    }
+
+    mapped_document_type = [
+        document_type_mapping[dt] for dt in document_type if dt in document_type_mapping
+    ]
+
+
+    results = searching_instance.knowledge_search(
+        query=query,
+        year_range=year_range,
+        document_type=mapped_document_type,
+        modes=modes,
+        agencies=agencies,
+        type=search_type,
+    )
+
+    return results
+
 
 def get_welcome_message(request: gr.Request):
     return request.username
 
 
 with gr.Blocks(
-    title="TAIC smart assistant",
+    title="TAIC smart tools",
     theme=gr.themes.Base(),
     fill_height=True,
     fill_width=True,
@@ -235,57 +286,124 @@ with gr.Blocks(
     assistant_page.load(get_user_conversations, inputs=None, outputs=user_conversations)
 
     with gr.Row():
-        gr.Markdown("# TAIC smart assistant demo")
+        gr.Markdown("# TAIC smart tools")
         gr.Markdown("Logged in as:")
         username = gr.Markdown()
         logout_button = gr.Button("Logout", link="/logout")
 
-    # Redirecto login page if not logged in
+    # Redirect to login page if not logged in
     assistant_page.load(get_welcome_message, inputs=[], outputs=[username])
 
-    with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("### Current conversation")
-            conversation_id = gr.Markdown(str(uuid.uuid4()))
-            gr.Markdown("### Previous conversations")
-
-            @gr.render(inputs=[user_conversations])
-            def render_conversations(conversations):
-                for conversation in conversations:
-                    with gr.Row():
-                        gr.Markdown(
-                            f"### {conversation['conversation_title']}", container=False
-                        )
-
-                        def load_conversation(conversation=conversation):
-                            return conversation["messages"], conversation["id"]
-
-                        gr.Button("load").click(
-                            fn=load_conversation,
-                            inputs=None,
-                            outputs=[chatbot_interface, conversation_id],
-                        )
-                        
-        with gr.Column(scale=3):
+    with gr.Tabs():
+        with gr.TabItem("Assistant"):
             with gr.Row():
-                gr.Markdown("### Chat: ")
+                with gr.Column(scale=1):
+                    gr.Markdown("### Current conversation")
+                    conversation_id = gr.Markdown(str(uuid.uuid4()))
+                    gr.Markdown("### Previous conversations")
 
-            chatbot_interface = gr.Chatbot(
-                type="messages",
-                height="90%",
-                min_height=400,
-                show_label=False,
-                avatar_images=(
-                    None,
-                    "https://www.taic.org.nz/themes/custom/taic/favicon/android-icon-192x192.png",
-                ),
-            )
+                    @gr.render(inputs=[user_conversations])
+                    def render_conversations(conversations):
+                        for conversation in conversations:
+                            with gr.Row():
+                                gr.Markdown(
+                                    f"### {conversation['conversation_title']}", container=False
+                                )
 
-            input_text = gr.Textbox(
-                placeholder="Please type your message here...",
-                show_label=False,
-                submit_btn="Send",
-            )
+                                def load_conversation(conversation=conversation):
+                                    return conversation["messages"], conversation["id"]
+
+                                gr.Button("load").click(
+                                    fn=load_conversation,
+                                    inputs=None,
+                                    outputs=[chatbot_interface, conversation_id],
+                                )
+
+                with gr.Column(scale=3):
+                    with gr.Row():
+                        gr.Markdown("### Chat: ")
+
+                    chatbot_interface = gr.Chatbot(
+                        type="messages",
+                        height="90%",
+                        min_height=400,
+                        show_label=False,
+                        avatar_images=(
+                            None,
+                            "https://www.taic.org.nz/themes/custom/taic/favicon/android-icon-192x192.png",
+                        ),
+                    )
+
+                    input_text = gr.Textbox(
+                        placeholder="Please type your message here...",
+                        show_label=False,
+                        submit_btn="Send",
+                    )
+
+        with gr.TabItem("Knowledge Search"):
+            with gr.Row():
+                with gr.Column(scale=1):
+                    query = gr.Textbox(label="Search Query")
+                    search_button = gr.Button("Search")
+                with gr.Column(scale=1):
+                    with gr.Accordion("Advanced Search Options", open=True):
+                        current_year = datetime.now().year
+                        year_range = RangeSlider(
+                            label="Year Range",
+                            minimum=2000,
+                            maximum=current_year,
+                            step=1,
+                            value=[2007, current_year],
+                        )
+                        document_type = gr.CheckboxGroup(
+                            label="Document Type",
+                            choices=[
+                                "Safety Issues",
+                                "Safety Recommendations",
+                                "Report sections",
+                                "Entire Reports"
+                            ],
+                            value=["Safety Issues", "Safety Recommendations"],    
+                        )
+                        modes = gr.CheckboxGroup(
+                            label="Modes of Transport",
+                            choices=["Aviation", "Rail", "Maritime"],
+                            value=["Aviation", "Rail", "Maritime"],
+                            type="index"
+                        )
+                        agencies = gr.CheckboxGroup(
+                            label="Agencies",
+                            choices=["TAIC", "ATSB", "TSB"],
+                            value=["TAIC"],
+                        )
+                        relevance = gr.Slider(
+                            label="Relevance",
+                            minimum=0,
+                            maximum=1,
+                            step=0.01,
+                            value=0.6,
+                        )
+
+                    
+                    search = [
+                        query,
+                        year_range,
+                        document_type,
+                        modes,
+                        agencies,
+                        relevance,
+                    ]
+
+            with gr.Row():
+                search_results = gr.Dataframe(
+                    pinned_columns=1,
+                    wrap=True,
+                    type="pandas",
+                )
+
+            search_button.click(perform_search, inputs=search, outputs=search_results)
+
+
 
     chatbot_interface.undo(
         fn=handle_undo,

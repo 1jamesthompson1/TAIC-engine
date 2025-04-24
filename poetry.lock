@@ -1061,31 +1061,33 @@ tqdm = ["tqdm"]
 
 [[package]]
 name = "gradio"
-version = "5.14.0"
+version = "5.26.0"
 description = "Python library for easily interacting with trained machine learning models"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "gradio-5.14.0-py3-none-any.whl", hash = "sha256:7f8a7fd61f37c0c0a5eb9494439f35123ccefa9106eebe0fb4e2d0e4c9a87a55"},
+    {file = "gradio-5.26.0-py3-none-any.whl", hash = "sha256:d0960eb551e0da528f8cf4caae0e742c8175deb72f58600d42f8beec866e9294"},
+    {file = "gradio-5.26.0.tar.gz", hash = "sha256:9d03ca96576b91a7ead40e99676f184ff6ad513b35b91539268b74449fa09979"},
 ]
 
 [package.dependencies]
-aiofiles = ">=22.0,<24.0"
+aiofiles = ">=22.0,<25.0"
 anyio = ">=3.0,<5.0"
 fastapi = ">=0.115.2,<1.0"
 ffmpy = "*"
-gradio-client = "1.7.0"
+gradio-client = "1.9.0"
+groovy = ">=0.1,<1.0"
 httpx = ">=0.24.1"
-huggingface-hub = ">=0.25.1"
+huggingface-hub = ">=0.28.1"
 jinja2 = "<4.0"
-markupsafe = ">=2.0,<3.0"
+markupsafe = ">=2.0,<4.0"
 numpy = ">=1.0,<3.0"
 orjson = ">=3.0,<4.0"
 packaging = "*"
 pandas = ">=1.0,<3.0"
 pillow = ">=8.0,<12.0"
-pydantic = ">=2.0"
+pydantic = ">=2.0,<2.12"
 pydub = "*"
 python-multipart = ">=0.0.18"
 pyyaml = ">=5.0,<7.0"
@@ -1104,14 +1106,14 @@ oauth = ["authlib", "itsdangerous"]
 
 [[package]]
 name = "gradio-client"
-version = "1.7.0"
+version = "1.9.0"
 description = "Python library for easily interacting with trained machine learning models"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "gradio_client-1.7.0-py3-none-any.whl", hash = "sha256:b403570c67f121ebbbc19ac1f0afa2ab1bab085ce60d96eb190832fe871aa946"},
-    {file = "gradio_client-1.7.0.tar.gz", hash = "sha256:87f6ade197951f38bac0431b2a436a8ebb2f33b2ceba2ef8e1e5bef8d8b238e4"},
+    {file = "gradio_client-1.9.0-py3-none-any.whl", hash = "sha256:192a046ed2cff9dfafb40e3b04899ecc1dc16f3ed994119d2b90c6a405c38d3e"},
+    {file = "gradio_client-1.9.0.tar.gz", hash = "sha256:eeecec06e4509c32eab5841ba31d34146f50e3f8e0d3fcd3700a8a8f204cc989"},
 ]
 
 [package.dependencies]
@@ -1120,7 +1122,7 @@ httpx = ">=0.24.1"
 huggingface-hub = ">=0.19.3"
 packaging = "*"
 typing-extensions = ">=4.0,<5.0"
-websockets = ">=10.0,<15.0"
+websockets = ">=10.0,<16.0"
 
 [[package]]
 name = "gradio-rangeslider"
@@ -1139,6 +1141,21 @@ gradio = ">=4.0,<6.0"
 
 [package.extras]
 dev = ["build", "twine"]
+
+[[package]]
+name = "groovy"
+version = "0.1.2"
+description = "A small Python library created to help developers protect their applications from Server Side Request Forgery (SSRF) attacks."
+optional = false
+python-versions = ">3.9"
+groups = ["main"]
+files = [
+    {file = "groovy-0.1.2-py3-none-any.whl", hash = "sha256:7f7975bab18c729a257a8b1ae9dcd70b7cafb1720481beae47719af57c35fa64"},
+    {file = "groovy-0.1.2.tar.gz", hash = "sha256:25c1dc09b3f9d7e292458aa762c6beb96ea037071bf5e917fc81fb78d2231083"},
+]
+
+[package.extras]
+dev = ["pytest", "ruff (==0.9.3)"]
 
 [[package]]
 name = "h11"
@@ -4045,4 +4062,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "12618cb503265a93a83d98eccc96d8cef098a53b87c98632b8b078d1de61d443"
+content-hash = "672da84c64507f3cc60c02b2cb691f4267d0028b879bb7ed7a5b8862e764d806"
