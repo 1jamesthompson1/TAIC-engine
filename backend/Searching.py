@@ -14,11 +14,15 @@ class Searcher:
         self.openai_client = openai.OpenAI(api_key=openai_api_key)
         self.voyageai_client = voyageai.Client(api_key=voyageai_api_key)
 
+        self.last_updated = self.all_document_types_table.list_versions()[-1][
+            "timestamp"
+        ].strftime("%Y-%m-%d")
         searcher_config = table.Table(title="🔍 Searcher Config", show_header=True)
         searcher_config.add_column("Name")
         searcher_config.add_column("Value")
         searcher_config.add_row("Database URI", db_uri)
         searcher_config.add_row("Table Name", table_name)
+        searcher_config.add_row("Last updated", self.last_updated)
         searcher_config.add_row(
             "Table Size", f"{self.all_document_types_table.count_rows()} rows"
         )
@@ -108,9 +112,14 @@ class Searcher:
 
         self.__print_search_query(query, final_query, where_statement)
 
+
+        search = self.all_document_types_table.search(final_query, query_type=type)
+
+        if type == "vector":
+            search = search.metric("cosine")
+
         results = (
-            self.all_document_types_table.search(final_query, query_type=type)
-            .metric("cosine")
+            search
             .where(where_statement, prefilter=True)
             .limit(limit)
             .to_pandas()
@@ -135,7 +144,9 @@ class Searcher:
             results.sort_values(by=["relevance"], ascending=False, inplace=True)
             results.reset_index(drop=True, inplace=True)
 
-            cols = ["relevance"] + [col for col in results.columns if col != "relevance"]
+            cols = ["relevance"] + [
+                col for col in results.columns if col != "relevance"
+            ]
             results = results[cols]
 
             if relevance > 0:

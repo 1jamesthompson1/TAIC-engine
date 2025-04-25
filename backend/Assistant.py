@@ -44,6 +44,7 @@ For each report you should provide use the report IDs, if you reference any othe
 Here is some more dataset information
 There are {len(self.searcher.all_document_types_table.schema.names)} columns with {self.searcher.all_document_types_table.count_rows()} rows.
 The columns available are: {"".join(self.searcher.all_document_types_table.schema.names)}
+The data was last updated on {self.searcher.last_updated}.
 
 Here are some definitions from TAIC:
 

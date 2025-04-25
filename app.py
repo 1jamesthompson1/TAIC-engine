@@ -2,8 +2,9 @@ import uuid
 from fastapi import FastAPI, Request, Depends, HTTPException
 from starlette.config import Config
 from starlette.status import HTTP_302_FOUND
-from starlette.responses import RedirectResponse
+from starlette.responses import RedirectResponse, HTMLResponse
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.staticfiles import StaticFiles
 from authlib.integrations.starlette_client import OAuth, OAuthError
 import gradio as gr
 from gradio_rangeslider import RangeSlider
@@ -26,6 +27,9 @@ client = TableServiceClient.from_connection_string(conn_str=connection_string)
 chatlogs = client.create_table_if_not_exists(table_name="chatlogs")
 
 app = FastAPI()
+
+# Mount static files directory *before* mounting Gradio apps
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Azure AD OAuth settings
 AZURE_CLIENT_ID = os.getenv("CLIENT_ID")
@@ -103,9 +107,10 @@ async def auth(request: Request):
     return RedirectResponse(url="/")
 
 
+
 # =====================================================================
 #
-# Assistant
+# Assistant / Gradio UI Setup
 #
 # =====================================================================
 
@@ -280,7 +285,8 @@ def perform_search(
 
     # Format the results to be displayed in the dataframe
     results["agency_id"] = results.apply(
-        lambda x: f"<a href='{x['url']}' style='color: #1a73e8; text-decoration-line: underline;'>{x['agency_id']}</a>", axis=1
+        lambda x: f"<a href='{x['url']}' style='color: #1a73e8; text-decoration-line: underline;'>{x['agency_id']}</a>",
+        axis=1,
     )
     results.drop(columns=["url"], inplace=True)
 
@@ -291,14 +297,50 @@ _These are the relevant results from the search of the database, there is a no g
 
 
 def get_welcome_message(request: gr.Request):
-    return request.username
+    return request.username, f"Data last updated: {searching_instance.last_updated}"
 
+TAIC_theme = gr.themes.Default(
+    primary_hue=gr.themes.utils.colors.Color(
+        name="primary_hue",
+        c50="#2e679c",
+        **{f"c{n}": "#2e679c" for n in range(100, 901, 100)},
+        c950="#2e679c",
+    ),
+    secondary_hue=gr.themes.utils.colors.Color(
+        name="secondary_hue",
+        c50="#e6dca1",
+        **{f"c{n}": "#e6dca1" for n in range(100, 901, 100)},
+        c950="#e6dca1",
+    ),
+    neutral_hue="gray",
+)
 
+def get_footer():
+    return gr.HTML(f"""
+<style>                   
+    .custom-footer {{
+        text-align: center;
+        margin-top: 20px;
+        padding: 10px;
+        background-color: {TAIC_theme.primary_50};
+        color: {TAIC_theme.neutral_50};
+    }}
+</style>
+<div class="custom-footer">
+    <p>Created by <a href="https://github.com/1jamesthompson1">James Thompson</a> for the <a href="https://www.taic.org.nz">New Zealand Transport Accident Investigation Commission.</a></p>
+    <p>Contact directed to <a href="mailto:james.thompson@taic.org.nz">james.thompson@taic.org.nz</a> or for suggestions and/or bug reports please use the provided <a href="https://forms.office.com/Pages/ResponsePage.aspx?id=RmxQlKGu1key34UuP4dPFavrlUtUJCpGvY1oQw3ObrlUQjZSTFRFUDRZRk8wUUxPWkVYVEw1SUVDUy4u" target="_blank">feeback form</a>.</p>
+    <p>Project is being developed openly on <a href="https://github.com/1jamesthompson1/TAIC_smart_assistant">https://github.com/1jamesthompson1/TAIC-report-summary</a></p>
+    <p xmlns:cc="http://creativecommons.org/ns#" >This work is licensed under <a href="https://creativecommons.org/licenses/by/4.0/?ref=chooser-v1" target="_blank" rel="license noopener noreferrer" style="display:inline-block;">CC BY 4.0<img style="height:22px!important;margin-left:3px;vertical-align:middle;display: inline-block;" src="https://mirrors.creativecommons.org/presskit/icons/cc.svg?ref=chooser-v1" alt="CC logo"><img style="height:22px!important;margin-left:3px;vertical-align:middle;display: inline-block;" src="https://mirrors.creativecommons.org/presskit/icons/by.svg?ref=chooser-v1" alt="BY logo"></a></p>                  
+</div>
+""")
+
+# Add head parameter to assistant_page Blocks
 with gr.Blocks(
     title="TAIC smart tools",
-    theme=gr.themes.Base(),
+    theme=TAIC_theme,
     fill_height=True,
     fill_width=True,
+    head='<link rel="icon" href="/static/favicon.png" type="image/png">'
 ) as assistant_page:
     user_conversations = gr.State([])
 
@@ -306,12 +348,13 @@ with gr.Blocks(
 
     with gr.Row():
         gr.Markdown("# TAIC smart tools")
+        data_update = gr.Markdown("Data last updated: ")
         gr.Markdown("Logged in as:")
         username = gr.Markdown()
         logout_button = gr.Button("Logout", link="/logout")
-
+    
     # Redirect to login page if not logged in
-    assistant_page.load(get_welcome_message, inputs=[], outputs=[username])
+    assistant_page.load(get_welcome_message, inputs=[], outputs=[username, data_update])
 
     with gr.Tabs():
         with gr.TabItem("Assistant"):
@@ -359,6 +402,44 @@ with gr.Blocks(
                         show_label=False,
                         submit_btn="Send",
                     )
+            chatbot_interface.undo(
+                fn=handle_undo,
+                inputs=chatbot_interface,
+                outputs=[chatbot_interface, input_text],
+            )
+            chatbot_interface.clear(
+                lambda: (str(uuid.uuid4()), []),
+                None,
+                [conversation_id, chatbot_interface],
+                queue=False,
+            ).then(
+                get_user_conversations,
+                inputs=None,
+                outputs=user_conversations,
+            )
+
+            input_text.submit(
+                fn=handle_submit,
+                inputs=[input_text, chatbot_interface],
+                outputs=[input_text, chatbot_interface],
+                queue=False,
+            ).then(
+                assistant_instance.process_input,
+                inputs=[chatbot_interface],
+                outputs=[chatbot_interface],
+            ).then(
+                create_or_update_conversation,
+                inputs=[conversation_id, chatbot_interface],
+                outputs=None,
+            ).then(
+                get_user_conversations,
+                inputs=None,
+                outputs=user_conversations,
+            ).then(
+                lambda: gr.Textbox(interactive=True),
+                None,
+                input_text,
+            )
 
         with gr.TabItem("Knowledge Search"):
             with gr.Row():
@@ -437,60 +518,43 @@ with gr.Blocks(
                     show_search="search",
                 )
 
-            search_button.click(perform_search, inputs=search, outputs=[search_results, search_summary])
+            search_button.click(
+                perform_search, inputs=search, outputs=[search_results, search_summary]
+            )
             query.submit(
                 perform_search,
                 inputs=search,
                 outputs=[search_results, search_summary],
             )
-
-    chatbot_interface.undo(
-        fn=handle_undo,
-        inputs=chatbot_interface,
-        outputs=[chatbot_interface, input_text],
-    )
-    chatbot_interface.clear(
-        lambda: (str(uuid.uuid4()), []),
-        None,
-        [conversation_id, chatbot_interface],
-        queue=False,
-    ).then(
-        get_user_conversations,
-        inputs=None,
-        outputs=user_conversations,
-    )
-
-    input_text.submit(
-        fn=handle_submit,
-        inputs=[input_text, chatbot_interface],
-        outputs=[input_text, chatbot_interface],
-        queue=False,
-    ).then(
-        assistant_instance.process_input,
-        inputs=[chatbot_interface],
-        outputs=[chatbot_interface],
-    ).then(
-        create_or_update_conversation,
-        inputs=[conversation_id, chatbot_interface],
-        outputs=None,
-    ).then(
-        get_user_conversations,
-        inputs=None,
-        outputs=user_conversations,
-    ).then(
-        lambda: gr.Textbox(interactive=True),
-        None,
-        input_text,
-    )
-
+    footer = get_footer()
 
 app = gr.mount_gradio_app(
     app, assistant_page, path="/assistant", auth_dependency=get_user, show_api=False
 )
 
 
-with gr.Blocks() as login_page:
-    gr.Button("Login", link="/login")
+# Add head parameter to login_page Blocks
+with gr.Blocks(
+    title="TAIC smart tools login",
+    theme=TAIC_theme,
+    fill_height=True,
+    head='<link rel="icon" href="/static/favicon.png" type="image/png">',
+    css="""
+.complete-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+"""
+) as login_page:
+    with gr.Column(elem_classes="complete-center"):
+        gr.Markdown("# TAIC smart tools")
+        gr.Markdown("Please login to continue:")
+        gr.Button("Login", link="/login")
+
+    footer = get_footer()
+
 
 app = gr.mount_gradio_app(app, login_page, path="/login-page", show_api=False)
 
