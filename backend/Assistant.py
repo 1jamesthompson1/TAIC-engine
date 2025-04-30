@@ -233,7 +233,7 @@ Example function calls:
         yield history
 
         rag_response = self.openai_client.chat.completions.create(
-            model="gpt-4o", messages=messages, stream=True
+            model="gpt-4.1", messages=messages, stream=True
         )
 
         history.append({"role": "assistant", "content": ""})

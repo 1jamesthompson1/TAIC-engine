@@ -2,7 +2,7 @@ import uuid
 from fastapi import FastAPI, Request, Depends, HTTPException
 from starlette.config import Config
 from starlette.status import HTTP_302_FOUND
-from starlette.responses import RedirectResponse, HTMLResponse
+from starlette.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
 from authlib.integrations.starlette_client import OAuth, OAuthError
@@ -105,7 +105,6 @@ async def auth(request: Request):
         return RedirectResponse(url="/")
     request.session["user"] = user
     return RedirectResponse(url="/")
-
 
 
 # =====================================================================
@@ -272,7 +271,7 @@ def perform_search(
         document_type_mapping[dt] for dt in document_type if dt in document_type_mapping
     ]
 
-    results = searching_instance.knowledge_search(
+    results, info, plots = searching_instance.knowledge_search(
         query=query,
         year_range=year_range,
         document_type=mapped_document_type,
@@ -284,20 +283,36 @@ def perform_search(
     )
 
     # Format the results to be displayed in the dataframe
-    results["agency_id"] = results.apply(
-        lambda x: f"<a href='{x['url']}' style='color: #1a73e8; text-decoration-line: underline;'>{x['agency_id']}</a>",
-        axis=1,
+    if not results.empty:
+        results["agency_id"] = results.apply(
+            lambda x: f"<a href='{x['url']}' style='color: #1a73e8; text-decoration-line: underline;'>{x['agency_id']}</a>",
+            axis=1,
+        )
+        results.drop(columns=["url"], inplace=True)
+        message = f"""Found {info["relevant_results"]} results from database.  
+_These are the relevant results (out of {info["total_results"]}) from the search of the database, there is a no guarantee of its completeness._"""
+    else:
+        message = "No results found for the given criteria."
+        # Ensure plots are None if no results
+        plots = {
+            k: None for k in ["document_type", "mode", "year", "agency", "event_type"]
+        }
+
+    # Return plots along with results and message
+    return (
+        results,
+        message,
+        plots.get("document_type"),
+        plots.get("mode"),
+        plots.get("year"),
+        plots.get("agency"),
+        plots.get("event_type"),
     )
-    results.drop(columns=["url"], inplace=True)
-
-    message = f"""Found {len(results)} results from database.  
-_These are the relevant results from the search of the database, there is a no guarantee of its completeness._"""
-
-    return results, message
 
 
 def get_welcome_message(request: gr.Request):
     return request.username, f"Data last updated: {searching_instance.last_updated}"
+
 
 TAIC_theme = gr.themes.Default(
     primary_hue=gr.themes.utils.colors.Color(
@@ -314,6 +329,7 @@ TAIC_theme = gr.themes.Default(
     ),
     neutral_hue="gray",
 )
+
 
 def get_footer():
     return gr.HTML(f"""
@@ -334,13 +350,14 @@ def get_footer():
 </div>
 """)
 
+
 # Add head parameter to assistant_page Blocks
 with gr.Blocks(
     title="TAIC smart tools",
     theme=TAIC_theme,
     fill_height=True,
     fill_width=True,
-    head='<link rel="icon" href="/static/favicon.png" type="image/png">'
+    head='<link rel="icon" href="/static/favicon.png" type="image/png">',
 ) as assistant_page:
     user_conversations = gr.State([])
 
@@ -352,7 +369,7 @@ with gr.Blocks(
         gr.Markdown("Logged in as:")
         username = gr.Markdown()
         logout_button = gr.Button("Logout", link="/logout")
-    
+
     # Redirect to login page if not logged in
     assistant_page.load(get_welcome_message, inputs=[], outputs=[username, data_update])
 
@@ -494,6 +511,13 @@ with gr.Blocks(
                         agencies,
                         relevance,
                     ]
+            with gr.Accordion(label="Result graphs", open=False):
+                with gr.Row():
+                    doc_type_plot = gr.Plot()
+                    mode_plot = gr.Plot()
+                    agency_plot = gr.Plot()
+                    year_hist = gr.Plot()
+                    event_type_plot = gr.Plot()
 
             with gr.Row():
                 search_results = gr.Dataframe(
@@ -518,13 +542,21 @@ with gr.Blocks(
                     show_search="search",
                 )
 
-            search_button.click(
-                perform_search, inputs=search, outputs=[search_results, search_summary]
-            )
+            search_outputs = [
+                search_results,
+                search_summary,
+                doc_type_plot,
+                mode_plot,
+                year_hist,
+                agency_plot,
+                event_type_plot,
+            ]
+
+            search_button.click(perform_search, inputs=search, outputs=search_outputs)
             query.submit(
                 perform_search,
                 inputs=search,
-                outputs=[search_results, search_summary],
+                outputs=search_outputs,
             )
     footer = get_footer()
 
@@ -546,7 +578,7 @@ with gr.Blocks(
     align-items: center;
     text-align: center;
 }
-"""
+""",
 ) as login_page:
     with gr.Column(elem_classes="complete-center"):
         gr.Markdown("# TAIC smart tools")

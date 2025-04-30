@@ -2,7 +2,9 @@ from rich import print, table
 import openai
 import voyageai
 import lancedb
-
+import plotly.express as px
+import pandas as pd
+from typing import Optional, Union
 
 class Searcher:
     def __init__(self, openai_api_key, voyageai_api_key, db_uri):
@@ -12,7 +14,7 @@ class Searcher:
         table_name = "all_document_types"
         self.all_document_types_table = self.vector_db.open_table(table_name)
         self.openai_client = openai.OpenAI(api_key=openai_api_key)
-        self.voyageai_client = voyageai.Client(api_key=voyageai_api_key)
+        self.voyageai_client = voyageai.Client(api_key=voyageai_api_key) # type: ignore
 
         self.last_updated = self.all_document_types_table.list_versions()[-1][
             "timestamp"
@@ -63,7 +65,7 @@ class Searcher:
     def __print_search_query(
         self,
         query: str,
-        final_query: str,
+        final_query: Union[str, list[float], None],
         where_statement: str,
     ):
         query_table = table.Table(
@@ -73,12 +75,15 @@ class Searcher:
         )
         query_table.add_column("Parameter")
         query_table.add_column("Value")
-        query_table.add_row(
-            "Query",
-            final_query
-            if isinstance(final_query, str)
-            else "vector embeddings of " + query,
-        )
+        if final_query is None:
+            query_table.add_row("Query", "None")
+        else:
+            query_table.add_row(
+                "Query",
+                final_query
+                if isinstance(final_query, str)
+                else "vector embeddings of " + query,
+            )
         if where_statement:
             query_table.add_row("Filters", where_statement)
         print(query_table)
@@ -86,7 +91,7 @@ class Searcher:
     def knowledge_search(
         self,
         query: str,
-        type: str,
+        type: Optional[str],
         year_range: tuple[int, int],
         document_type: list[str],
         modes: list[str],
@@ -94,6 +99,8 @@ class Searcher:
         limit: int = 100,
         relevance: float = 0,
     ):
+        info = {}
+
         where_statement = self.__get_where_statement(
             year_range=year_range,
             document_type=document_type,
@@ -101,8 +108,10 @@ class Searcher:
             agencies=agencies,
         )
 
+        final_query: Union[list[float], Optional[str]] = None
         if query == "" or query is None:
             final_query = None
+            type = None # Fix up error with LLM not providing the right paramters
         elif type == "fts":
             final_query = query
         elif type == "vector":
@@ -129,6 +138,8 @@ class Searcher:
             f"[bold green]Found {len(results)} results for query: {query}[/bold green]"
         )
 
+        info["total_results"] = len(results)
+
         # Clean up the relevance score column so that it is always sorted in descending order
         if final_query is not None:
             if "_distance" in results.columns:
@@ -154,6 +165,7 @@ class Searcher:
                     f"[bold yellow]Filtering results to only include relevance >= {relevance}[/bold yellow]"
                 )
                 results = results[results["relevance"] >= relevance]
+                info['relevant_results'] = len(results)
                 print(
                     f"[bold green]Found {len(results)} relevant results for query: {query}[/bold green]"
                 )
@@ -163,9 +175,117 @@ class Searcher:
             lambda x: ["aviation", "rail", "maritime"][int(x)]
         )
 
-        return results
+        graph_maker = GraphMaker(results)
+
+        plots = {
+            "document_type": graph_maker.get_document_type_pie_chart(),
+            "mode": graph_maker.get_mode_pie_chart(),
+            "year": graph_maker.get_year_histogram(),
+            "event_type": graph_maker.get_most_common_event_types(),
+            "agency": graph_maker.get_agency_pie_chart(),
+        }
+
+
+        return results, info, plots
 
     def embed_query(self, query: str):
         return self.voyageai_client.embed(
-            query, model="voyage-large-2-instruct", input_type="query", truncation=False
+            query, model="voyage-large-2-instruct", input_type="query", truncation=False, output_dtype="float"
         ).embeddings[0]
+
+
+
+
+class GraphMaker():
+    def __init__(self, context):
+        self.context = context
+        
+    def add_visual_layout(self, fig):
+        fig = fig.update_layout(width=310)
+
+        # If fig a pie chart
+        if fig.data[0].type == "pie":
+            fig.update_traces(
+                textposition="inside",
+                textinfo="percent+label",
+                insidetextorientation="radial",
+            )
+
+            # Remove legend
+            fig.update_layout(showlegend=False)
+
+        return fig
+        
+    def get_document_type_pie_chart(self):
+        context_df = (
+            self.context["document_type"].value_counts().reset_index()
+        )
+        context_df.columns = ["document_type", "count"]
+        fig = px.pie(
+            context_df,
+            values="count",
+            names="document_type",
+            title="Document type distribution",
+        )
+
+        return self.add_visual_layout(fig)
+
+    def get_mode_pie_chart(self):
+        context_df = self.context["mode"].value_counts().reset_index()
+        context_df.columns = ["mode", "count"]
+        fig = px.pie(
+            context_df,
+            values="count",
+            names="mode",
+            title="Mode distribution",
+        )
+
+        return self.add_visual_layout(fig)
+
+    def get_year_histogram(self):
+        context_df = self.context
+        fig = px.histogram(
+            context_df,
+            x="year",
+            title="Year distributions",
+        )
+        return self.add_visual_layout(fig)
+
+    def get_most_common_event_types(self):
+        context_df = self.context
+        type_counts = context_df.groupby("type")["document"].count()
+
+        top_5_types = type_counts.nlargest(5).reset_index()
+
+        others_count = type_counts[~type_counts.index.isin(top_5_types["type"])].sum()
+
+        combined_df = pd.concat(
+            [
+                top_5_types,
+                pd.DataFrame([["Others", others_count]], columns=["type", "document"]),
+            ],
+            ignore_index=True,
+        )
+
+        combined_df.columns = ["Event type", "Count"]
+
+        fig = px.pie(
+            combined_df,
+            values="Count",
+            names="Event type",
+            title="Top 5 most common event types",
+        )
+
+        return self.add_visual_layout(fig)
+
+    def get_agency_pie_chart(self):
+        context_df = self.context["agency"].value_counts().reset_index()
+        context_df.columns = ["agency", "count"]
+        fig = px.pie(
+            context_df,
+            values="count",
+            names="agency",
+            title="Agency distribution",
+        )
+
+        return self.add_visual_layout(fig)
