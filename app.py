@@ -10,12 +10,15 @@ import gradio as gr
 from gradio_rangeslider import RangeSlider
 import dotenv
 import os
+import tempfile
+from openpyxl import Workbook
 import uvicorn
 from rich import print
 import logging
 from azure.data.tables import TableServiceClient
 import json
 from datetime import datetime
+import pandas as pd
 
 from backend import Assistant, Searching
 
@@ -252,6 +255,7 @@ def perform_search(
     agencies: list[str],
     relevance: float,
 ):
+    search_start_time = datetime.now()
     search_type = (
         "none"
         if (query == "" or query is None)
@@ -270,17 +274,19 @@ def perform_search(
     mapped_document_type = [
         document_type_mapping[dt] for dt in document_type if dt in document_type_mapping
     ]
+    search_settings = {
+        "query": query,
+        "year_range": (year_range[0], year_range[1]),
+        "document_type": mapped_document_type,
+        "modes": modes,
+        "agencies": agencies,
+        "type": search_type,
+        "limit": 5000,
+        "relevance": relevance,
+    }
 
-    results, info, plots = searching_instance.knowledge_search(
-        query=query,
-        year_range=year_range,
-        document_type=mapped_document_type,
-        modes=modes,
-        agencies=agencies,
-        type=search_type,
-        limit=5000,
-        relevance=relevance,
-    )
+    results, info, plots = searching_instance.knowledge_search(**search_settings)
+    results_to_download = results.copy()
 
     # Format the results to be displayed in the dataframe
     if not results.empty:
@@ -298,9 +304,15 @@ _These are the relevant results (out of {info["total_results"]}) from the search
             k: None for k in ["document_type", "mode", "year", "agency", "event_type"]
         }
 
+    download_dict = {
+        "settings": search_settings,
+        "results": results_to_download,
+        "search_start_time": search_start_time,
+    }
     # Return plots along with results and message
     return (
         results,
+        download_dict,
         message,
         plots.get("document_type"),
         plots.get("mode"),
@@ -308,6 +320,38 @@ _These are the relevant results (out of {info["total_results"]}) from the search
         plots.get("agency"),
         plots.get("event_type"),
     )
+
+def update_download_button(download_dict: dict):
+    if download_dict["results"] is None or download_dict["results"].empty:
+        return gr.DownloadButton(visible=False)
+    else:
+        temp_dir = tempfile.mkdtemp()
+        file_path = os.path.join(temp_dir, "search_results.xlsx")
+
+        # Write summary information to the first sheet
+        wb = Workbook()
+        summary_sheet = wb.active
+        summary_sheet.title = "Summary"
+
+        summary_sheet.cell(row=1, column=1, value="This spreadsheet contains the results of a search conducted using the TAIC knowledge search tool.")
+        summary_sheet.cell(row=2, column=1, value=f"The search was conducted on {download_dict['search_start_time']}. The settings used for the search can be found below and the full results can be found in the 'Results' sheet.")
+
+        for row, (key, value) in enumerate(download_dict["settings"].items()):
+            summary_sheet.cell(row=row+2, column=1, value=f"{key}:")
+            summary_sheet.cell(row=row+2, column=2, value=str(value))
+
+        wb.save(file_path)
+        wb.close()
+
+
+        download_dict["results"].to_excel(pd.ExcelWriter(file_path, engine = "openpyxl", mode="a"), index=False, sheet_name="Results")
+
+
+        return gr.DownloadButton(
+            label="Download results (spreadsheet)",
+            value=file_path,
+            visible=True,
+        )
 
 
 def get_welcome_message(request: gr.Request):
@@ -459,11 +503,16 @@ with gr.Blocks(
             )
 
         with gr.TabItem("Knowledge Search"):
+            search_results_to_download = gr.State(None)
             with gr.Row():
                 with gr.Column(scale=1):
                     query = gr.Textbox(label="Search Query")
                     search_button = gr.Button("Search")
-                    search_summary = gr.Markdown()
+                    with gr.Row():
+                        with gr.Column():
+                            search_summary = gr.Markdown()
+                        with gr.Column():
+                            download_button = gr.DownloadButton("Download results", visible=False)
                 with gr.Column(scale=1):
                     with gr.Accordion("Advanced Search Options", open=True):
                         current_year = datetime.now().year
@@ -544,6 +593,7 @@ with gr.Blocks(
 
             search_outputs = [
                 search_results,
+                search_results_to_download,
                 search_summary,
                 doc_type_plot,
                 mode_plot,
@@ -552,11 +602,15 @@ with gr.Blocks(
                 event_type_plot,
             ]
 
-            search_button.click(perform_search, inputs=search, outputs=search_outputs)
+            search_event = search_button.click(perform_search, inputs=search, outputs=search_outputs).then(
+                update_download_button, search_results_to_download, download_button
+            )
             query.submit(
                 perform_search,
                 inputs=search,
                 outputs=search_outputs,
+            ).then(
+                update_download_button, search_results_to_download, download_button
             )
     footer = get_footer()
 

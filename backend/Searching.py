@@ -111,7 +111,7 @@ class Searcher:
         final_query: Union[list[float], Optional[str]] = None
         if query == "" or query is None:
             final_query = None
-            type = None # Fix up error with LLM not providing the right paramters
+            type = None # Fix up error with LLM not providing the right parameters
         elif type == "fts":
             final_query = query
         elif type == "vector":
