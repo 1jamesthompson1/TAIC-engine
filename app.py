@@ -29,11 +29,12 @@ dotenv.load_dotenv(override=True)
 connection_string = f"AccountName={os.getenv('AZURE_STORAGE_ACCOUNT_NAME')};AccountKey={os.getenv('AZURE_STORAGE_ACCOUNT_KEY')};EndpointSuffix=core.windows.net"
 client = TableServiceClient.from_connection_string(conn_str=connection_string)
 chatlogs = client.create_table_if_not_exists(table_name="chatlogs")
-knowledgesearchlogs = client.create_table_if_not_exists(table_name="knowledgesearchlogs")
+knowledgesearchlogs = client.create_table_if_not_exists(
+    table_name="knowledgesearchlogs"
+)
 
 app = FastAPI()
 
-# Mount static files directory *before* mounting Gradio apps
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Azure AD OAuth settings
@@ -80,7 +81,7 @@ def get_user(request: Request):
 @app.get("/")
 def public(user: dict = Depends(get_user)):
     if user:
-        return RedirectResponse(url="/assistant")
+        return RedirectResponse(url="/tools")
     else:
         return RedirectResponse(url="/login-page")
 
@@ -114,11 +115,9 @@ async def auth(request: Request):
 
 # =====================================================================
 #
-# Assistant / Gradio UI Setup
+# Assistant UI functions
 #
 # =====================================================================
-
-
 def handle_undo(history, undo_data: gr.UndoData):
     return history[: undo_data.index], history[undo_data.index]["content"]
 
@@ -244,9 +243,10 @@ assistant_instance = Assistant.Assistant(
 
 # =====================================================================
 #
-# Knowledge search
+# Knowledge search UI functions
 #
 # =====================================================================
+
 
 def perform_search(
     username: str,
@@ -279,7 +279,9 @@ def perform_search(
         }
 
         mapped_document_type = [
-            document_type_mapping[dt] for dt in document_type if dt in document_type_mapping
+            document_type_mapping[dt]
+            for dt in document_type
+            if dt in document_type_mapping
         ]
         search_settings = {
             "query": query,
@@ -300,10 +302,12 @@ def perform_search(
         search = False
         clean_results = False
 
-    results, info , plots = None, None, None
+    results, info, plots = None, None, None
     if error is None:
         try:
-            results, info, plots = searching_instance.knowledge_search(**search_settings)
+            results, info, plots = searching_instance.knowledge_search(
+                **search_settings
+            )
         except Exception as e:
             print(f"[bold red]Error in search: {e}[/bold red]")
             error = e
@@ -312,8 +316,8 @@ def perform_search(
             clean_results = False
 
     results_to_download, download_dict = None, None
-    if error is None: 
-        try: 
+    if error is None:
+        try:
             results_to_download = results.copy()
             # Format the results to be displayed in the dataframe
             if not results.empty:
@@ -328,7 +332,8 @@ def perform_search(
                 message = "No results found for the given criteria."
                 # Ensure plots are None if no results
                 plots = {
-                    k: None for k in ["document_type", "mode", "year", "agency", "event_type"]
+                    k: None
+                    for k in ["document_type", "mode", "year", "agency", "event_type"]
                 }
 
             download_dict = {
@@ -349,20 +354,49 @@ def perform_search(
         "RowKey": str(uuid.uuid4()),
         "search_start_time": search_start_time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    search = {
-        "settings": json.dumps(search_settings),
-    } if created_search else {
-        "settings": None,
-    }
-    results_log = {
-        "results": results.head(100).drop(columns=["document"]).to_json(orient="records"),
-        "relevant_results": info["relevant_results"],
-        "total_results": info["total_results"],
-    } if clean_results else {
-        "results": None,
-        "relevant_results": None,
-        "total_results": None,
-    }
+    search = (
+        {
+            "settings": json.dumps(search_settings),
+        }
+        if created_search
+        else {
+            "settings": None,
+        }
+    )
+    
+    results_log = (
+        {
+            "results": results.head(100)
+            .drop(columns=["document"])
+            .to_json(orient="records"),
+            "relevant_results": info["relevant_results"],
+            "total_results": info["total_results"],
+        }
+        if clean_results
+        else {
+            "results": None,
+            "relevant_results": None,
+            "total_results": None,
+        }
+    )
+
+    # Make sure that the results are not too large to be stored in the usage logs. I dont need all the items but having an idea of what documents were returned is useful.
+    if results_log["results"] is not None:
+        results_size = len(results_log["results"])
+        while results_size > 32_000:
+            print("Trimming results to fit size limit, current size:", results_size)
+            current_df = pd.read_json(results_log["results"])
+            if current_df.shape[0] > 20:
+                results_log["results"] = current_df.iloc[:-10].to_json(
+                    orient="records"
+                )
+            else:
+                results_log["results"] = current_df.iloc[:-1].to_json(
+                    orient="records"
+                )
+            results_size = len(results_log["results"])
+
+
 
     knowledgesearchlogs.create_entity(
         entity={
@@ -374,7 +408,10 @@ def perform_search(
     )
 
     if error is not None:
-        raise gr.Error(f"An error has occurred during your search, please refresh page and try again.\nError: {error}", duration=5)
+        raise gr.Error(
+            f"An error has occurred during your search, please refresh page and try again.\nError: {error}",
+            duration=5,
+        )
 
     # Return plots along with results and message
     return (
@@ -388,30 +425,35 @@ def perform_search(
         plots.get("event_type"),
     )
 
+
 def update_download_button(download_dict: dict):
+    """
+    Update the download button to to point to a new temporary file that is the results ready to be downloaded.
+    """
     if download_dict["results"] is None or download_dict["results"].empty:
         return gr.DownloadButton(visible=False)
     else:
+        save_name = f"{download_dict['settings']['query'][:min(20, len(download_dict['settings']['query']))]}_{download_dict['search_start_time'].strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
         temp_dir = tempfile.mkdtemp()
-        file_path = os.path.join(temp_dir, "search_results.xlsx")
+        file_path = os.path.join(temp_dir, save_name)
 
-        # Write summary information to the first sheet
-        wb = Workbook()
-        summary_sheet = wb.active
-        summary_sheet.title = "Summary"
+        summary_data = [
+            [
+                "This spreadsheet contains the results of a search conducted using the TAIC knowledge search tool.",
+                "",
+            ],
+            [
+                f"The search was conducted on {download_dict['search_start_time'].strftime('%Y-%m-%d %H:%M:%S')} by {download_dict['username']}. The settings used for the search can be found below and the full results can be found in the 'Results' sheet.",
+                "",
+            ],
+        ]
+        for key, value in download_dict["settings"].items():
+            summary_data.append([f"{key}:", str(value)])
+        summary_df = pd.DataFrame(summary_data, columns=["Setting", "Value"])
 
-        summary_sheet.cell(row=1, column=1, value="This spreadsheet contains the results of a search conducted using the TAIC knowledge search tool.")
-        summary_sheet.cell(row=2, column=1, value=f"The search was conducted on {download_dict['search_start_time'].strftime('%Y-%m-%d %H:%M:%S')} by {download_dict['username']}. The settings used for the search can be found below and the full results can be found in the 'Results' sheet.")
-
-        for row, (key, value) in enumerate(download_dict["settings"].items()):
-            summary_sheet.cell(row=row+3, column=1, value=f"{key}:")
-            summary_sheet.cell(row=row+3, column=2, value=str(value))
-
-        wb.save(file_path)
-        wb.close()
-
-
-        download_dict["results"].to_excel(pd.ExcelWriter(file_path, engine = "openpyxl", mode="a"), index=False, sheet_name="Results")
+        with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+            summary_df.to_excel(writer, index=False, header=False, sheet_name="Summary")
+            download_dict["results"].to_excel(writer, index=False, sheet_name="Results")
 
 
         return gr.DownloadButton(
@@ -421,8 +463,16 @@ def update_download_button(download_dict: dict):
         )
 
 
+# =====================================================================
+#
+# Gradio UI
+#
+# =====================================================================
+
+
 def get_welcome_message(request: gr.Request):
     return request.username, f"Data last updated: {searching_instance.last_updated}"
+
 
 def get_user_name(request: gr.Request):
     return request.username
@@ -465,7 +515,6 @@ def get_footer():
 """)
 
 
-# Add head parameter to assistant_page Blocks
 with gr.Blocks(
     title="TAIC smart tools",
     theme=TAIC_theme,
@@ -486,8 +535,9 @@ with gr.Blocks(
         username_display = gr.Markdown()
         logout_button = gr.Button("Logout", link="/logout")
 
-    # Redirect to login page if not logged in
-    smart_tools.load(get_welcome_message, inputs=None, outputs=[username_display, data_update])
+    smart_tools.load(
+        get_welcome_message, inputs=None, outputs=[username_display, data_update]
+    )
 
     with gr.Tabs():
         with gr.TabItem("Assistant"):
@@ -584,7 +634,9 @@ with gr.Blocks(
                         with gr.Column():
                             search_summary = gr.Markdown()
                         with gr.Column():
-                            download_button = gr.DownloadButton("Download results", visible=False)
+                            download_button = gr.DownloadButton(
+                                "Download results", visible=False
+                            )
                 with gr.Column(scale=1):
                     with gr.Accordion("Advanced Search Options", open=True):
                         current_year = datetime.now().year
@@ -675,20 +727,18 @@ with gr.Blocks(
                 event_type_plot,
             ]
 
-            search_event = search_button.click(perform_search, inputs=search, outputs=search_outputs).then(
-                update_download_button, search_results_to_download, download_button
-            )
+            search_event = search_button.click(
+                perform_search, inputs=search, outputs=search_outputs
+            ).then(update_download_button, search_results_to_download, download_button)
             query.submit(
                 perform_search,
                 inputs=search,
                 outputs=search_outputs,
-            ).then(
-                update_download_button, search_results_to_download, download_button
-            )
+            ).then(update_download_button, search_results_to_download, download_button)
     footer = get_footer()
 
 app = gr.mount_gradio_app(
-    app, smart_tools, path="/assistant", auth_dependency=get_user, show_api=False
+    app, smart_tools, path="/tools", auth_dependency=get_user, show_api=False
 )
 
 

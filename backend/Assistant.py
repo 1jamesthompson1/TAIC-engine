@@ -194,7 +194,7 @@ Example function calls:
         )
         yield history
 
-        results = self.searcher.knowledge_search(**function_arguments)
+        results, _, _ = self.searcher.knowledge_search(**function_arguments)
         tool_call_message = {
             "role": "assistant",
             "content": None,
