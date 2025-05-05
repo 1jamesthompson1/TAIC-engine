@@ -37,7 +37,7 @@ class Assistant:
         system_message = {
             "role": "system",
             "content": f"""
-You are a expert working at the New Zealand transport accident investigation commission. Your job is to assistant employees of TAIC with their queries. The day is {datetime.now()}.
+You are a expert working at the New Zealand transport accident investigation commission. Your job is to assistant employees of TAIC with their queries. The day is {datetime.now()}. You should respond as if you are a senior accident investigator/research who is speaking to your colleagues. Keep your responses short and to the point.
 You will be provided the conversation history and a query from the user. You can either respond directly or can call a function that searches a database of accident reports.
 For each report you should provide use the report IDs, if you reference any other document you should provide the document type and document ID.
 
@@ -187,7 +187,8 @@ Example function calls:
         function_arguments = json.loads(function_arguments_str)
 
         history[-1]["metadata"] = {
-            "title": "🔍 Searching database for more information"
+            "title": "🔍 Searching database for more information",
+            "status": "pending",
         }
         history[-1]["content"] += (
             f"Using these parameters to search the database: {function_arguments_str}"
@@ -209,6 +210,7 @@ Example function calls:
                 }
             ],
         }
+        history[-1]["metadata"]["status"] = "done"
 
         messages = (
             [system_message]
@@ -227,7 +229,7 @@ Example function calls:
             {
                 "role": "assistant",
                 "content": results.to_html(index=False),
-                "metadata": {"title": f"📖 Reading {results.shape[0]} results"},
+                "metadata": {"title": f"📖 Reading {results.shape[0]} results", 'status': 'done'},
             }
         )
         yield history
