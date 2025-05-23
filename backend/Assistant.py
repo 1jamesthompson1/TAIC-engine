@@ -23,6 +23,7 @@ class Assistant:
                         "role": "system",
                         "content": """
                     You are part of a chatbot assistant at the Transport Accident Investigation Commission that help users add titles to their conversation. You will receive the conversation and you are too response with a 5 word summary of the conversation.
+                    Provide a title that will best help the user identify what conversation it was.
                     Just respond with the title and nothing else.
                     """,
                     },
@@ -38,7 +39,7 @@ class Assistant:
             "role": "system",
             "content": f"""
 You are a expert working at the New Zealand transport accident investigation commission. Your job is to assistant employees of TAIC with their queries. The day is {datetime.now()}. You should respond as if you are a senior accident investigator/research who is speaking to your colleagues. Keep your responses short and to the point.
-You will be provided the conversation history and a query from the user. You can either respond directly or can call a function that searches a database of accident reports.
+You will be provided the conversation history and a query from the user. You can either respond directly or can call a function that searches a database of accident reports, you may only make a single function call per response.
 For each report you should provide use the report IDs, if you reference any other document you should provide the document type and document ID.
 
 Here is some more dataset information
@@ -69,7 +70,7 @@ issues.
         }
 
         response_stream = self.openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4.1",
             messages=[system_message] + history,
             tools=[
                 {
@@ -97,6 +98,17 @@ Example function calls:
     "document_type": ["safety_issue"],
     "modes": [2],
     "agencies": ["TAIC"]
+}}
+```
+
+```json
+{{
+    "query": "Accident involves distracted operators",
+    "type": "vector",
+    "year_range": [2020, {datetime.now().year}],
+    "document_type": ["safety_issue", "recommendation", "report_section"],
+    "modes": [1],
+    "agencies": ["TAIC", "ATSB"]
 }}
 ```
 
@@ -146,6 +158,7 @@ Example function calls:
                     },
                 }
             ],
+            parallel_tool_calls=False,
             stream=True,
         )
         function_arguments_str = ""
@@ -184,7 +197,11 @@ Example function calls:
         if not is_collecting_function_args:
             return history
 
-        function_arguments = json.loads(function_arguments_str)
+        try:
+            function_arguments = json.loads(function_arguments_str)
+        except json.JSONDecodeError as e:
+            print(f"[bold red]Error decoding JSON {e}:[/bold red] {function_arguments_str}")
+            raise ValueError("Assistant tried to make a function call but failed due to malformed function call")
 
         history[-1]["metadata"] = {
             "title": "🔍 Searching database for more information",
