@@ -1,7 +1,8 @@
+
 name: Auto Version Bump
 
 on:
-  push:
+  pull_request:
     branches: [ master ]
   workflow_dispatch:
     inputs:
@@ -47,28 +48,44 @@ jobs:
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           echo "type=${{ github.event.inputs.bump_type }}" >> $GITHUB_OUTPUT
         else
-          # Auto-detect from commit messages
-          COMMIT=$(git log --oneline -n 1)
-
-          if echo "$COMMIT" | grep -i "BREAKING\|breaking change\|major:"; then
+          # Use PR title for bump type, require it to start with major, minor, or patch
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          echo "PR title: $PR_TITLE"
+          if echo "$PR_TITLE" | grep -iE '^major'; then
             echo "type=major" >> $GITHUB_OUTPUT
-          elif echo "$COMMITS" | grep -i "feat\|feature\|minor:"; then
+          elif echo "$PR_TITLE" | grep -iE '^minor'; then
             echo "type=minor" >> $GITHUB_OUTPUT
-          else
+          elif echo "$PR_TITLE" | grep -iE '^patch'; then
             echo "type=patch" >> $GITHUB_OUTPUT
+          else
+            echo "::error::PR title must start with 'major', 'minor', or 'patch' (case-insensitive)." >&2
+            exit 1
           fi
         fi
     
+    - name: Check if version already bumped
+      id: check_version
+      run: |
+        CURRENT_VERSION=$(uv version --short)
+        echo "Current version: $CURRENT_VERSION"
+
+        # Get list of commits in PR — including base
+        COMMITS=$(git rev-list --format=%B --no-merges ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+
+        echo "$COMMITS" | grep -q "Bump version to $CURRENT_VERSION" && \
+          echo "already_bumped=true" >> $GITHUB_OUTPUT || \
+          echo "already_bumped=false" >> $GITHUB_OUTPUT
+
     - name: Bump version
+      if: steps.check_version.outputs.already_bumped == 'false'
       run: |
         uv version --bump ${{ steps.bump_type.outputs.type }}
         NEW_VERSION=$(uv version --short)
         echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-    
+
     - name: Commit version bump
+      if: steps.check_version.outputs.already_bumped == 'false'
       run: |
         git add pyproject.toml
         git commit -m "Bump version to $NEW_VERSION" || exit 0
-        git tag "v$NEW_VERSION"
-        git push origin master
-        git push origin "v$NEW_VERSION"
+        git push origin "HEAD:refs/heads/${{ github.head_ref }}"
