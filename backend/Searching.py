@@ -24,6 +24,7 @@ class Searcher:
         searcher_config.add_column("Value")
         searcher_config.add_row("Database URI", db_uri)
         searcher_config.add_row("Table Name", table_name)
+        searcher_config.add_row("Table Version", str(self.all_document_types_table.version))
         searcher_config.add_row("Last updated", self.last_updated)
         searcher_config.add_row(
             "Table Size", f"{self.all_document_types_table.count_rows()} rows"

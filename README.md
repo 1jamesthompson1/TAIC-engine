@@ -41,38 +41,38 @@ Use GitHub Actions workflow "Auto Version Bump" with manual trigger to specify v
 
 1. **Install dependencies**
 
-   ```bash
-   # Install Poetry if you haven't already
-   curl -sSL https://install.python-poetry.org | python3 -
-   
-   # Install project dependencies
-   poetry install
-   ```
+```bash
+# Install uv if you haven't already
+curl -Ls https://astral.sh/uv/install.sh | sh
+
+# Install project dependencies
+uv sync
+```
 
 2. **Get the vector database**
 
-   ```bash
-   # Download and setup the vector database
-   poetry run python working_files/download_vector_db.py
-   ```
+```bash
+# Download and setup the vector database
+poetry run python working_files/download_vector_db.py
+```
 
 3. **Environment configuration**
 
-   ```bash
-   # Copy and configure your environment variables
-   cp .env.example .env
-   # Edit .env with your Azure credentials and API keys
-   ```
+```bash
+# Copy and configure your environment variables
+cp .env.example .env
+# Edit .env with your Azure credentials and API keys
+```
 
 4. **Run the app locally**
 
-   ```bash
-   poetry run uvicorn app:app --host localhost --port 7860 --reload
-   ```
+```bash
+uv run uvicorn app:app --host localhost --port 7860 --reload
+```
 
 5. **Access the application**
-   - Open your browser to `http://localhost:7860`
-   - For the tools interface: `http://localhost:7860/tools`
+- Open your browser to `http://localhost:7860`
+- For the tools interface: `http://localhost:7860/tools`
 
 ### Development Workflow
 

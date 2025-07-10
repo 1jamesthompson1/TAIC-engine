@@ -132,7 +132,7 @@ Example function calls:
                                 },
                                 "document_type": {
                                     "type": "array",
-                                    "description": "A list of document types to filter the search results. Safety issues and recommendations are following definitions given, while report sections are reports chunked into sections/pages. Valid types are 'safety_issue', 'recommendation', 'report_section'.",
+                                    "description": "A list of document types to filter the search results. Safety issues and recommendations are following definitions given, while report sections are reports chunked into sections/pages, summary are brief overviews of the reports scrapped from the agencies report webpages, they are only present for TAIC and ATSB. Valid types are 'safety_issue', 'recommendation', 'report_section' and 'summary'.",
                                     "items": {"type": "string"},
                                 },
                                 "modes": {
