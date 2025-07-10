@@ -4,14 +4,14 @@ FROM python:3.11-slim
 # Set the working directory in the container
 WORKDIR /
 
-# Copy the pyproject.toml and poetry.lock files into the container
+# Copy the pyproject.toml and uv.lock files into the container
 COPY . .
 
-# Install Poetry
-RUN pip install --no-cache-dir poetry
+# Install uv
+RUN pip install --no-cache-dir uv
 
-# Install the dependencies using Poetry
-RUN poetry config virtualenvs.create false && poetry install --without dev --no-root
+# Install the dependencies using uv
+RUN uv sync --no-dev
 
 # Install necessary packages to allow download of azcopy
 RUN apt-get update && apt-get install -y \
@@ -36,4 +36,4 @@ RUN --mount=type=secret,id=SAS_TOKEN,mode=0444,required=true \
 EXPOSE 7860
 
 # Command to run the application
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uv", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
