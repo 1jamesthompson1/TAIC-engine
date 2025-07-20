@@ -82,10 +82,11 @@ jobs:
         uv version --bump ${{ steps.bump_type.outputs.type }}
         NEW_VERSION=$(uv version --short)
         echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+        uv lock
 
     - name: Commit version bump
       if: steps.check_version.outputs.already_bumped == 'false'
       run: |
-        git add pyproject.toml
+        git add .
         git commit -m "Bump version to $NEW_VERSION" || exit 0
         git push origin "HEAD:refs/heads/${{ github.head_ref }}"
