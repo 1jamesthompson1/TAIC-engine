@@ -3315,7 +3315,7 @@ wheels = [
 
 [[package]]
 name = "taic-smart-tools"
-version = "0.2.0"
+version = "0.2.1"
 source = { virtual = "." }
 dependencies = [
     { name = "adlfs" },
