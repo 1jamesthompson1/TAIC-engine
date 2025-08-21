@@ -25,7 +25,7 @@ def main():
     parser.add_argument('--account-name', type=str, help='Azure Storage account name', default="taicdocumentsearcherdata")
     parser.add_argument('--container-name', type=str, help='Azure Storage container name', default="vectordb")
     parser.add_argument('--blob-path', type=str, help='Path to the blob in Azure Storage', default="prod/all_document_types.lance")
-    parser.add_argument('--local-dir', type=str, help='Local directory to save the downloaded files', default="./testing")
+    parser.add_argument('--local-dir', type=str, help='Local directory to save the downloaded files', default="./vectordb")
     parser.add_argument('--log-level', type=str, help='Logging level', default="INFO")
 
     args = parser.parse_args()

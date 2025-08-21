@@ -39,6 +39,8 @@ Use GitHub Actions workflow "Auto Version Bump" with manual trigger to specify v
 
 ### Setup for Local Development
 
+_Note that this has only ever been 'completed' on Linux machines. For ease of use I would recommend [WSL](https://learn.microsoft.com/en-us/windows/wsl/about) for windows users_
+
 1. **Install dependencies**
 
 ```bash
@@ -51,9 +53,12 @@ uv sync
 
 2. **Get the vector database**
 
+Install `azcopy` by following: https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azcopy-v10?tabs=apt
+Install `az cli` by following: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest
+
 ```bash
 # Download and setup the vector database
-poetry run python working_files/download_vector_db.py
+uv run python working_files/download_vector_db.py
 ```
 
 3. **Environment configuration**

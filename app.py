@@ -230,9 +230,8 @@ def load_conversation(request: gr.Request, conversation_id: str):
 
 
 searching_instance = Searching.Searcher(
-    openai_api_key=os.getenv("OPENAI_API_KEY"),
-    voyageai_api_key=os.getenv("VOYAGEAI_API_KEY"),
     db_uri=os.getenv("VECTORDB_PATH"),
+    table_name=os.getenv("VECTORDB_TABLE_NAME")
 )
 
 assistant_instance = Assistant.Assistant(
@@ -330,10 +329,10 @@ def perform_search(
             query = query[1:-1]
 
         document_type_mapping = {
-            "Safety Issues": "safety_issue",
-            "Safety Recommendations": "recommendation",
+            "Safety issues": "safety_issue",
+            "Safety recommendations": "recommendation",
             "Report sections": "report_section",
-            "Entire Reports": "report_text",
+            "Report summaries": "summary",
         }
 
         mapped_document_type = [
@@ -752,12 +751,12 @@ with gr.Blocks(
                         document_type = gr.CheckboxGroup(
                             label="Document Type",
                             choices=[
-                                "Safety Issues",
-                                "Safety Recommendations",
+                                "Safety issues",
+                                "Safety recommendations",
                                 "Report sections",
-                                "Entire Reports",
+                                "Report summaries",
                             ],
-                            value=["Safety Issues", "Safety Recommendations"],
+                            value=["Safety issues", "Safety recommendations"],
                         )
                         modes = gr.CheckboxGroup(
                             label="Modes of Transport",
@@ -831,7 +830,9 @@ with gr.Blocks(
 
             search_event = search_button.click(
                 perform_search, inputs=search, outputs=search_outputs
-            ).then(update_download_button, search_results_to_download, download_button).then(
+            ).then(
+                update_download_button, search_results_to_download, download_button
+            ).then(
                 get_user_search_history,
                 inputs=None,
                 outputs=user_search_history,
