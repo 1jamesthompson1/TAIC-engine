@@ -229,7 +229,13 @@ class Searcher:
         limit: int = 150,
         relevance: float = 0,
     ):
-        info = {}
+        info = {
+            "info_message": "",
+        }
+
+        # Add info message 
+        if "TSB" in agencies and "summary" in document_type:
+            info['info_message'] += "Summaries are only available for ATSB and TAIC reports, not TSB reports.\n"
 
         where_statement = self.__get_where_statement(
             year_range=year_range,

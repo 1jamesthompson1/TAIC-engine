@@ -11,19 +11,25 @@ from gradio_rangeslider import RangeSlider
 import dotenv
 import os
 import tempfile
-from openpyxl import Workbook
 import uvicorn
 from rich import print
 import logging
 from azure.data.tables import TableServiceClient
-import json
 from datetime import datetime
 import pandas as pd
 import traceback
 
 from backend import Assistant, Searching, Storage, Version
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
+
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
+# Removing excessive logging from azure sdk
+logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
+logging.getLogger("azure.core").setLevel(logging.WARNING)
+logging.getLogger("azure.storage").setLevel(logging.WARNING)
+logging.getLogger("azure.data.tables").setLevel(logging.WARNING)
 dotenv.load_dotenv(override=True)
 
 # Setup the storage connection
@@ -141,31 +147,41 @@ async def auth(request: Request):
 # Assistant UI functions
 #
 # =====================================================================
-def handle_undo(history, undo_data: gr.UndoData):
-    return history[: undo_data.index], history[undo_data.index]["content"]
+def handle_undo(history: Assistant.CompleteHistory, undo_data: gr.UndoData):
+    last_message = history.undo(undo_data.index)
+    return history, history.gradio_format(), last_message
 
-def handle_edit(history, edit_data: gr.EditData):
-    new_history = history[:edit_data.index+1]
-    new_history[-1 if len(new_history) > 0 else 0]['content'] = edit_data.value
-    return new_history, None
+def handle_edit(history: Assistant.CompleteHistory, edit_data: gr.EditData):
+    history.edit(edit_data.index, edit_data.value)
+    return history, history.gradio_format(), None
 
-def handle_submit(user_input, history=None):
+def handle_submit(user_input, history: Assistant.CompleteHistory = None):
     if history is None:
-        history = []
-    history.append({"role": "user", "content": user_input})
+        history = Assistant.CompleteHistory([])
+    history.add_message("user", user_input)
 
-    return gr.Textbox(interactive=False, value=None), history
+    return gr.Textbox(interactive=False, value=None), history, history.gradio_format()
 
 
-def create_or_update_conversation(request: gr.Request, conversation_id, history):
+def create_or_update_conversation(request: gr.Request, conversation_id, conversation_title, history: Assistant.CompleteHistory):
     if history == []:  # ignore instance when history is empty
         return
+
     
     username = request.username
+
     
-    # Generate conversation title if this is a new conversation
-    conversation_title = assistant_instance.provide_conversation_title(history)
+    # Generate conversation title only every 3rd after the first message that 
+    # the user sends
+    if len(
+        [msg for msg in history.gradio_format() if msg['role'] == 'user']
+        ) % 3 == 1:
+        conversation_title = assistant_instance.provide_conversation_title(history)
     
+    if os.getenv("NO_LOGS", "false").lower() == "true":
+        print("[orange]⚠ NO_LOGS is set to true, skipping storing conversation[/orange]")
+        return conversation_title
+
     # Store using blob storage (JSON in blob + metadata in table)
     success = conversation_store.create_or_update_conversation(
         username=username,
@@ -174,10 +190,10 @@ def create_or_update_conversation(request: gr.Request, conversation_id, history)
         conversation_title=conversation_title
     )
     
-    if success:
-        print(f"[bold green]✓ Stored conversation {conversation_id} in blob storage[/bold green]")
-    else:
+    if not success:
         print(f"[bold red]✗ Failed to store conversation {conversation_id}[/bold red]")
+
+    return conversation_title
 
 
 def get_user_conversations_metadata(request: gr.Request):
@@ -185,7 +201,6 @@ def get_user_conversations_metadata(request: gr.Request):
     
     # Get only conversation metadata (no full message history)
     conversations = conversation_store.get_user_conversations_metadata(username)
-    print(f"[bold green]✓ Retrieved metadata for {len(conversations)} conversations[/bold green]")
     return conversations
 
 
@@ -221,11 +236,14 @@ def load_conversation(request: gr.Request, conversation_id: str):
         
         print(f"[bold green]✓ Loaded conversation {conversation_id}[/bold green]")
         formatted_id = f"`{conversation['id']}`"
-        return conversation["messages"], formatted_id, formatted_title
+        
+        history = Assistant.CompleteHistory(conversation["messages"])
+        
+        return history, history.gradio_format(), formatted_id, formatted_title
     else:
         print(f"[bold red]✗ Failed to load conversation {conversation_id}[/bold red]")
-        return [], f"`{conversation_id}`", "*Failed to load*"
-
+        history = Assistant.CompleteHistory([])
+        return history, [], f"`{conversation_id}`", "*Failed to load*"
 
 
 
@@ -235,7 +253,8 @@ searching_instance = Searching.Searcher(
 )
 
 assistant_instance = Assistant.Assistant(
-    openai_api_key=os.getenv("OPENAI_API_KEY"),
+    openai_api_key=os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY"),
+    openai_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
     searcher=searching_instance,
 )
 
@@ -564,6 +583,7 @@ with gr.Blocks(
     smart_tools.load(get_user_name, inputs=None, outputs=username)
 
     user_conversations = gr.State([])
+    current_conversation = gr.State(None)
     smart_tools.load(get_user_conversations_metadata, inputs=None, outputs=user_conversations)
 
     with gr.Row():
@@ -606,7 +626,11 @@ with gr.Blocks(
                                 gr.Button("load").click(
                                     fn=create_load_function(conversation["id"]),
                                     inputs=None,
-                                    outputs=[chatbot_interface, conversation_id, conversation_title],
+                                    outputs=[
+                                        current_conversation,
+                                        chatbot_interface,
+                                        conversation_id,
+                                        conversation_title],
                                 )
 
                 with gr.Column(scale=3):
@@ -633,22 +657,22 @@ with gr.Blocks(
                     )
             chatbot_interface.undo(
                 fn=handle_undo,
-                inputs=chatbot_interface,
-                outputs=[chatbot_interface, input_text],
+                inputs=current_conversation,
+                outputs=[current_conversation, chatbot_interface, input_text],
             )
             chatbot_interface.edit(
                 fn=handle_edit,
-                inputs=chatbot_interface,
-                outputs=[chatbot_interface, input_text],
+                inputs=current_conversation,
+                outputs=[current_conversation, chatbot_interface, input_text],
                 queue=False,
             ).then(
                 assistant_instance.process_input,
-                inputs=[chatbot_interface],
-                outputs=[chatbot_interface],
+                inputs=[current_conversation],
+                outputs=[current_conversation, chatbot_interface],
             ).then(
                 create_or_update_conversation,
-                inputs=[conversation_id, chatbot_interface],
-                outputs=None,
+                inputs=[conversation_id, conversation_title, current_conversation],
+                outputs=conversation_title,
             ).then(
                 get_user_conversations_metadata,
                 inputs=None,
@@ -660,9 +684,9 @@ with gr.Blocks(
             )
 
             chatbot_interface.clear(
-                lambda: (f"`{str(uuid.uuid4())}`", [], "*New conversation*"),
+                lambda: (f"`{str(uuid.uuid4())}`", [], Assistant.CompleteHistory([]), "*New conversation*"),
                 None,
-                [conversation_id, chatbot_interface, conversation_title],
+                [conversation_id, chatbot_interface, current_conversation, conversation_title],
                 queue=False,
             ).then(
                 get_user_conversations_metadata,
@@ -672,17 +696,17 @@ with gr.Blocks(
 
             input_text.submit(
                 fn=handle_submit,
-                inputs=[input_text, chatbot_interface],
-                outputs=[input_text, chatbot_interface],
+                inputs=[input_text, current_conversation],
+                outputs=[input_text, current_conversation, chatbot_interface],
                 queue=False,
             ).then(
                 assistant_instance.process_input,
-                inputs=[chatbot_interface],
-                outputs=[chatbot_interface],
+                inputs=[current_conversation],
+                outputs=[current_conversation, chatbot_interface],
             ).then(
                 create_or_update_conversation,
-                inputs=[conversation_id, chatbot_interface],
-                outputs=None,
+                inputs=[conversation_id, conversation_title, current_conversation],
+                outputs=conversation_title,
             ).then(
                 get_user_conversations_metadata,
                 inputs=None,
