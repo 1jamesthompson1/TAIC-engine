@@ -307,8 +307,10 @@ class ConversationMetadataStore:
         self.table_client = table_client
         self.blob_store = blob_store
     
-    def create_or_update_conversation(self, username: str, conversation_id: str, 
-                                    history: List[Dict], conversation_title: Optional[str] = None) -> bool:
+    def create_or_update_conversation(
+        self, username: str, conversation_id: str, db_version: int,
+        history: List[Dict], conversation_title: Optional[str] = None,
+        ) -> bool:
         """
         Store conversation: blob for JSON data, Table Storage for metadata.
         
@@ -352,6 +354,7 @@ class ConversationMetadataStore:
                 "last_updated": now,
                 "created_at": existing_entity.get("created_at", now) if existing_entity else now,
                 "app_version": Version.CURRENT_VERSION,
+                "db_version": db_version,
             }
             
             # Upsert the entity (create or update)

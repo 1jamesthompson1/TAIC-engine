@@ -1,39 +1,40 @@
+
+# TAIC Smart Assistant
+
+> An intelligent assistant and knowledge search tool for the New Zealand Transport Accident Investigation Commission
+
+[![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
+[![Built with Gradio](https://img.shields.io/badge/Built%20with-Gradio-orange)](https://gradio.app/)
+
 ---
-title: TAIC smart assistant
-emoji: 💻
-colorFrom: purple
-colorTo: gray
-sdk: docker
-app_file: app.py
+
+## Preview
+
+![TAIC Smart Assistant Demo](https://github.com/1jamesthompson1/TAIC_smart_assistant/releases/download/v0.4.0/demo.gif)
+
 ---
-This is a quick chatbot gradio app. 
 
-It is being built seperately from the main project repo: https://github.com/1jamesthompson1/TAIC-report-summary to keep oveheads low.
+## Features
 
-It is likely following dicussions at TAIC that this chat interface is alot better for the end user. Therefore it may be implemented and merged with the current flask viewer app. The easiest way seems to be do doing this via embedding. However long term it would be better to have it all on the same framework.
+🤖 **AI-Powered Assistant**
+- Interactive chat interface with conversational AI
+- Context-aware responses using TAIC's knowledge base
+- Conversation history and management
 
-## Version Management
+🔍 **Advanced Knowledge Search**
+- Vector-based semantic search across TAIC, ATSB and TSB documents
+- Filter by document type, agency, year, and transport mode
+- Visual analytics and result export capabilities
 
-This project uses semantic versioning (MAJOR.MINOR.PATCH):
+---
 
-- **Patch** versions are auto-bumped on every push to main
-- **Minor/Major** versions can be manually triggered using GitHub Actions
-- All conversations and searches store the app version they were created with
-- Version compatibility checking prevents loading incompatible data
+## Project Status
 
-### Auto-versioning Rules
+This chat interface has proven to be significantly more user-friendly than other methods. This means that as many tools will be built behind the chat interface.
 
-Commit messages can trigger different version bumps:
+As of October 2025 this app is going into organisation wide deployment. There is no public access at the moment.
 
-- `BREAKING:` or `breaking change:` → Major version bump
-- `feat:` or `feature:` or `minor:` → Minor version bump  
-- Everything else → Patch version bump
-
-### Manual Version Bumping
-
-Use GitHub Actions workflow "Auto Version Bump" with manual trigger to specify version bump type.
-
-**Note for Pull Requests**: When using squash-and-merge, ensure your final squashed commit message contains the appropriate keywords above, as the GitHub Action analyzes the squashed commit message for version bumping.
+The app implementation is completely seperate from the code base, however a new deployment would still require some admin and setup to get running.
 
 ## Contributing
 
@@ -85,3 +86,26 @@ uv run uvicorn app:app --host localhost --port 7860 --reload
 2. Make your changes with appropriate commit messages
 3. Create a pull request
 4. When merging, use squash-and-merge with conventional commit keywords in the final commit message for automatic version bumping
+
+#### Version Management
+
+This project uses semantic versioning (MAJOR.MINOR.PATCH):
+
+- **Patch** versions are auto-bumped on every push to main
+- **Minor/Major** versions can be manually triggered using GitHub Actions
+- All conversations and searches store the app version they were created with
+- Version compatibility checking prevents loading incompatible data
+
+##### Auto-versioning Rules
+
+Commit messages can trigger different version bumps:
+
+- `BREAKING:` or `breaking change:` → Major version bump
+- `feat:` or `feature:` or `minor:` → Minor version bump  
+- Everything else → Patch version bump
+
+##### Manual Version Bumping
+
+Use GitHub Actions workflow "Auto Version Bump" with manual trigger to specify version bump type.
+
+**Note for Pull Requests**: When using squash-and-merge, ensure your final squashed commit message contains the appropriate keywords above, as the GitHub Action analyzes the squashed commit message for version bumping.

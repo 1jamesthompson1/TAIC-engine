@@ -24,24 +24,27 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Install necessary packages to allow download of azcopy
+# Install necessary packages for Azure CLI and runtime dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
-    apt-transport-https
+    apt-transport-https \
+    ca-certificates \
+    lsb-release \
+    && rm -rf /var/lib/apt/lists/*
 
-# Download and install the Microsoft package repository
+# Download and install the Microsoft package repository for azcopy
 RUN curl -sSL -O https://packages.microsoft.com/config/debian/11/packages-microsoft-prod.deb && \
     dpkg -i packages-microsoft-prod.deb && \
     rm packages-microsoft-prod.deb && \
     apt-get update
 
 # Install azcopy
-RUN apt-get install -y azcopy
+RUN apt-get install -y azcopy && rm -rf /var/lib/apt/lists/*
 
-# Download the vector database
-RUN --mount=type=secret,id=SAS_TOKEN,mode=0444,required=true \
-    azcopy cp "https://taicdocumentsearcherdata.blob.core.windows.net/vectordb/prod/*?$(cat /run/secrets/SAS_TOKEN)" vectordb --recursive
+# Copy and make startup scripts executable
+COPY startup.sh /app/startup.sh
+RUN chmod +x /app/startup.sh
 
 # Expose the port that the app runs on
 EXPOSE 7860
@@ -49,5 +52,5 @@ EXPOSE 7860
 # Reset the entrypoint, don't invoke `uv`
 ENTRYPOINT []
 
-# Command to run the application
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+# Command to run the startup script (which handles vectordb download and starts the app)
+CMD ["/app/startup.sh"]

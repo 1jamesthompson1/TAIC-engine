@@ -187,7 +187,8 @@ def create_or_update_conversation(request: gr.Request, conversation_id, conversa
         username=username,
         conversation_id=conversation_id,
         history=history,
-        conversation_title=conversation_title
+        conversation_title=conversation_title,
+        db_version=searching_instance.db_version,
     )
     
     if not success:
@@ -528,7 +529,7 @@ def update_download_button(download_dict: dict):
 
 
 def get_welcome_message(request: gr.Request):
-    return request.username, f"Data last updated: {searching_instance.last_updated} | App version: {Version.CURRENT_VERSION}"
+    return request.username, f"**Data:** {searching_instance.last_updated} • **App:** {Version.CURRENT_VERSION} • **DB:** {searching_instance.db_version}"
 
 
 def get_user_name(request: gr.Request):
@@ -566,7 +567,7 @@ def get_footer():
 <div class="custom-footer">
     <p>Created by <a href="https://github.com/1jamesthompson1">James Thompson</a> for the <a href="https://www.taic.org.nz">New Zealand Transport Accident Investigation Commission.</a></p>
     <p>Contact directed to <a href="mailto:james.thompson@taic.org.nz">james.thompson@taic.org.nz</a> or for suggestions and/or bug reports please use the provided <a href="https://forms.office.com/Pages/ResponsePage.aspx?id=RmxQlKGu1key34UuP4dPFavrlUtUJCpGvY1oQw3ObrlUQjZSTFRFUDRZRk8wUUxPWkVYVEw1SUVDUy4u" target="_blank">feeback form</a>.</p>
-    <p>Project is being developed openly on <a href="https://github.com/1jamesthompson1/TAIC_smart_assistant">https://github.com/1jamesthompson1/TAIC-report-summary</a></p>
+    <p>Project is being developed openly on <a href="https://github.com/1jamesthompson1/TAIC_smart_assistant">https://github.com/1jamesthompson1/TAIC_smart_assistant</a></p>
     <p xmlns:cc="http://creativecommons.org/ns#" >This work is licensed under <a href="https://creativecommons.org/licenses/by/4.0/?ref=chooser-v1" target="_blank" rel="license noopener noreferrer" style="display:inline-block;">CC BY 4.0<img style="height:22px!important;margin-left:3px;vertical-align:middle;display: inline-block;" src="https://mirrors.creativecommons.org/presskit/icons/cc.svg?ref=chooser-v1" alt="CC logo"><img style="height:22px!important;margin-left:3px;vertical-align:middle;display: inline-block;" src="https://mirrors.creativecommons.org/presskit/icons/by.svg?ref=chooser-v1" alt="BY logo"></a></p>                  
 </div>
 """)

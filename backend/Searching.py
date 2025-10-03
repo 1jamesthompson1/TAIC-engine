@@ -148,6 +148,7 @@ class Searcher:
         self.last_updated = self.all_document_types_table.list_versions()[-1][
             "timestamp"
         ].strftime("%Y-%m-%d")
+        self.db_version = self.all_document_types_table.version
         searcher_config = table.Table(title="🔍 Searcher Config", show_header=True)
         searcher_config.add_column("Name")
         searcher_config.add_column("Value")
