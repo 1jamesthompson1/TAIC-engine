@@ -1,6 +1,6 @@
 [project]
 name = "TAIC_smart_tools"
-version = "0.4.1"
+version = "0.4.2"
 description = "An app that provides access to smart tools mainly a RAG agent which is built off a dataset of TAIC, ATSB and TSB reports to assist investigators and researchers."
 authors = [{ name = "1jamesthompson1", email = "1jamesthompson1@gmail.com" }]
 requires-python = ">=3.10,<3.13"
@@ -10,37 +10,23 @@ dependencies = [
     "python-dotenv>=1.0.1,<2",
     "openai>=1.55.1,<2",
     "lancedb>=0.21.0,<0.22",
-    "voyageai>=0.3.1,<0.4",
-    "adlfs>=2024.7.0,<2025",
     "rich>=13.9.4,<14",
     "authlib>=1.3.2,<2",
     "fastapi>=0.115.6,<0.116",
-    "starlette>=0.41.0,<0.42",
-    "itsdangerous>=2.2.0,<3",
+    "starlette[full]>=0.41.0,<0.42",
     "azure-data-tables>=12.6.0,<13",
-    "datasets>=3.2.0,<4",
-    "pylance>=0.25.0,<0.26",
     "gradio-rangeslider>=0.0.8,<0.0.9",
-    "transformers>=4.51.3,<5",
-    "pydantic==2.10.6",
+    "pydantic>=2.10.6,<3",
     "plotly>=6.0.1,<7",
     "openpyxl>=3.1.5,<4",
-    "tiktoken>=0.9.0,<0.10",
     "azure-storage-blob>=12.25.1,<13",
-    "langchain[openai]>=0.3.26,<0.4",
-    "langchain-openai>=0.2.11,<0.3",
-    "langchain-core>=0.3.28,<0.4",
-    "langgraph>=0.5.1,<0.6",
     "azure-ai-inference>=1.0.0b9",
+    "uvicorn>=0.34.2,<0.35",
 ]
 
 [dependency-groups]
 dev = [
-    "huggingface-hub[cli]>=0.30.0,<1.0",
     "ipykernel>=6.29.5,<7",
-    "uvicorn>=0.34.2,<0.35",
-    "matplotlib>=3.10.3,<4",
-    "seaborn>=0.13.2,<0.14",
     "notebook>=7.4.4,<8",
 ]
 

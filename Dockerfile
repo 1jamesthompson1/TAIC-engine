@@ -46,8 +46,11 @@ RUN apt-get install -y azcopy && rm -rf /var/lib/apt/lists/*
 COPY startup.sh /app/startup.sh
 RUN chmod +x /app/startup.sh
 
+# Set the port for the application
+ENV PORT=8080
+
 # Expose the port that the app runs on
-EXPOSE 8080
+EXPOSE ${PORT}
 
 # Reset the entrypoint, don't invoke `uv`
 ENTRYPOINT []
