@@ -49,13 +49,19 @@ _Note that this has only ever been 'completed' on Linux machines. For ease of us
 curl -Ls https://astral.sh/uv/install.sh | sh
 
 # Install project dependencies
-uv sync
+uv sync --dev
+
+# Setup pre-commits
+uv run pre-commit install
 ```
 
 2. **Get the vector database**
+*This is simply so that when you want to test the webapp you can use the searcher quickly as it is locally fetching data.*
 
 Install `azcopy` by following: https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azcopy-v10?tabs=apt
 Install `az cli` by following: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest
+
+You will then need to login with `az login`.
 
 ```bash
 # Download and setup the vector database
@@ -108,4 +114,37 @@ Commit messages can trigger different version bumps:
 
 Use GitHub Actions workflow "Auto Version Bump" with manual trigger to specify version bump type.
 
+##### Manual Version Bumping
+
+Use GitHub Actions workflow "Auto Version Bump" with manual trigger to specify version bump type.
+
 **Note for Pull Requests**: When using squash-and-merge, ensure your final squashed commit message contains the appropriate keywords above, as the GitHub Action analyzes the squashed commit message for version bumping.
+
+### CI/CD Configuration
+
+This project uses GitHub Actions for automated testing and deployment. The following secrets need to be configured in your GitHub repository:
+
+#### Required GitHub Secrets
+
+| Secret Name | Description |
+|-------------|-------------|
+| `AZURE_CLIENT_ID` | Azure AD application client ID for authentication |
+| `AZURE_CLIENT_SECRET` | Azure AD application client secret |
+| `AZURE_TENANT_ID` | Azure AD tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID for blob storage access |
+| `AZURE_STORAGE_ACCOUNT_NAME` | Azure Storage account name where test config is stored |
+
+#### Test Environment Setup
+
+The CI pipeline automatically downloads a test configuration file (`test.env`) from Azure Blob Storage during test runs. This file should contain all necessary environment variables for testing with real services.
+
+To set up the test environment:
+
+1. Create a `test.env` file with your test environment variables
+2. Upload it to Azure Blob Storage in a `configs` container
+3. Ensure the service principal has read access to the blob
+
+The test workflow will:
+- Authenticate with Azure using the service principal
+- Download the test configuration
+- Run tests with both mocked and real services

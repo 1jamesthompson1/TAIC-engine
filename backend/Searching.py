@@ -1,16 +1,17 @@
-from rich import print, table
-import lancedb
-import plotly.express as px
-import pandas as pd
-import numpy as np
 import os
-from typing import Optional, Union, ClassVar, List
+from typing import ClassVar, Literal, NamedTuple
 
+import lancedb
+import numpy as np
+import pandas as pd
+import plotly.express as px
 from azure.ai.inference import EmbeddingsClient
 from azure.core.credentials import AzureKeyCredential
 from lancedb.embeddings.base import TextEmbeddingFunction
 from lancedb.embeddings.registry import register
 from lancedb.embeddings.utils import TEXT
+from rich import print, table  # noqa: A004
+
 
 # This has to be added in manually unless https://github.com/lancedb/lancedb/issues/2518 is resolved
 @register("azure-ai-text")
@@ -58,23 +59,26 @@ class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
     def ndims(self):
         if self.name == "embed-v-4-0":
             return 1536
-        elif self.name == "Cohere-embed-v3-english":
+        if self.name in {"Cohere-embed-v3-english", "Cohere-embed-v3-multilingual"}:
             return 1024
-        elif self.name == "Cohere-embed-v3-multilingual":
-            return 1024
-        elif self.name == "text-embedding-ada-002":
+        if self.name == "text-embedding-ada-002":
             return 1536
-        elif self.name == "text-embedding-3-large":
+        if self.name == "text-embedding-3-large":
             return 3072
-        elif self.name == "text-embedding-3-small":
+        if self.name == "text-embedding-3-small":
             return 1536
-        else:
-            raise ValueError(f"Unknown model name: {self.name}")
+        msg = f"Unknown model name: {self.name}"
+        raise ValueError(msg)
 
-    def compute_query_embeddings(self, query: str, *args, **kwargs) -> List[np.array]:
+    def compute_query_embeddings(self, query: str, *_args, **_kwargs) -> list[np.array]:
         return self.compute_source_embeddings(query, input_type="query")
 
-    def compute_source_embeddings(self, texts: TEXT, *args, **kwargs) -> List[np.array]:
+    def compute_source_embeddings(
+        self,
+        texts: TEXT,
+        *_args,
+        **kwargs,
+    ) -> list[np.array]:
         texts = self.sanitize_input(texts)
         input_type = (
             kwargs.get("input_type") or "document"
@@ -82,8 +86,11 @@ class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
         return self.generate_embeddings(texts, input_type=input_type)
 
     def generate_embeddings(
-        self, texts: Union[List[str], np.ndarray], *args, **kwargs
-    ) -> List[np.array]:
+        self,
+        texts: list[str] | np.ndarray,
+        *_args,
+        **kwargs,
+    ) -> list[np.array]:
         """
         Get the embeddings for the given texts
 
@@ -99,9 +106,12 @@ class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
 
         if isinstance(texts, np.ndarray):
             if texts.dtype != object:
-                raise ValueError(
+                msg = (
                     "AzureAITextEmbeddingFunction only supports input of strings for numpy \
                         arrays."
+                )
+                raise ValueError(
+                    msg,
                 )
             texts = texts.tolist()
 
@@ -122,16 +132,27 @@ class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
     def _init_client():
         if AzureAITextEmbeddingFunction.client is None:
             if os.environ.get("AZURE_AI_API_KEY") is None:
-                raise ValueError("AZURE_AI_API_KEY not found in environment variables")
+                msg = "AZURE_AI_API_KEY not found in environment variables"
+                raise ValueError(msg)
             if os.environ.get("AZURE_AI_ENDPOINT") is None:
-                raise ValueError("AZURE_AI_ENDPOINT not found in environment variables")
+                msg = "AZURE_AI_ENDPOINT not found in environment variables"
+                raise ValueError(msg)
 
             AzureAITextEmbeddingFunction.client = EmbeddingsClient(
                 endpoint=os.environ["AZURE_AI_ENDPOINT"],
                 credential=AzureKeyCredential(os.environ["AZURE_AI_API_KEY"]),
             )
-            
-            
+
+
+class SearchParams(NamedTuple):
+    query: str
+    search_type: Literal["fts", "vector"] | None
+    year_range: tuple[int, int]
+    document_type: list[str]
+    modes: list[str]
+    agencies: list[str]
+
+
 class Searcher:
     def __init__(self, db_uri, table_name):
         print("[bold]Creating searcher[/bold]")
@@ -154,18 +175,24 @@ class Searcher:
         searcher_config.add_column("Value")
         searcher_config.add_row("Database URI", db_uri)
         searcher_config.add_row("Table Name", table_name)
-        searcher_config.add_row("Table Version", str(self.all_document_types_table.version))
+        searcher_config.add_row(
+            "Table Version",
+            str(self.all_document_types_table.version),
+        )
         searcher_config.add_row("Last updated", self.last_updated)
         searcher_config.add_row(
-            "Table Size", f"{self.all_document_types_table.count_rows()} rows"
+            "Table Size",
+            f"{self.all_document_types_table.count_rows()} rows",
         )
         searcher_config.add_row(
-            "Columns", ", ".join(self.all_document_types_table.schema.names)
+            "Columns",
+            ", ".join(self.all_document_types_table.schema.names),
         )
         print(searcher_config)
 
         if "agency" not in self.all_document_types_table.schema.names:
-            raise ValueError("agency column not found in table")
+            msg = "agency column not found in table"
+            raise ValueError(msg)
 
     def __get_where_statement(
         self,
@@ -177,7 +204,7 @@ class Searcher:
         where_statement = []
         if year_range:
             where_statement.append(
-                f"year >= {int(year_range[0])} and year <= {int(year_range[1])}"
+                f"year >= {int(year_range[0])} and year <= {int(year_range[1])}",
             )
         if document_type:
             document_types = ", ".join(f'"{dt}"' for dt in document_type)
@@ -185,7 +212,7 @@ class Searcher:
         if modes and len(modes) > 1:
             where_statement.append(f"mode in {tuple([str(mode) for mode in modes])}")
         elif modes and len(modes) == 1:
-            where_statement.append(f"mode = '{str(modes[0])}'")
+            where_statement.append(f"mode = '{modes[0]!s}'")
         if agencies and len(agencies) > 1:
             where_statement.append(f"agency in {tuple(agencies)}")
         elif agencies and len(agencies) == 1:
@@ -196,7 +223,7 @@ class Searcher:
     def __print_search_query(
         self,
         query: str,
-        final_query: Union[str, list[float], None],
+        final_query: str | list[float] | None,
         where_statement: str,
     ):
         query_table = table.Table(
@@ -221,12 +248,7 @@ class Searcher:
 
     def knowledge_search(
         self,
-        query: str,
-        type: Optional[str],
-        year_range: tuple[int, int],
-        document_type: list[str],
-        modes: list[str],
-        agencies: list[str],
+        params: SearchParams,
         limit: int = 150,
         relevance: float = 0,
     ):
@@ -234,43 +256,46 @@ class Searcher:
             "info_message": "",
         }
 
-        # Add info message 
-        if "TSB" in agencies and "summary" in document_type:
-            info['info_message'] += "Summaries are only available for ATSB and TAIC reports, not TSB reports.\n"
+        # Add info message
+        if "TSB" in params.agencies and "summary" in params.document_type:
+            info["info_message"] += (
+                "Summaries are only available for ATSB and TAIC reports, not TSB reports.\n"
+            )
 
         where_statement = self.__get_where_statement(
-            year_range=year_range,
-            document_type=document_type,
-            modes=modes,
-            agencies=agencies,
+            year_range=params.year_range,
+            document_type=params.document_type,
+            modes=params.modes,
+            agencies=params.agencies,
         )
 
-        final_query: Union[list[float], Optional[str]] = None
-        if query == "" or query is None:
+        final_query: list[float] | str | None = None
+        if params.query == "" or params.query is None:
             final_query = None
-            type = None # Fix up error with LLM not providing the right parameters
-        elif type in ["fts", "vector"]:
-            final_query = query
+            # Fix up error with LLM not providing the right parameters
+            params = params._replace(search_type=None)
+        elif params.search_type in ["fts", "vector"]:
+            final_query = params.query
         else:
-            raise ValueError(f"type must be 'fts' or 'vector' not {type}")
+            msg = f"type must be 'fts' or 'vector' not {params.search_type}"
+            raise ValueError(msg)
 
-        self.__print_search_query(query, final_query, where_statement)
+        self.__print_search_query(params.query, final_query, where_statement)
 
+        search = self.all_document_types_table.search(
+            final_query,
+            query_type=params.search_type,
+        )
 
-        search = self.all_document_types_table.search(final_query, query_type=type)
-
-        if type == "vector":
+        if params.search_type == "vector":
             search = search.metric("cosine")
 
         results = (
-            search
-            .where(where_statement, prefilter=True)
-            .limit(limit)
-            .to_pandas()
+            search.where(where_statement, prefilter=True).limit(limit).to_pandas()
         ).drop(columns=["vector"])
 
         print(
-            f"[bold green]Found {len(results)} results for query: {query}[/bold green]"
+            f"[bold green]Found {len(results)} results for query: {params.query}[/bold green]",
         )
 
         info["total_results"] = len(results)
@@ -279,16 +304,15 @@ class Searcher:
         if final_query is not None:
             if "_distance" in results.columns:
                 results["_distance"] = 1 - results["_distance"]
-            results.rename(
+            results = results.rename(
                 columns={
                     "_relevance_score": "relevance",
                     "_score": "relevance",
                     "_distance": "relevance",
                 },
-                inplace=True,
             )
-            results.sort_values(by=["relevance"], ascending=False, inplace=True)
-            results.reset_index(drop=True, inplace=True)
+            results = results.sort_values(by=["relevance"], ascending=False)
+            results = results.reset_index(drop=True)
 
             cols = ["relevance"] + [
                 col for col in results.columns if col != "relevance"
@@ -297,17 +321,17 @@ class Searcher:
 
             if relevance > 0:
                 print(
-                    f"[bold yellow]Filtering results to only include relevance >= {relevance}[/bold yellow]"
+                    f"[bold yellow]Filtering results to only include relevance >= {relevance}[/bold yellow]",
                 )
                 results = results[results["relevance"] >= relevance]
-                info['relevant_results'] = len(results)
+                info["relevant_results"] = len(results)
                 print(
-                    f"[bold green]Found {len(results)} relevant results for query: {query}[/bold green]"
+                    f"[bold green]Found {len(results)} relevant results for query: {params.query}[/bold green]",
                 )
 
         # Convert mode back to strings
         results["mode"] = results["mode"].apply(
-            lambda x: ["aviation", "rail", "maritime"][int(x)]
+            lambda x: ["aviation", "rail", "maritime"][int(x)],
         )
 
         graph_maker = GraphMaker(results)
@@ -320,15 +344,13 @@ class Searcher:
             "agency": graph_maker.get_agency_pie_chart(),
         }
 
-
         return results, info, plots
 
 
-
-class GraphMaker():
+class GraphMaker:
     def __init__(self, context):
         self.context = context
-        
+
     def add_visual_layout(self, fig):
         fig = fig.update_layout(width=310)
 
@@ -344,11 +366,9 @@ class GraphMaker():
             fig.update_layout(showlegend=False)
 
         return fig
-        
+
     def get_document_type_pie_chart(self):
-        context_df = (
-            self.context["document_type"].value_counts().reset_index()
-        )
+        context_df = self.context["document_type"].value_counts().reset_index()
         context_df.columns = ["document_type", "count"]
         fig = px.pie(
             context_df,

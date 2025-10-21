@@ -3,3 +3,14 @@ __pycache__
 .gradio
 vectordb/*
 workbench/*
+
+# Testing artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.pyc
+*.pyo
+
+# IDE files
+.vscode/
