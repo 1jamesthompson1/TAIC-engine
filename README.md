@@ -75,12 +75,12 @@ cp .env.example .env
 4. **Run the app locally**
 
 ```bash
-uv run uvicorn app:app --host 0.0.0.0 --port 8080 --reload
+uv run uvicorn app:app --host localhost --port 7860 --reload --timeout-graceful-shutdown 1
 ```
 
 5. **Access the application**
-- Open your browser to `http://localhost:8080`
-- For the tools interface: `http://localhost:8080/tools`
+- Open your browser to `http://localhost:7860`
+- For the tools interface: `http://localhost:7860/tools`
 
 ### Development Workflow
 

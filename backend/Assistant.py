@@ -412,7 +412,7 @@ class Assistant:
             )
             .choices[0]
             .message.content
-        )
+        ).strip()
 
     def complete_tool_use(
         self,

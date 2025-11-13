@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import tempfile
 import traceback
 import uuid
@@ -133,6 +134,13 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 # Dependency to get the current user
 def get_user(request: Request):
+    # Developer no-login mode: return a dev username and set session
+    if os.getenv("NO_LOGIN", "false").lower() == "true":
+        dev_username = os.getenv("DEV_USERNAME", "devuser")
+        # Try to ensure session user is available for code paths that read it
+        request.session["user"] = {"name": dev_username}
+        return dev_username
+
     user = request.session.get("user")
     if user:
         return user["name"]
@@ -189,15 +197,35 @@ def handle_undo(history: Assistant.CompleteHistory, undo_data: gr.UndoData):
 
 def handle_edit(history: Assistant.CompleteHistory, edit_data: gr.EditData):
     history.edit(edit_data.index, edit_data.value)
-    return history, history.gradio_format(), None
+    return history, history.gradio_format(), None, edit_data.value
 
 
-def handle_submit(user_input, history: Assistant.CompleteHistory = None):
+def handle_example_select(
+    selection: gr.SelectData,
+    current_conversation: Assistant.CompleteHistory,
+):
+    return handle_submit(selection.value["text"], current_conversation)
+
+
+def handle_submit(
+    user_input,
+    history: Assistant.CompleteHistory = None,
+    conversation_id=None,
+):
     if history is None:
         history = Assistant.CompleteHistory([])
     history.add_message("user", user_input)
 
-    return gr.Textbox(interactive=False, value=None), history, history.gradio_format()
+    if conversation_id is None:
+        conversation_id = str(uuid.uuid4())
+
+    return (
+        gr.Textbox(interactive=False, value=None),
+        user_input,
+        history,
+        history.gradio_format(),
+        conversation_id,
+    )
 
 
 def create_or_update_conversation(
@@ -222,16 +250,25 @@ def create_or_update_conversation(
     ):
         conversation_title = assistant_instance.provide_conversation_title(history)
 
+    print(f"Looking at updating conversation {conversation_id} for user {username}")
+
     if os.getenv("NO_LOGS", "false").lower() == "true":
         print(
             "[orange]⚠ NO_LOGS is set to true, skipping storing conversation[/orange]",
         )
         return conversation_title
 
+    # Clean conversation_id to just the UUID part if it has extra formatting
+    uuid_regex = (
+        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    )
+    match = re.search(uuid_regex, conversation_id)
+    cleaned_conversation_id = match.group(0) if match else conversation_id
+
     # Store using blob storage (JSON in blob + metadata in table)
     success = conversation_store.create_or_update_conversation(
         username=username,
-        conversation_id=conversation_id,
+        conversation_id=cleaned_conversation_id,
         history=history,
         conversation_title=conversation_title,
         db_version=searching_instance.db_version,
@@ -271,9 +308,9 @@ def load_conversation(request: gr.Request, conversation_id: str):
             print(
                 f"[bold red]⚠ Version incompatibility for conversation {conversation_id}: {version_message}[/bold red]",
             )
-            formatted_id = f"`{conversation['id']}`"
+            formatted_id = f"ID: `{conversation['id']}`"
             formatted_title = (
-                f"**{conversation['conversation_title']}** ⚠️ *Version Incompatible*"
+                f"{conversation['conversation_title']} ⚠️ *Version Incompatible*"
             )
             # Return empty messages with error indication
             error_message = {
@@ -288,26 +325,98 @@ def load_conversation(request: gr.Request, conversation_id: str):
             }
             error_messages = [error_message] + conversation["messages"]
             history = Assistant.CompleteHistory(error_messages)
-            return history, history.gradio_format(), formatted_id, formatted_title
+            return (
+                history,
+                history.gradio_format(),
+                formatted_id,
+                formatted_title,
+                gr.Button(
+                    visible=True,
+                ),
+            )
 
         if version_message:  # Minor version differences
             print(
                 f"[orange]⚠ Version warning for conversation {conversation_id}: {version_message}[/orange]",
             )
             # Add a subtle warning to the title but still load the conversation
-            formatted_title = f"**{conversation['conversation_title']}** ⚠️"
+            formatted_title = f"{conversation['conversation_title']} ⚠️"
         else:
-            formatted_title = f"**{conversation['conversation_title']}**"
+            formatted_title = conversation["conversation_title"]
 
         print(f"[bold green]✓ Loaded conversation {conversation_id}[/bold green]")
-        formatted_id = f"`{conversation['id']}`"
 
         history = Assistant.CompleteHistory(conversation["messages"])
 
-        return history, history.gradio_format(), formatted_id, formatted_title
+        return (
+            history,
+            history.gradio_format(),
+            conversation["id"],
+            formatted_title,
+            gr.Button(
+                visible=True,
+            ),
+        )
     print(f"[bold red]✗ Failed to load conversation {conversation_id}[/bold red]")
     history = Assistant.CompleteHistory([])
-    return history, [], f"`{conversation_id}`", "*Failed to load*"
+    return history, [], conversation_id, "Failed to load", gr.Button(visible=True)
+
+
+def delete_conversation(  # noqa: PLR0913
+    request: gr.Request,
+    current_conv: gr.State,
+    chatbot: gr.Chatbot,
+    current_conv_id: gr.State,
+    current_conv_title: gr.State,
+    to_delete: str | None,
+):
+    """
+    Delete a conversation and clear current conversation state if needed.
+    Will ask the user for confirmation before calling this function.
+    """
+    username = request.username
+
+    if current_conv_id is None:
+        new_conversation_button = gr.Button(visible=False)
+    else:
+        new_conversation_button = gr.Button(visible=True)
+
+    if to_delete is None:
+        print("[orange]Deletion of conversation cancelled by user[/orange]")
+        return (
+            current_conv,
+            chatbot,
+            current_conv_id,
+            current_conv_title,
+            new_conversation_button,
+        )
+
+    if current_conv_id == to_delete:
+        # Clear current conversation if it's the one being deleted
+        current_conv = Assistant.CompleteHistory([])
+        chatbot = gr.Chatbot(value=current_conv.gradio_format(), type="messages")
+        current_conv_id = None
+        current_conv_title = None
+        new_conversation_button = gr.Button(visible=False)
+
+    success = conversation_store.delete_conversation(
+        username,
+        to_delete,
+    )
+
+    if success:
+        print(f"[bold green]✓ Deleted conversation {to_delete}[/bold green]")
+    else:
+        print(f"[bold red]✗ Failed to delete conversation {to_delete}[/bold red]")
+        gr.Warning("Failed to delete conversation. Try again later.")
+
+    return (
+        current_conv,
+        chatbot,
+        current_conv_id,
+        current_conv_title,
+        new_conversation_button,
+    )
 
 
 searching_instance = Searching.Searcher(
@@ -659,8 +768,8 @@ def get_footer():
     return gr.HTML(f"""
 <style>
     .custom-footer {{
-        text-align: center;
         margin-top: 20px;
+        text-align: center;
         padding: 10px;
         background-color: {TAIC_theme.primary_50};
         color: {TAIC_theme.neutral_50};
@@ -681,17 +790,12 @@ with gr.Blocks(
     fill_height=True,
     fill_width=True,
     head='<link rel="icon" href="/static/favicon.png" type="image/png">',
+    css="""
+footer {visibility: hidden} /* Hides the default gradio footer */
+""",  # Hides the footer
 ) as smart_tools:
     username = gr.State()
     smart_tools.load(get_user_name, inputs=None, outputs=username)
-
-    user_conversations = gr.State([])
-    current_conversation = gr.State(None)
-    smart_tools.load(
-        get_user_conversations_metadata,
-        inputs=None,
-        outputs=user_conversations,
-    )
 
     with gr.Row():
         gr.Markdown("# TAIC smart tools")
@@ -707,135 +811,271 @@ with gr.Blocks(
     )
 
     with gr.Tabs():
-        with gr.TabItem("Assistant"):
+        with gr.TabItem("Assistant") as assistant_tab:
+            user_conversations = gr.State([])
+            new_input = gr.State(None)
+            current_conversation = gr.State(None)
+            current_conversation_id = gr.State(None)
+            current_conversation_title = gr.State(None)
+
+            chatbot_interface = gr.Chatbot(
+                type="messages",
+                height="90%",
+                min_height=400,
+                show_label=False,
+                watermark="This paragraph was generated by AI, please check thoroughly before using.",
+                editable="user",
+                avatar_images=(
+                    None,
+                    "https://www.taic.org.nz/themes/custom/taic/favicon/android-icon-192x192.png",
+                ),
+                render=False,
+                examples=[
+                    {
+                        "display_text": "Recent TAIC safety issues",
+                        "text": "Can you please provide a summary of recent safety issues identified by TAIC in the last 2 years?",
+                    },
+                    {
+                        "display_text": "Breakdown of common causes of incidents",
+                        "text": "What are the common threads that run through aviation safety incidents investigated by TAIC over the last decade? Is this different from what is seen in ATSB aviation incident reports?",
+                    },
+                    {
+                        "display_text": "Mentions of 'International Maritime Organization'",
+                        "text": "How many times has the 'International Maritime Organization' been mentioned in TAIC's investigation reports?",
+                    },
+                ],
+                placeholder="#### Welcome to the TAIC smart assistant\nI have access to TAIC's, ATSB's and TSB's investigations reports, safety issues and recommendations from 2000 to present day. Ask me anything in the box below, or try out one of the example questions!\n\n*Please note that while I strive to provide accurate and helpful information, I may occasionally generate incorrect or nonsensical responses. Always verify critical information from authoritative sources.*\n\n##### Examples",
+            )
+
+            input_text = gr.Textbox(
+                placeholder="Please type your message here...",
+                show_label=False,
+                submit_btn="Send",
+                render=False,
+                lines=3,
+            )
+            new_conversation_button = gr.Button(
+                "New conversation",
+                visible="hidden",
+                render=False,
+            )
+
+            smart_tools.load(
+                fn=get_user_conversations_metadata,
+                inputs=None,
+                outputs=user_conversations,
+            )
+
+            assistant_process = new_input.change(
+                assistant_instance.process_input,
+                inputs=[current_conversation],
+                outputs=[current_conversation, chatbot_interface],
+                trigger_mode="once",
+            )
+            ui_update = (
+                assistant_process.then(
+                    create_or_update_conversation,
+                    inputs=[
+                        current_conversation_id,
+                        current_conversation_title,
+                        current_conversation,
+                    ],
+                    outputs=current_conversation_title,
+                )
+                .then(
+                    get_user_conversations_metadata,
+                    inputs=None,
+                    outputs=user_conversations,
+                )
+                .then(
+                    lambda: gr.Textbox(interactive=True),
+                    None,
+                    input_text,
+                )
+                .then(
+                    lambda: gr.Button(visible=True),
+                    None,
+                    new_conversation_button,
+                )
+            )
             with gr.Row():
                 with gr.Column(scale=1):
-                    gr.Markdown("## Current conversation")
-                    with gr.Group():
-                        gr.Markdown("**Conversation ID:**")
-                        conversation_id = gr.Markdown(f"`{uuid.uuid4()!s}`")
-                        gr.Markdown("**Title:**")
-                        conversation_title = gr.Markdown("*New conversation*")
                     gr.Markdown("## Previous conversations")
+
+                    to_delete = gr.JSON(None, visible="hidden")
+                    to_delete.change(
+                        fn=delete_conversation,
+                        inputs=[
+                            current_conversation,
+                            chatbot_interface,
+                            current_conversation_id,
+                            current_conversation_title,
+                            to_delete,
+                        ],
+                        outputs=[
+                            current_conversation,
+                            chatbot_interface,
+                            current_conversation_id,
+                            current_conversation_title,
+                            new_conversation_button,
+                        ],
+                    ).then(
+                        get_user_conversations_metadata,
+                        inputs=None,
+                        outputs=user_conversations,
+                    )
 
                     @gr.render(inputs=[user_conversations])
                     def render_conversations(conversations):
                         for conversation in conversations:
-                            with gr.Row():
+                            with gr.Group(), gr.Row():
                                 gr.Markdown(
                                     f"### {conversation['conversation_title']}",
                                     container=False,
                                 )
+                                with gr.Column(min_width=40):
 
-                                def create_load_function(conv_id):
-                                    def load_func(request: gr.Request):
-                                        return load_conversation(request, conv_id)
+                                    def create_load_function(conv_id):
+                                        def load_func(request: gr.Request):
+                                            return load_conversation(request, conv_id)
 
-                                    return load_func
+                                        return load_func
 
-                                gr.Button("load").click(
-                                    fn=create_load_function(conversation["id"]),
-                                    inputs=None,
-                                    outputs=[
-                                        current_conversation,
-                                        chatbot_interface,
-                                        conversation_id,
-                                        conversation_title,
-                                    ],
-                                )
+                                    gr.Button("load", size="sm").click(
+                                        fn=create_load_function(conversation["id"]),
+                                        inputs=None,
+                                        outputs=[
+                                            current_conversation,
+                                            chatbot_interface,
+                                            current_conversation_id,
+                                            current_conversation_title,
+                                            new_conversation_button,
+                                        ],
+                                    )
+                                    js = f"""
+                                    () => {{
+                                        return confirm(`Are you sure you want to delete\n\n{conversation["conversation_title"]}\n\nThis action cannot be undone.`)
+                                            ? '{conversation["id"]}'
+                                            : null;
+                                    }}
+                                    """
+                                    gr.Button(
+                                        "delete conversation",
+                                        size="sm",
+                                    ).click(
+                                        None,
+                                        None,
+                                        to_delete,
+                                        js=js,
+                                    )
 
                 with gr.Column(scale=3):
                     with gr.Row():
-                        gr.Markdown("### Chat: ")
+                        conversation_title = gr.Markdown(None)
+                    with gr.Row():
+                        conversation_id = gr.Markdown(None)
+                        new_conversation_button.render()
 
-                    chatbot_interface = gr.Chatbot(
-                        type="messages",
-                        height="90%",
-                        min_height=400,
-                        show_label=False,
-                        watermark="This paragraph was generated by AI, please check thoroughly before using.",
-                        editable="user",
-                        avatar_images=(
-                            None,
-                            "https://www.taic.org.nz/themes/custom/taic/favicon/android-icon-192x192.png",
-                        ),
+                    chatbot_interface.render()
+
+                    # Update the conversation title and id displays when the current conversation state changes
+                    current_conversation_title.change(
+                        lambda title: f"## {title}" if title else None,
+                        inputs=current_conversation_title,
+                        outputs=conversation_title,
+                    ).then(
+                        lambda cid: f"ID: `{cid}`" if cid else None,
+                        current_conversation_id,
+                        conversation_id,
                     )
 
-                    input_text = gr.Textbox(
-                        placeholder="Please type your message here...",
-                        show_label=False,
-                        submit_btn="Send",
-                    )
-            chatbot_interface.undo(
-                fn=handle_undo,
-                inputs=current_conversation,
-                outputs=[current_conversation, chatbot_interface, input_text],
-            )
-            chatbot_interface.edit(
-                fn=handle_edit,
-                inputs=current_conversation,
-                outputs=[current_conversation, chatbot_interface, input_text],
-                queue=False,
-            ).then(
-                assistant_instance.process_input,
-                inputs=[current_conversation],
-                outputs=[current_conversation, chatbot_interface],
-            ).then(
-                create_or_update_conversation,
-                inputs=[conversation_id, conversation_title, current_conversation],
-                outputs=conversation_title,
-            ).then(
-                get_user_conversations_metadata,
-                inputs=None,
-                outputs=user_conversations,
-            ).then(
-                lambda: gr.Textbox(interactive=True),
-                None,
-                input_text,
-            )
+                    input_text.render()
 
-            chatbot_interface.clear(
+            # Handling the clearning of the conversation
+            clear_trigger = gr.State(None)
+            clear_trigger.change(
                 lambda: (
-                    f"`{uuid.uuid4()!s}`",
+                    None,
                     [],
                     Assistant.CompleteHistory([]),
-                    "*New conversation*",
+                    None,
+                    None,
                 ),
                 None,
                 [
                     conversation_id,
                     chatbot_interface,
                     current_conversation,
-                    conversation_title,
+                    current_conversation_id,
+                    current_conversation_title,
                 ],
                 queue=False,
             ).then(
                 get_user_conversations_metadata,
                 inputs=None,
                 outputs=user_conversations,
+            ).then(
+                lambda: gr.Button(visible=False),
+                None,
+                new_conversation_button,
+            )
+
+            chatbot_interface.clear(
+                uuid.uuid4,
+                None,
+                clear_trigger,
+                js=True,
+            )
+
+            new_conversation_button.click(
+                uuid.uuid4,
+                None,
+                clear_trigger,
+                js=True,
+            )
+
+            # Handle undo action
+            chatbot_interface.undo(
+                fn=handle_undo,
+                inputs=current_conversation,
+                outputs=[current_conversation, chatbot_interface, input_text],
+            )
+
+            # Handle examples, edit and submit actions
+
+            chatbot_interface.edit(
+                fn=handle_edit,
+                inputs=current_conversation,
+                outputs=[
+                    current_conversation,
+                    chatbot_interface,
+                    input_text,
+                    new_input,
+                ],
             )
 
             input_text.submit(
                 fn=handle_submit,
-                inputs=[input_text, current_conversation],
-                outputs=[input_text, current_conversation, chatbot_interface],
-                queue=False,
-            ).then(
-                assistant_instance.process_input,
+                inputs=[input_text, current_conversation, current_conversation_id],
+                outputs=[
+                    input_text,
+                    new_input,
+                    current_conversation,
+                    chatbot_interface,
+                    current_conversation_id,
+                ],
+            )
+
+            chatbot_interface.example_select(
+                fn=handle_example_select,
                 inputs=[current_conversation],
-                outputs=[current_conversation, chatbot_interface],
-            ).then(
-                create_or_update_conversation,
-                inputs=[conversation_id, conversation_title, current_conversation],
-                outputs=conversation_title,
-            ).then(
-                get_user_conversations_metadata,
-                inputs=None,
-                outputs=user_conversations,
-            ).then(
-                lambda: gr.Textbox(interactive=True),
-                None,
-                input_text,
+                outputs=[
+                    input_text,
+                    new_input,
+                    current_conversation,
+                    chatbot_interface,
+                    current_conversation_id,
+                ],
             )
 
         with gr.TabItem("Knowledge Search"):
