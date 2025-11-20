@@ -201,11 +201,12 @@ class VectorDB:
             # Create FTS index for text search
             try:
                 table.create_fts_index(
-                    "document",
+                    field_names="document",
                     use_tantivy=False,
                     language="English",
-                    stem=True,
                     ascii_folding=True,
+                    with_position=True,
+                    remove_stop_words=False,
                     replace=True,
                 )
             except Exception as e:
