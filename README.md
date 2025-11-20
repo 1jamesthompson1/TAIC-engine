@@ -1,31 +1,23 @@
 ﻿# TAIC report analysis
 
-![Website](https://img.shields.io/website?url=https://taic-document-searcher-cfdkgxgnc3bxgbeg.australiaeast-01.azurewebsites.net/login&up_message=live&down_message=not%20available&label=production%20webapp&link=https://taic-document-searcher-cfdkgxgnc3bxgbeg.australiaeast-01.azurewebsites.net/)
+> An AI powered data pipeline that ingests transport accident investigation reports and outputs structured datasets to be used downstream in RAG like applications, like [TAIC smart tools](https://github.com/1jamesthompson1/TAIC_smart_assistant)
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![tests](https://github.com/1jamesthompson1/TAIC-report-summary/actions/workflows/ci.yml/badge.svg)](https://github.com/1jamesthompson1/TAIC-report-summary/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/1jamesthompson1/TAIC-report-summary/graph/badge.svg?token=3IMJCA4B49)](https://codecov.io/gh/1jamesthompson1/TAIC-report-summary)
 
 
-***
-
-#### _A project that has built a tool and webapp to support both investigators and researchers in understanding the vast swath of previous investigations._
-
 ## What
 
-This GitHub repo is a project repository that has been built throughout [my](https://github.com/1jamesthompson1) experience and efforts of applying data science solutions to transport accident investigations.
+This github repository contains code for a data pipeline that ingests publicly available transport accident investigation reports from the [TAIC](https://taic.org.nz/reports), [ATSB](https://www.atsb.gov.au/publications/investigation-reports/) and [TSB](https://www.tsb.gc.ca/eng/rapports-reports.html) and outputs structured datasets of safety issues, recommendations, report paragraphs and more.
 
-There are fundamentally two deliverables in this project.  
-1. [engine](#engine) which is a Python program that gathers publicly available investigation reports and extracts/infers information to make datasets of safety issues, recommendations etc.  
-2. [viewer](#viewer) which is a Python Flask webapp deployed with Azure that implements a [RAG](https://arxiv.org/abs/2005.11401v4) search engine to search through some of the datasets generated in the engine.
-
-There is also a [collection](https://github.com/1jamesthompson1/TAIC-report-summary/tree/d735c0f3a50f4ef24f1e7198730c984fdb3446c7/notebooks) of jupyter notebooks that show the development process of some of the more complex features in the engine and viewer.
+There is also a [collection](https://github.com/1jamesthompson1/TAIC-report-summary/tree/d735c0f3a50f4ef24f1e7198730c984fdb3446c7/notebooks) of jupyter notebooks that show the development process of some of the more complex features in the engine.
 
 
 ### About
 
-This project started as a university project for my final semester. The university work was completed in July-October 2023 and finished with a basic engine and viewer app. Since then work has been completed directly with TAIC to bring the engine and viewer from POC -> Prototype -> Production. It should be released internally sometime in October 2024. 
+This project started as a university project for James' final semester of his BSc. The university work was completed in July-October 2023 and finished with a basic engine and viewer app. Since then work has been completed directly with TAIC to bring the engine and viewer from POC -> Prototype -> Production. The legacy 'viewer' app was released in later 2024. With a new [smart tools](https://github.com/1jamesthompson1/TAIC_smart_assistant) app developed and deployed in November 2025
 
 ### More information
 
-If you want more information about the project and how it works/how you can use it you should checkout the [wiki](https://github.com/1jamesthompson1/TAIC-report-summary/wiki).
-
-However if you are curious about the project and its history and non-technical documentation you can check out the [Project documents](https://github.com/1jamesthompson1/TAIC-report-summary/tree/main/Project%20documents)
+Most of the work is orgnaised inside a private Azure DevOps repository for TAIC. However GitHub is used for all code storing and PR resolutions. Contact James Thompson for more information.
