@@ -1,7 +1,7 @@
 [project]
 name = "taic-report-engine"
 version = "0.1.0"
-description = "An engine to use the powers of LLMs offered by openai to help analyse and interpret the accident investigation reports."
+description = "An AI powered data pipelines that takes publically available reports from transport accident investigation organisations and turns them into structured datasets (Safety issues, Recommendations, Summaries etc) for downstream applications (Like a RAG chatbot)."
 authors = [
     {name = "James", email = "1jamesthompson1@gmail.com"}
 ]
@@ -50,7 +50,7 @@ dependencies = [
     "lxml>=6.0.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "ipykernel>=6.29.4",
     "notebook>=7.1.2",
@@ -66,6 +66,7 @@ dev = [
     "plotly>=5.24.1",
     "dash>=2.18.2",
     "gunicorn>=23.0.0",
+    "azure-data-tables>=12.7.0",
 ]
 
 [project.urls]
@@ -97,11 +98,6 @@ package = true
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[dependency-groups]
-dev = [
-    "azure-data-tables>=12.7.0",
-]
 
 [tool.hatch.build.targets.wheel]
 packages = ["engine"]
