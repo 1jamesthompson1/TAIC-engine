@@ -83,6 +83,9 @@ jobs:
         NEW_VERSION=$(uv version --short)
         echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
         uv lock
+        
+        # Update README badge
+        sed -i "s/Version-[0-9.]*-blue/Version-$NEW_VERSION-blue/" README.md
 
     - name: Commit version bump
       if: steps.check_version.outputs.already_bumped == 'false'
