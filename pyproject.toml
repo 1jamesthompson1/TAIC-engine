@@ -1,7 +1,7 @@
 [project]
 name = "taic-report-engine"
 version = "0.1.0"
-description = "An engine to use the powers of LLMs offered by openai to help analyse and interpret the accident investigation reports."
+description = "An AI powered data pipelines that takes publically available reports from transport accident investigation organisations and turns them into structured datasets (Safety issues, Recommendations, Summaries etc) for downstream applications (Like a RAG chatbot)."
 authors = [
     {name = "James", email = "1jamesthompson1@gmail.com"}
 ]
