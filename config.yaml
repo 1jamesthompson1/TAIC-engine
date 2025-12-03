@@ -29,7 +29,7 @@ engine:
     atsb_website_reports_table_file_name: "atsb_website_reports_table.pkl"
     taic_website_reports_table_file_name: "taic_website_reports_table.pkl"
   data:
-    data_remote_folder_location: "https://raw.githubusercontent.com/1jamesthompson1/TAIC-report-summary/main/data/"
+    data_remote_folder_location: "https://raw.githubusercontent.com/1jamesthompson1/TAIC-engine/main/data/"
     data_local_folder_location: "data"
     event_types_file_name: "event_types.csv"
     atsb_historic_aviation: "atsb_historic_aviation_investigations.csv"

@@ -28,7 +28,7 @@ engine:
     storage:
       container: "testengineoutput"
   data:
-    data_remote_folder_location: "https://raw.githubusercontent.com/1jamesthompson1/TAIC-report-summary/main/data/"
+    data_remote_folder_location: "https://raw.githubusercontent.com/1jamesthompson1/TAIC-engine/main/data/"
     data_local_folder_location: "data"
     recommendations_file_name: "cleaned_TAIC_recommendations_2024_04_04.csv"
     event_types_file_name: "event_types.csv"

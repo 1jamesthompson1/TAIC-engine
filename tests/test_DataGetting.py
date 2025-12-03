@@ -17,7 +17,7 @@ def test_get_generic(tmpdir, file_name, expected):
 
     dataGetter = DataGetting.DataGetter(
         "data",
-        "https://raw.githubusercontent.com/1jamesthompson1/TAIC-report-summary/main/data/",
+        "https://raw.githubusercontent.com/1jamesthompson1/TAIC-engine/main/data/",
         False,
     )
 
