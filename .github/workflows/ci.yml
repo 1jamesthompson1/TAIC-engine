@@ -28,11 +28,6 @@ env:
   AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY}}
   AZURE_STORAGE_ACCOUNT_NAME: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}
   AZURE_STORAGE_ACCOUNT_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_KEY }}
-  CLIENT_ID: ${{ secrets.CLIENT_ID }}
-  CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-  ROOT_URI: ${{ secrets.ROOT_URI }}
-  AUTHORITY: ${{ secrets.AUTHORITY }}
-
 jobs:
   quick-tests:
     runs-on: ubuntu-latest

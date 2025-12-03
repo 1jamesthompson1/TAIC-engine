@@ -76,7 +76,6 @@ dev = [
 
 [project.scripts]
 engine = "engine.utils.cli:cli"
-viewer = "viewer.app:run"
 
 [tool.coverage.report]
 include_namespace_packages = true
