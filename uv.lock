@@ -2952,7 +2952,7 @@ full = [
 
 [[package]]
 name = "taic-smart-tools"
-version = "0.6.1"
+version = "0.6.2"
 source = { virtual = "." }
 dependencies = [
     { name = "authlib" },

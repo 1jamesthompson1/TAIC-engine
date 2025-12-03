@@ -1,6 +1,6 @@
 [project]
 name = "TAIC_smart_tools"
-version = "0.6.1"
+version = "0.6.2"
 description = "An app that provides access to smart tools mainly a RAG agent which is built off a dataset of TAIC, ATSB and TSB reports to assist investigators and researchers."
 authors = [{ name = "James Thompson", email = "1jamesthompson1@gmail.com" }]
 requires-python = ">=3.10,<3.13"

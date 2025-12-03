@@ -1,14 +1,14 @@
-# TAIC Smart Assistant
+# TAIC smart tools
 
-> An intelligent assistant and knowledge search tool for internal use at the New Zealand Transport Accident Investigation Commission
+> A platform for smart tools for internal use at the New Zealand Transport Accident Investigation Commission. Featured tools are smart assistant and smart document search.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Continuous Integration](https://github.com/1jamesthompson1/TAIC_smart_assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/1jamesthompson1/TAIC_smart_assistant/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/Version-0.6.1-blue)
+[![Continuous Integration](https://github.com/1jamesthompson1/TAIC-smart-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/1jamesthompson1/TAIC-smart-tools/actions/workflows/ci.yml)
+![Version](https://img.shields.io/badge/Version-0.6.2-blue)
 
 ## Preview
 
-![TAIC Smart Assistant Demo](https://github.com/1jamesthompson1/TAIC_smart_assistant/releases/download/v0.4.0/demo.gif)
+![TAIC Smart Assistant Demo](https://github.com/1jamesthompson1/TAIC-smart-tools/releases/download/v0.4.0/demo.gif)
 
 ---
 
@@ -20,7 +20,7 @@
 - Conversation history and management
 
 🔍 **Advanced Knowledge Search**
-- Vector-based semantic search across TAIC, ATSB and TSB documents
+- Vector-based semantic search across TAIC, ATSB and TSB documents (database created by [TAIC-engine](https://github.com/1jamesthompson1/TAIC-engine)
 - Filter by document type, agency, year, and transport mode
 - Visual analytics and result export capabilities
 
@@ -42,8 +42,8 @@ _Note that this has only ever been 'completed' on Linux machines. For ease of us
 
 ```bash
 # Get the code
-git clone https://github.com/1jamesthompson1/TAIC_smart_assistant
-cd TAIC_smart_assistant
+git clone https://github.com/1jamesthompson1/TAIC-smart-tools
+cd TAIC-smart-tools
 
 # Install uv if you haven't already
 curl -Ls https://astral.sh/uv/install.sh | sh
