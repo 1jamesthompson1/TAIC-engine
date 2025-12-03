@@ -313,7 +313,7 @@ def upload(container_name, output_dir, output_config):
 
 def cli():
     parser = argparse.ArgumentParser(
-        description="A engine that will download, extract, and summarize PDFs from the marine accident investigation reports. More information can be found here: https://github.com/1jamesthompson1/TAIC-report-summary/"
+        description="A engine that will download, extract, and summarize PDFs from the marine accident investigation reports. More information can be found here: https://github.com/1jamesthompson1/TAIC-engine/"
     )
     parser.add_argument(
         "-r",
