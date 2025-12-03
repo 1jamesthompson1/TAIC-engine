@@ -13,6 +13,30 @@ This github repository contains code for a data pipeline that ingests publicly a
 
 There is also a [collection](https://github.com/1jamesthompson1/TAIC-report-summary/tree/d735c0f3a50f4ef24f1e7198730c984fdb3446c7/notebooks) of jupyter notebooks that show the development process of some of the more complex features in the engine.
 
+## Contributing
+
+Get code and install dependencies:
+
+```bash
+# Get the code
+git clone https://github.com/1jamesthompson1/TAIC-report-summary
+cd TAIC-report-summary
+
+# Install uv if you haven't already
+curl -Ls https://astral.sh/uv/install.sh | sh
+
+# Install project dependencies
+uv sync --dev
+
+# Setup pre-commits
+uv run pre-commit install
+```
+
+Engine can then be ran with 
+
+```bash
+uv run engine --help
+```
 
 ### About
 
