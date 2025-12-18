@@ -610,68 +610,57 @@ class TAICReportScraper(ReportScraper):
         if os.path.exists(reports_table_path):
             investigations = pd.read_pickle(reports_table_path)
         else:
-            investigations = pd.DataFrame(columns=["id", "year", "Status"])
+            investigations = pd.DataFrame(columns=["id", "year"])
         page_num = 0
         while True:
+            print(f"Processing page {page_num}")
             try:
-                investigation_page = pd.read_html(
-                    hrequests.get(
-                        f"https://www.taic.org.nz/inquiries?page={page_num}&keyword=&occurrence_date[min]=&occurrence_date[max]=&publication_date[min]=&publication_date[max]=&order=field_publication_date&sort=desc",
-                        headers=self.get_randomized_headers(),
-                    ).content,
-                    flavor="lxml",
-                )[0]
-
-                if (
-                    investigation_page["Number and name"]
-                    .str.contains("RO-2004-122")
-                    .any()
-                ):
-                    print(f"Found investigation RO-2002-112 on page number {page_num}.")
-
-                investigation_page["year"] = investigation_page["Number and name"].map(
-                    lambda x: int(re.search(r"-(\d{4})-", x).group(1))
-                )
-
-                investigation_page["id"] = investigation_page["Number and name"].map(
-                    lambda x: re.search(r"(?:[MAR]O-\d{4}-)\d{3}", x).group(0)
-                )
-
-                already_seen_ids = investigation_page["id"].isin(investigations["id"])
-                merged_df = investigation_page.loc[already_seen_ids].merge(
-                    investigations, on="id", how="left"
-                )
-                changed_status = merged_df["Status_x"] != merged_df["Status_y"]
-                investigations_to_remove = merged_df.loc[changed_status]["id"]
-                if len(investigations_to_remove) > 0:
-                    print(
-                        f"Removing {len(investigations_to_remove)} investigations that have had their status updated"
-                    )
-                    print(investigations_to_remove)
-                # Remove investigations that have had an updated status.
-                investigations = investigations.loc[
-                    ~investigations["id"].isin(investigations_to_remove)
-                ]
-
-                investigation_page = investigation_page.loc[
-                    ~investigation_page["id"].isin(investigations["id"]),
-                    ["id", "year", "Status"],
-                ]
-
-                if investigation_page.empty:
-                    break
-
-                investigations = pd.concat(
-                    [investigations, investigation_page], ignore_index=True
-                )
-
-                page_num += 1
+                new_content = hrequests.get(
+                    f"https://taic.org.nz/inquiries-recommendations?type=investigation&field_jurisdiction[11]=11&field_status[260]=260&sort_by=incident&page={page_num}"
+                ).content
             except hrequests.exceptions.ClientException as e:
                 print(f"Timeout while scraping TAIC investigations: {e}")
                 print(f"Retrying page {page_num}")
-            except ValueError as e:
-                print(f"Failed to scrape page {page_num}: {e}")
+                continue
+
+            soup = BeautifulSoup(new_content, "html.parser")
+
+            list = soup.find_all("div", class_="search-results__list")
+
+            if not list or len(list) == 0:
+                print(f"Reached end of pages at page {page_num}, stopping.")
                 break
+
+            all_reports_on_page = [
+                {
+                    "id": report.find("span", class_="card__incident").get_text(
+                        strip=True
+                    ),
+                    "year": report.find("span", class_="card__date")
+                    .get_text(strip=True)
+                    .split()[-1],
+                }
+                for report in list[0].find_all("div", recursive=False)
+            ]
+
+            new_reports = pd.DataFrame(
+                filter(
+                    lambda r: r["id"] not in investigations["id"].values,
+                    all_reports_on_page,
+                )
+            )
+
+            if new_reports.empty:
+                print(f"No new reports found on page {page_num}, stopping.")
+                break
+
+            investigations = pd.concat([investigations, new_reports], ignore_index=True)
+
+            print(
+                f"Found {len(all_reports_on_page)} reports, {len(investigations)} total"
+            )
+
+            page_num += 1
 
         investigations.set_index(
             investigations["id"].map(lambda x: Modes.Mode[x[0].lower()]),
@@ -679,6 +668,7 @@ class TAICReportScraper(ReportScraper):
         )
         investigations.index.name = None
 
+        # Update the pickle file
         investigations.to_pickle(reports_table_path)
 
         return investigations
@@ -691,27 +681,34 @@ class TAICReportScraper(ReportScraper):
                 taic_id,  # This is the agency_id for TAIC
             )
             for taic_id in self.agency_reports.loc[mode]
-            .query(f"year == {year} & Status == 'Closed'")["id"]
+            .query(f"year == {year}")["id"]
             .to_list()
         ]
 
     def get_report_metadata(self, report_id: str, url: str, soup: BeautifulSoup):
-        title = soup.find("div", class_="field--name-field-inv-title").text
-
-        agency_id = soup.find("h1", class_="page-title").get_text().strip()
-
-        summary_div = soup.find("div", class_="field--name-field-final-summary")
-        if summary_div is not None:
-            summary = summary_div.get_text().strip()
-            # Treat the summary as None if it is less than 200 characters
-            # This is to catch the situations like "Final report not yet published", "New Zealand has completed its support for this inquiry. Please note, TAIC will not be producing a report for this inquiry."
-            if summary.startswith("[") and summary.endswith("]") and len(summary) < 500:
-                summary = None
-            if len(summary) < 200:
-                summary = None
+        headers = soup.find("div", class_="screen-head__title")
+        if headers is not None:
+            title = headers.find("span", class_="heading--english").text.strip()
+            agency_id = headers.find("span", class_="heading--accent").text.strip()
         else:
-            print(f"Failed to get summary for {report_id}")
+            print(f"Failed to get title for {report_id}")
+            title = "Unknown Title"
+            agency_id = None
+
+        # Get the report text
+        report_text_div = soup.find("div", class_="node--type-investigation")
+        if report_text_div is None:
+            print(f"Failed to get report text for {report_id}")
             summary = None
+        else:
+            sections = report_text_div.find_all("section", recursive=False)
+
+            executive_summary_section = sections[0]
+
+            summary = executive_summary_section.find("p").get_text().strip()
+
+            if summary is None or summary == "":
+                summary = None
 
         return ReportMetadata(
             url=url,

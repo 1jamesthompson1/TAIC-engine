@@ -51,14 +51,34 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
 
     def _get_agency_scraper(agency: str) -> WebsiteScraping.ReportScraper:
         if agency == "TAIC":
-            return WebsiteScraping.TAICReportScraper(
-                os.path.join(
-                    str(tmpdir),
-                    pytest.output_config.get("taic_website_reports_table_file_name"),
-                ),
-                report_scraping_settings,
+            # Use the canonical TAIC reports table from the tests data folder, but
+            # copy it into the test's tmpdir so the original isn't modified by tests.
+            original_path = os.path.join(
+                pytest.output_config.get("folder_name"),
+                pytest.output_config.get("taic_website_reports_table_file_name"),
             )
+            tmp_path = os.path.join(
+                str(tmpdir),
+                pytest.output_config.get("taic_website_reports_table_file_name"),
+            )
+
+            if os.path.exists(original_path):
+                shutil.copy2(original_path, tmp_path)
+
+            return WebsiteScraping.TAICReportScraper(tmp_path, report_scraping_settings)
         elif agency == "ATSB":
+            original_path = os.path.join(
+                pytest.output_config.get("folder_name"),
+                pytest.output_config.get("atsb_website_reports_table_file_name"),
+            )
+            tmp_path = os.path.join(
+                str(tmpdir),
+                pytest.output_config.get("atsb_website_reports_table_file_name"),
+            )
+
+            if os.path.exists(original_path):
+                shutil.copy2(original_path, tmp_path)
+
             return WebsiteScraping.ATSBReportScraper(
                 os.path.join(
                     str(tmpdir),
