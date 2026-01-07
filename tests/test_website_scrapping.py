@@ -300,13 +300,13 @@ def test_ATSB_safety_issue_scrape(tmpdir):
             "tsb",
             WebsiteScraping.TSBRecommendationsScraper,
             "aviation",
-            179,
+            121,
             id="TSB listing",
         ),
     ],
 )
 @pytest.mark.integration
-def test_recommendation_listing_smoke(
+def test_recommendation_listing(
     tmpdir,
     request,
     site,
@@ -338,6 +338,7 @@ def test_recommendation_listing_smoke(
     table = scraper.get_table(table_arg)
     assert not table.empty
     print(table)
+    table = scraper.process_new_table(table)
     assert len(table) >= expected_min_rows
 
     assert set(["url", "recommendation_id"]).issubset(table.columns)
@@ -381,7 +382,7 @@ def test_recommendation_listing_smoke(
     ],
 )
 @pytest.mark.integration
-def test_recommendation_page_smoke(tmpdir, request, site, scraper_cls, url, assert_fn):
+def test_recommendation_page(tmpdir, request, site, scraper_cls, url, assert_fn):
     """Smoke test: extract fields from one recommendation page.
 
     Uses the real websites but is designed to be quick (one HTTP request per case).

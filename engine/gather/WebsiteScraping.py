@@ -1581,7 +1581,7 @@ class TSBRecommendationsScraper(RecommendationScraper):
         }
 
     def process_new_table(self, table):
-        # filter out older recommendations
+        # filter out older recommendations that are from the previous century
         table = table[
             table["Number"]
             .map(
