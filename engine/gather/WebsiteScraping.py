@@ -831,7 +831,7 @@ class ATSBReportScraper(ReportScraper):
                         ~page_df["Investigation number"].isin(
                             investigations["Investigation number"]
                         )
-                    ]
+                    ].copy()
 
                     new_investigations.loc[:, "year"] = pd.to_datetime(
                         new_investigations["Occurrence date"].to_list(),
@@ -1328,6 +1328,10 @@ class RecommendationScraper(WebsiteScraper, ABC):
 
         print("  Reading recommendation tables to get recommendations webpages")
 
+        all_recommendation_ids = pd.concat(
+            recommendations_df["recommendations"].tolist()
+        )["recommendation_id"]
+
         for element in (phbar := tqdm(self.loop_iter)):
             phbar.set_description(f"Scraping recommendations for {element}")
 
@@ -1339,13 +1343,7 @@ class RecommendationScraper(WebsiteScraper, ABC):
             table = self.process_new_table(table)
 
             if len(recommendations_df) > 0:
-                table = table[
-                    ~table["recommendation_id"].isin(
-                        pd.concat(recommendations_df["recommendations"].tolist())[
-                            "recommendation_id"
-                        ]
-                    )
-                ]
+                table = table[~table["recommendation_id"].isin(all_recommendation_ids)]
 
             if len(table) == 0:
                 break
@@ -1590,11 +1588,11 @@ class TSBRecommendationsScraper(RecommendationScraper):
                 )
             )
             .between(0, 80)
-        ]
+        ].copy()
 
         # Add in the url
 
-        table["url"] = table["Number"].map(
+        table.loc[:, "url"] = table["Number"].map(
             lambda x: f"{self.base_url}{x[1]}" if x[1] else None
         )
 
@@ -1641,7 +1639,6 @@ class TAICRecommendationsScraper(RecommendationScraper):
         return f"{self.base_url}/inquiries-recommendations?type=recommendation&field_recipient_name=All&sort_by=latest&page={element}"
 
     def get_table(self, element) -> pd.DataFrame:
-        print(f"Processing page {element} of TAIC recommendations")
         url = self.get_url(element)
 
         try:
@@ -1673,7 +1670,7 @@ class TAICRecommendationsScraper(RecommendationScraper):
         rows: list[dict[str, str]] = []
         for card in cards:
             title = card.select_one(".card__title")
-            rec_id = title.get_text(" ", strip=True) if title else ""
+            rec_id = title.get_text(" ", strip=True).strip() if title else ""
 
             a = card.select_one("a[href]")
             href_attr = a.get("href") if a else None
