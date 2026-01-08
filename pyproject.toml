@@ -76,6 +76,7 @@ dev = [
 
 [project.scripts]
 engine = "engine.utils.cli:cli"
+azure = "notebooks.admin.easy_azure:main"
 
 [tool.coverage.report]
 include_namespace_packages = true
@@ -103,7 +104,7 @@ packages = ["engine"]
 
 
 [tool.setuptools.packages.find]
-include = ["engine*", "viewer*"]
+include = ["engine*"]
 
 [tool.deptry]
 ignore = ["DEP004"]

@@ -1,7 +1,6 @@
 import os
 import random
 import re
-import time
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -13,6 +12,12 @@ import hrequests
 import hrequests.exceptions
 import pandas as pd
 from bs4 import BeautifulSoup
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 from tqdm import tqdm
 
 from ..utils import Modes
@@ -203,6 +208,36 @@ class WebsiteScraper(ABC):
 
         return dict(header_items)
 
+    def get(
+        self,
+        url: str,
+        *,
+        headers: dict | None = None,
+        attempts: int = 3,
+        wait_min_s: float = 0.5,
+        wait_max_s: float = 5.0,
+        **kwargs,
+    ):
+        """HTTP GET with bounded retries and randomized headers.
+
+        All website scrapers should use this instead of calling `hrequests.get` directly.
+        """
+
+        merged_headers = {**self.get_randomized_headers(), **(headers or {})}
+
+        @retry(
+            stop=stop_after_attempt(attempts),
+            wait=wait_exponential(
+                multiplier=wait_min_s, min=wait_min_s, max=wait_max_s
+            ),
+            retry=retry_if_exception_type(hrequests.exceptions.ClientException),
+            reraise=True,
+        )
+        def _inner():
+            return hrequests.get(url, headers=merged_headers, **kwargs)
+
+        return _inner()
+
     def id_converter(self, agency, agency_id):
         """
         This uses the COMPLETE report titles dataframe and creates a dictionary of agency_id:report_id.
@@ -374,19 +409,10 @@ class ReportScraper(WebsiteScraper, ABC):
             return True
 
         try:
-            webpage = hrequests.get(
-                url, headers=self.get_randomized_headers(), timeout=5
-            )
+            webpage = self.get(url)
         except hrequests.exceptions.ClientException as e:
-            print(f"  Timed out while trying to collect {url}, {e}, Retrying...")
-            try:
-                time.sleep(random.uniform(0.5, 2.0))
-                webpage = hrequests.get(
-                    url, headers=self.get_randomized_headers(), timeout=5
-                )
-            except hrequests.exceptions.ClientException as e:
-                print(f"{e}")
-                return False
+            print(f"  Timed out while trying to collect {url}: {e}")
+            return False
         except hrequests.exceptions.BrowserTimeoutException:
             print(f"  Failed to collect {url}, timeout error")
             return False
@@ -442,10 +468,9 @@ class ReportScraper(WebsiteScraper, ABC):
         link = urljoin(base_url, pdf_link)
 
         try:
-            response = hrequests.get(
+            response = self.get(
                 link,
                 allow_redirects=True,
-                headers=self.get_randomized_headers(),
                 timeout=30,
             )
             if response is None:
@@ -610,68 +635,57 @@ class TAICReportScraper(ReportScraper):
         if os.path.exists(reports_table_path):
             investigations = pd.read_pickle(reports_table_path)
         else:
-            investigations = pd.DataFrame(columns=["id", "year", "Status"])
+            investigations = pd.DataFrame(columns=["id", "year"])
         page_num = 0
         while True:
+            print(f"Processing page {page_num}")
             try:
-                investigation_page = pd.read_html(
-                    hrequests.get(
-                        f"https://www.taic.org.nz/inquiries?page={page_num}&keyword=&occurrence_date[min]=&occurrence_date[max]=&publication_date[min]=&publication_date[max]=&order=field_publication_date&sort=desc",
-                        headers=self.get_randomized_headers(),
-                    ).content,
-                    flavor="lxml",
-                )[0]
-
-                if (
-                    investigation_page["Number and name"]
-                    .str.contains("RO-2004-122")
-                    .any()
-                ):
-                    print(f"Found investigation RO-2002-112 on page number {page_num}.")
-
-                investigation_page["year"] = investigation_page["Number and name"].map(
-                    lambda x: int(re.search(r"-(\d{4})-", x).group(1))
-                )
-
-                investigation_page["id"] = investigation_page["Number and name"].map(
-                    lambda x: re.search(r"(?:[MAR]O-\d{4}-)\d{3}", x).group(0)
-                )
-
-                already_seen_ids = investigation_page["id"].isin(investigations["id"])
-                merged_df = investigation_page.loc[already_seen_ids].merge(
-                    investigations, on="id", how="left"
-                )
-                changed_status = merged_df["Status_x"] != merged_df["Status_y"]
-                investigations_to_remove = merged_df.loc[changed_status]["id"]
-                if len(investigations_to_remove) > 0:
-                    print(
-                        f"Removing {len(investigations_to_remove)} investigations that have had their status updated"
-                    )
-                    print(investigations_to_remove)
-                # Remove investigations that have had an updated status.
-                investigations = investigations.loc[
-                    ~investigations["id"].isin(investigations_to_remove)
-                ]
-
-                investigation_page = investigation_page.loc[
-                    ~investigation_page["id"].isin(investigations["id"]),
-                    ["id", "year", "Status"],
-                ]
-
-                if investigation_page.empty:
-                    break
-
-                investigations = pd.concat(
-                    [investigations, investigation_page], ignore_index=True
-                )
-
-                page_num += 1
+                new_content = self.get(
+                    f"https://taic.org.nz/inquiries-recommendations?type=investigation&field_jurisdiction[11]=11&field_status[260]=260&sort_by=incident&page={page_num}"
+                ).content
             except hrequests.exceptions.ClientException as e:
                 print(f"Timeout while scraping TAIC investigations: {e}")
                 print(f"Retrying page {page_num}")
-            except ValueError as e:
-                print(f"Failed to scrape page {page_num}: {e}")
+                continue
+
+            soup = BeautifulSoup(new_content, "html.parser")
+
+            list = soup.find_all("div", class_="search-results__list")
+
+            if not list or len(list) == 0:
+                print(f"Reached end of pages at page {page_num}, stopping.")
                 break
+
+            all_reports_on_page = [
+                {
+                    "id": report.find("span", class_="card__incident").get_text(
+                        strip=True
+                    ),
+                    "year": report.find("span", class_="card__date")
+                    .get_text(strip=True)
+                    .split()[-1],
+                }
+                for report in list[0].find_all("div", recursive=False)
+            ]
+
+            new_reports = pd.DataFrame(
+                filter(
+                    lambda r: r["id"] not in investigations["id"].values,
+                    all_reports_on_page,
+                )
+            )
+
+            if new_reports.empty:
+                print(f"No new reports found on page {page_num}, stopping.")
+                break
+
+            investigations = pd.concat([investigations, new_reports], ignore_index=True)
+
+            print(
+                f"Found {len(all_reports_on_page)} reports, {len(investigations)} total"
+            )
+
+            page_num += 1
 
         investigations.set_index(
             investigations["id"].map(lambda x: Modes.Mode[x[0].lower()]),
@@ -679,6 +693,7 @@ class TAICReportScraper(ReportScraper):
         )
         investigations.index.name = None
 
+        # Update the pickle file
         investigations.to_pickle(reports_table_path)
 
         return investigations
@@ -691,27 +706,34 @@ class TAICReportScraper(ReportScraper):
                 taic_id,  # This is the agency_id for TAIC
             )
             for taic_id in self.agency_reports.loc[mode]
-            .query(f"year == {year} & Status == 'Closed'")["id"]
+            .query(f"year == {year}")["id"]
             .to_list()
         ]
 
     def get_report_metadata(self, report_id: str, url: str, soup: BeautifulSoup):
-        title = soup.find("div", class_="field--name-field-inv-title").text
-
-        agency_id = soup.find("h1", class_="page-title").get_text().strip()
-
-        summary_div = soup.find("div", class_="field--name-field-final-summary")
-        if summary_div is not None:
-            summary = summary_div.get_text().strip()
-            # Treat the summary as None if it is less than 200 characters
-            # This is to catch the situations like "Final report not yet published", "New Zealand has completed its support for this inquiry. Please note, TAIC will not be producing a report for this inquiry."
-            if summary.startswith("[") and summary.endswith("]") and len(summary) < 500:
-                summary = None
-            if len(summary) < 200:
-                summary = None
+        headers = soup.find("div", class_="screen-head__title")
+        if headers is not None:
+            title = headers.find("span", class_="heading--english").text.strip()
+            agency_id = headers.find("span", class_="heading--accent").text.strip()
         else:
-            print(f"Failed to get summary for {report_id}")
+            print(f"Failed to get title for {report_id}")
+            title = "Unknown Title"
+            agency_id = None
+
+        # Get the report text
+        report_text_div = soup.find("div", class_="node--type-investigation")
+        if report_text_div is None:
+            print(f"Failed to get report text for {report_id}")
             summary = None
+        else:
+            sections = report_text_div.find_all("section", recursive=False)
+
+            executive_summary_section = sections[0]
+
+            summary = executive_summary_section.find("p").get_text().strip()
+
+            if summary is None or summary == "":
+                summary = None
 
         return ReportMetadata(
             url=url,
@@ -775,14 +797,13 @@ class ATSBReportScraper(ReportScraper):
             while True:
                 pbar.set_description(f"Scraping mode: {mode}, page: {page_num}")
                 try:
-                    page = hrequests.get(
+                    page = self.get(
                         url.format(
                             mode=mode,
                             page_num=page_num,
                             url_start_date=url_start_date,
                             url_end_date=url_end_date,
-                        ),
-                        headers=self.get_randomized_headers(),
+                        )
                     ).content
 
                     page_df = pd.read_html(
@@ -810,7 +831,7 @@ class ATSBReportScraper(ReportScraper):
                         ~page_df["Investigation number"].isin(
                             investigations["Investigation number"]
                         )
-                    ]
+                    ].copy()
 
                     new_investigations.loc[:, "year"] = pd.to_datetime(
                         new_investigations["Occurrence date"].to_list(),
@@ -995,9 +1016,8 @@ class TSBReportScraper(ReportScraper):
 
         modes_df = [
             pd.read_html(
-                hrequests.get(
+                self.get(
                     f"https://www.tsb.gc.ca/eng/rapports-reports/{mode}/index.html",
-                    headers=self.get_randomized_headers(),
                 ).content,
                 flavor="lxml",
             )[0]
@@ -1038,10 +1058,8 @@ class TSBReportScraper(ReportScraper):
         # Due to TSB having the metadata on a page separate from the report pdf link, we need to get the new page
         split_id = report_id.split("_")
         tsb_id = f"{split_id[1]}{split_id[2][2:4]}{split_id[3]}"
-        page = hrequests.get(
+        page = self.get(
             f"https://www.tsb.gc.ca/eng/enquetes-investigations/{Modes.Mode.as_string(Modes.get_report_mode_from_id(report_id))}/{split_id[2]}/{tsb_id}/{tsb_id}.html",
-            headers=self.get_randomized_headers(),
-            timeout=30,
         )
         overview_page = BeautifulSoup(page.content, "html.parser")
 
@@ -1161,7 +1179,7 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
             while True:
                 pbar.set_description(f"Scraping page {current_page} of mode {mode}")
                 url = base_url.format(mode=mode, page=current_page)
-                response = hrequests.get(url, headers=self.get_randomized_headers())
+                response = self.get(url)
 
                 if response.status_code != 200:
                     pbar.write(
@@ -1310,34 +1328,22 @@ class RecommendationScraper(WebsiteScraper, ABC):
 
         print("  Reading recommendation tables to get recommendations webpages")
 
+        all_recommendation_ids = pd.concat(
+            recommendations_df["recommendations"].tolist()
+        )["recommendation_id"]
+
         for element in (phbar := tqdm(self.loop_iter)):
             phbar.set_description(f"Scraping recommendations for {element}")
 
-            url = self.get_url(element)
+            table = self.get_table(element)
 
-            response = hrequests.get(url, headers=self.get_randomized_headers())
-
-            if response.status_code != 200:
-                raise ValueError(
-                    f"Failed to scrape recommendations for {element}. Error code {response.status_code}"
-                )
-
-            table = pd.read_html(response.content, flavor="lxml", extract_links="body")
-
-            if len(table) == 0 or table[0].empty:
+            if table.empty:
                 break
-            table = table[0]
 
             table = self.process_new_table(table)
 
             if len(recommendations_df) > 0:
-                table = table[
-                    ~table["recommendation_id"].isin(
-                        pd.concat(recommendations_df["recommendations"].tolist())[
-                            "recommendation_id"
-                        ]
-                    )
-                ]
+                table = table[~table["recommendation_id"].isin(all_recommendation_ids)]
 
             if len(table) == 0:
                 break
@@ -1443,6 +1449,26 @@ class RecommendationScraper(WebsiteScraper, ABC):
         """
         pass
 
+    @abstractmethod
+    def get_table(self, element) -> pd.DataFrame:
+        """
+        Retrieves the recommendation table from the website for a given element.
+
+        This method must be implemented by subclasses to handle agency-specific
+        table retrieval logic.
+
+        Parameters
+        ----------
+        element : Any
+            The element used to retrieve the table (e.g., page number, mode)
+
+        Returns
+        -------
+        pd.DataFrame
+            The recommendation table retrieved from the website
+        """
+        pass
+
 
 class TSBRecommendationsScraper(RecommendationScraper):
     def __init__(self, output_file_path, report_titles_file_path, refresh=False):
@@ -1476,7 +1502,30 @@ class TSBRecommendationsScraper(RecommendationScraper):
             f"{self.base_url}/eng/recommandations-recommendations/{element}/index.html"
         )
 
-    def extract_recommendation_data(self, url, retry=3):
+    def get_table(self, element):
+        url = self.get_url(element)
+        response = self.get(url)
+
+        if response.status_code != 200:
+            print(
+                f"Failed to scrape recommendations from {url}. Error code {response.status_code}"
+            )
+            return pd.DataFrame()
+
+        tables = pd.read_html(
+            response.content,
+            flavor="lxml",
+            extract_links="body",
+        )
+
+        if len(tables) == 0:
+            print(f"No tables found on {url}")
+            return pd.DataFrame()
+        if len(tables) > 1:
+            print(f"Multiple tables found on {url}, using the first one")
+        return tables[0]
+
+    def extract_recommendation_data(self, url):
         """
         This will read the webpage and extract:
         - recommendation (This is because sometimes the recommendation inside the website table is not complete)
@@ -1493,12 +1542,9 @@ class TSBRecommendationsScraper(RecommendationScraper):
                 "recommendation_context": None,
             }
 
-        response = hrequests.get(url, headers=self.get_randomized_headers())
+        response = self.get(url)
 
         if response.status_code != 200:
-            if retry > 0:
-                time.sleep(1)
-                return self.extract_recommendation_data(url, retry - 1)
             raise ValueError(
                 f"Failed to scrape recommendations from {url}. Error code {response.status_code}"
             )
@@ -1533,7 +1579,7 @@ class TSBRecommendationsScraper(RecommendationScraper):
         }
 
     def process_new_table(self, table):
-        # filter out older recommendations
+        # filter out older recommendations that are from the previous century
         table = table[
             table["Number"]
             .map(
@@ -1542,20 +1588,30 @@ class TSBRecommendationsScraper(RecommendationScraper):
                 )
             )
             .between(0, 80)
-        ]
+        ].copy()
 
-        table["url"] = table["Number"].map(
+        # Add in the url
+
+        table.loc[:, "url"] = table["Number"].map(
             lambda x: f"{self.base_url}{x[1]}" if x[1] else None
         )
 
+        # Remove tuples
+
         table = table.map(lambda x: x[0] if isinstance(x, tuple) else x)
 
+        # Give proper column names
         table.columns = self.columns[:7]
         table.drop("recommendation", axis=1, inplace=True)
         return table
 
 
 class TAICRecommendationsScraper(RecommendationScraper):
+    """
+    Recommendation scraper for the Transport Accident Investigation Commission (TAIC) of New Zealand.
+    This scraper extracts recommendations from the TAIC recommendations webpage.
+    """
+
     def __init__(self, output_file_path, report_titles_file_path, refresh=False):
         columns = [
             "recommendation_id",
@@ -1580,69 +1636,132 @@ class TAICRecommendationsScraper(RecommendationScraper):
         )
 
     def get_url(self, element):
-        return f"{self.base_url}/recommendations?page={element}"
+        return f"{self.base_url}/inquiries-recommendations?type=recommendation&field_recipient_name=All&sort_by=latest&page={element}"
+
+    def get_table(self, element) -> pd.DataFrame:
+        url = self.get_url(element)
+
+        try:
+            response = self.get(url)
+        except hrequests.exceptions.ClientException as e:
+            print(f"Timeout while scraping TAIC recommendations listing: {e}")
+            return pd.DataFrame(columns=["recommendation_id", "url"])
+
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        results_list = soup.select_one("div.search-results__list")
+        if not results_list:
+            print(
+                f"Reached end of pages at page {element} (no results list), stopping."
+            )
+            return pd.DataFrame(columns=["recommendation_id", "url"])
+
+        # In the current TAIC site, the cards are nested inside the list grid.
+        # Example DOM (from browser):
+        #   <div class="search-results__list ...">
+        #       <div class="card card-type--recommendation" aria-label="044/25">...</div>
+        #       ...
+        #   </div>
+        cards = results_list.select("div.card.card-type--recommendation")
+        if not cards:
+            print(f"Reached end of pages at page {element} (no cards), stopping.")
+            return pd.DataFrame(columns=["recommendation_id", "url"])
+
+        rows: list[dict[str, str]] = []
+        for card in cards:
+            title = card.select_one(".card__title")
+            rec_id = title.get_text(" ", strip=True).strip() if title else ""
+
+            a = card.select_one("a[href]")
+            href_attr = a.get("href") if a else None
+            href = str(href_attr) if href_attr else None
+            full_url = urljoin(self.base_url, href) if href else None
+
+            if rec_id and full_url:
+                rows.append({"recommendation_id": rec_id, "url": full_url})
+
+        return pd.DataFrame(rows, columns=["recommendation_id", "url"])
 
     def process_new_table(self, table):
-        table = table.iloc[:, :4]
-
-        table.columns = self.columns[:4]
-        table["url"] = table["recommendation_id"].map(lambda x: self.base_url + x[1])
-
-        table = table.map(lambda x: x[0] if isinstance(x, tuple) else x)
-
-        table["recommendation_id"] = table["recommendation_id"].map(
-            lambda x: re.sub(" (Aviation)|(Rail)|(Marine)", "", x)
-        )
-        table = table[
-            table["recommendation_id"]
-            .map(
-                lambda x: int(re.match(r"\d{3}\w?/(\d{2})", x, re.IGNORECASE).group(1))
-            )
-            .between(0, 80)
-        ]
-
         return table
 
     def extract_recommendation_data(self, url) -> dict:
         """
+        It will read the actual recommendation page and extract the needed data.
         This will extract information that is not found in the table
         - recommendation_text
-        - reply_text
+        - reply_text (not currently extracted because new website does not support it)
+        - recipient
+        - made
+        - agency_id
         """
 
         if url is None:
             return {
                 "recommendation": None,
                 "reply_text": None,
+                "recipient": None,
+                "made": None,
+                "agency_id": None,
             }
 
-        response = hrequests.get(url, headers=self.get_randomized_headers())
+        response = self.get(url)
 
         if response.status_code != 200:
-            retry = 3
-            if retry > 0:
-                time.sleep(1)
-                return self.extract_recommendation_data(url)
             raise ValueError(
-                f"Failed to scrape recommendations from {url}. Error code {response.status_code}"
+                f"Failed to scrape recommendation from {url}. Error code {response.status_code}"
             )
 
         soup = BeautifulSoup(response.content, "html.parser")
 
-        text = soup.find("div", class_="field--name-field-sr-text")
+        recommendation_text = soup.find(
+            "div", class_="field--name-field-rich-content"
+        ).get_text()
 
-        recommendation_text = (
-            text.find("div", class_="field__item").get_text() if text else None
-        )
+        header = soup.select_one("dl.screen-head__metadata.metadata")
 
-        reply_text = soup.find("div", class_="field--name-field-sr-replytext")
-        reply_text = (
-            reply_text.find("div", class_="field__item").get_text()
-            if reply_text
+        out: dict[str, object] = {}
+        for item in header.select("div.metadata__item"):
+            dt = item.find("dt", class_="metadata__label")
+            dd = item.find("dd", class_="metadata__value")
+
+            if not dt or not dd:
+                continue
+
+            label = dt.get_text(" ", strip=True)
+
+            # "Related inquiries"
+            links = dd.select("a")
+            if links:
+                out[label] = [
+                    {"text": a.get_text(" ", strip=True), "href": a.get("href")}
+                    for a in links
+                    if a.get("href")
+                ]
+                continue
+
+            # "Issue date"
+            time_tag = dd.find("time")
+            if time_tag:
+                out[label] = time_tag.get_text(
+                    " ", strip=True
+                )  # if you want "19 Sep 2018"
+                continue
+
+            # FOr recipient
+            out[label] = dd.get_text(" ", strip=True)
+
+        agency_id = (
+            out.get("Related inquiries")[0]["href"].split("/")[-1]
+            if "Related inquiries" in out
             else None
         )
+        made = out.get("Issue date", None)
 
         return {
             "recommendation": recommendation_text,
-            "reply_text": reply_text,
+            "reply_text": None,
+            "recipient": out.get("Recipient", None),
+            "made": made,
+            "agency_id": agency_id,
         }
