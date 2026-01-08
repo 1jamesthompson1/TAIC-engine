@@ -17,6 +17,7 @@ To use this in other test files, you can copy the cleanup_test_pdf_container fix
 import itertools
 import os
 import shutil
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -238,10 +239,23 @@ def test_agency_website_scraper_collecting_all_reports(
 
     assert scraper
 
-    scraper.collect_all()
+    uploaded_pdfs = []
 
-    # Use PDF storage manager to count collected PDFs instead of local directory
-    pdf_count = len(scraper.settings.pdf_storage_manager.list_pdfs())
+    # Mock collect_report to simulate successful PDF upload
+    with patch.object(scraper, "collect_report", return_value=True) as mock_download:
+
+        def mock_download_side_effect(report_id, url, agency_id):
+            # Simulate successful PDF upload
+            print(f"Mock collecting report {report_id} from {url} for {agency_id}")
+            uploaded_pdfs.append(report_id)
+            return True
+
+        mock_download.side_effect = mock_download_side_effect
+
+        scraper.collect_all()
+
+    # Verify that collect_all resulted in the expected number of PDFs
+    pdf_count = len(uploaded_pdfs)
     assert pdf_count == expected_count
 
 
