@@ -2,16 +2,6 @@ name: tests
 
 on:
     workflow_dispatch:
-      inputs:
-        test-type:
-          description: 'Type of tests to run'
-          required: false
-          default: 'both'
-          type: choice
-          options:
-            - both
-            - quick
-            - slow
     push:
         branches:
             - main
@@ -29,63 +19,30 @@ env:
   AZURE_STORAGE_ACCOUNT_NAME: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}
   AZURE_STORAGE_ACCOUNT_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_KEY }}
 jobs:
-  quick-tests:
+  tests:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.test-type == 'both' || github.event.inputs.test-type == 'quick' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-      
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: .python-version
-      
-      - name: Install dependencies
-        run: uv sync
-      
-      - name: Run quick tests
-        run: uv run pytest -m "not slow" --cov=. --cov-report=xml --durations=10 -v
-      
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          verbose: true
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  slow-tests:
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.test-type == 'both' || github.event.inputs.test-type == 'slow' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version-file: .python-version
-      
+
       - name: Install dependencies
         run: uv sync
-      
-      - name: Run slow tests
-        run: uv run pytest -m "slow" --cov=. --cov-report=xml --durations=10 -v
-      
+
+      - name: Run tests
+        run: uv run pytest -n auto --cov=. --cov-report=xml --durations=10 -v
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
