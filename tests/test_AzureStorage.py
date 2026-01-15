@@ -1,4 +1,5 @@
 import os
+import uuid
 from datetime import datetime
 
 import pytest
@@ -41,3 +42,37 @@ def test_download_outputs(tmpdir):
 
     downloaded_files = [len(f[2]) for f in os.walk(tmpdir.strpath)]
     assert sum(downloaded_files) == 40
+
+
+def test_upload_pdf_to_pdf_container(test_pdf_storage_manager):
+    """Upload a small fake PDF to the test PDF container and verify it exists."""
+    report_id = f"TEST_UPLOAD_{uuid.uuid4().hex[:8]}"
+    pdf_bytes = b"%PDF-1.4\n%Fake PDF for tests\n%%EOF"
+
+    # Ensure it doesn't already exist, try to delete if present
+    try:
+        if report_id in test_pdf_storage_manager.list_pdfs():
+            test_pdf_storage_manager.delete_pdf(report_id)
+    except Exception:
+        # If listing fails, continue and let upload raise a useful error
+        pass
+
+    try:
+        uploaded = test_pdf_storage_manager.upload_pdf(
+            report_id, pdf_bytes, overwrite=True
+        )
+        assert uploaded is True
+
+        pdfs = test_pdf_storage_manager.list_pdfs()
+        assert report_id in pdfs
+
+        downloaded = test_pdf_storage_manager.download_pdf(report_id)
+        assert downloaded is not None
+        assert downloaded.startswith(b"%PDF") or pdf_bytes in downloaded
+
+    finally:
+        # Clean up regardless of test outcome
+        try:
+            test_pdf_storage_manager.delete_pdf(report_id)
+        except Exception:
+            pass

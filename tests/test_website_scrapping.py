@@ -67,8 +67,8 @@ def require_internet(request):
 def report_scraping_settings(tmpdir, test_pdf_storage_manager):
     return WebsiteScraping.ReportScraperSettings(
         os.path.join(tmpdir, "report_titles.pkl"),
-        2005,
-        2015,
+        2004,
+        2021,
         1,
         [Modes.Mode.a, Modes.Mode.r, Modes.Mode.m],
         [],
@@ -179,7 +179,19 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
 def test_report_collection(get_agency_scraper, agency, url, report_id, expected):
     scraper = get_agency_scraper(agency)
 
-    result = scraper.collect_report(report_id, url)
+    # Mock PDF storage interactions so tests don't perform real Azure uploads.
+    # We patch both `pdf_exists` to force a download attempt and `upload_pdf`
+    # to avoid actual network/storage activity while keeping the rest of the
+    # scraping logic intact.
+    with (
+        patch.object(
+            scraper.settings.pdf_storage_manager, "pdf_exists", return_value=False
+        ),
+        patch.object(
+            scraper.settings.pdf_storage_manager, "upload_pdf", return_value=True
+        ),
+    ):
+        result = scraper.collect_report(report_id, url)
 
     assert result == expected
 
