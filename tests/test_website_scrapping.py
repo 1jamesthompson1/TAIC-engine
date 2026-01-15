@@ -255,7 +255,7 @@ def test_agency_website_scraper_collecting_all_reports(
     # Mock collect_report to simulate successful PDF upload
     with patch.object(scraper, "collect_report", return_value=True) as mock_download:
 
-        def mock_download_side_effect(report_id, url, agency_id):
+        def mock_download_side_effect(report_id, url, agency_id=None):
             # Simulate successful PDF upload
             print(f"Mock collecting report {report_id} from {url} for {agency_id}")
             uploaded_pdfs.append(report_id)
