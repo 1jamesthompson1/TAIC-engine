@@ -37,8 +37,7 @@ def _can_connect(host: str, port: int = 443, timeout_s: float = 2.0) -> bool:
         return False
 
 
-# Mark all tests in this file as slow; "integration" tests hit real websites.
-pytestmark = [pytest.mark.slow]
+# Tests in this module hit real websites; they are skipped when offline.
 
 
 @pytest.fixture(autouse=True)
