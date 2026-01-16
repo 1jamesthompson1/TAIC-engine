@@ -1,10 +1,11 @@
 import os
+import warnings
 
 import anthropic
 import openai
 import tiktoken
 from dotenv import load_dotenv
-from openai import AzureOpenAI, OpenAI
+from openai import OpenAI
 
 load_dotenv()
 
@@ -19,10 +20,7 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 
 if azure_api_key and azure_endpoint:
     # Use Azure OpenAI
-    openai_client = AzureOpenAI(
-        api_key=azure_api_key, api_version="2024-10-21", azure_endpoint=azure_endpoint
-    )
-    print("Using Azure!")
+    openai_client = OpenAI(api_key=azure_api_key, base_url=azure_endpoint)
 elif openai_api_key:
     # Use standard OpenAI
     openai_client = OpenAI(api_key=openai_api_key)
@@ -50,7 +48,16 @@ class OpenAICaller(BaseAICaller):
     def __init__(self, client, model, limit):
         super().__init__(client, model, limit)
 
-    def query(self, system, user, temp, n, max_tokens=1024):
+    def query(
+        self,
+        system,
+        user,
+        temp,
+        max_tokens=16_000,
+        output_structure=None,
+        reasoning=None,
+        raw_output=False,
+    ):
         if self.client is None:
             raise ValueError(
                 "OpenAI client is not available. Please set either OPENAI_API_KEY or both "
@@ -61,41 +68,62 @@ class OpenAICaller(BaseAICaller):
             print("Too many tokens, not sending to OpenAI")
             return None
 
-        # If rate limit error happens then just wait a minute and try again
-        try:
-            completion = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-                temperature=temp,
-                n=n,
-                max_tokens=max_tokens,
-                seed=42,
+        if reasoning != "none" and temp is not None:
+            warnings.warn(
+                "Temperature is ignored when reasoning is enabled. "
+                "Set temperature to None to avoid this warning.",
+                UserWarning,
             )
+
+        # If rate limit error happens then just wait a minute and try again
+        params = {
+            "model": self.model,
+            "instructions": system,
+            "input": user,
+            "temperature": temp if reasoning != "none" else None,
+            "max_output_tokens": max_tokens,
+            "store": False,
+        }
+
+        if reasoning is not None:
+            params["reasoning"] = {"effort": reasoning}
+
+        try:
+            if output_structure is not None:
+                response = self.client.responses.parse(
+                    **params,
+                    text_format=output_structure,
+                )
+            else:
+                response = self.client.responses.create(
+                    **params,
+                )
+
         except openai.BadRequestError as e:
-            print(f"Too many tokens in request OpenAI declined:\n {e}")
+            print(f"OpenAI declined:\n {e}")
             return None
 
-        if n == 1:
-            return completion.choices[0].message.content
-        else:
-            return [choice.message.content for choice in completion.choices]
+        if raw_output:
+            return response
+
+        return response.output_text
 
 
 class AnthropicCaller(BaseAICaller):
     def __init__(self, client, model, limit):
+        # Deprecation warning: Anthropic support will be removed in a future release
+        warnings.warn(
+            "AnthropicCaller is deprecated and will no longer be updated"
+            "Please migrate to OpenAI or another supported provider.",
+            DeprecationWarning,
+        )
         super().__init__(client, model, limit)
 
-    def query(self, system, user, temp, n=1, max_tokens=1024):
+    def query(self, system, user, temp, max_tokens=1024):
         if self.client is None:
             raise ValueError(
                 "Anthropic client is not available. Please set the ANTHROPIC_API_KEY environment variable."
             )
-
-        if n != 1:
-            raise ValueError("Anthropic only supports n=1")
 
         if self.check_query_above_limit(system + user):
             print("Too many tokens, not sending to Anthropic")
@@ -116,9 +144,12 @@ class AICaller:
     def __init__(self):
         self.models = {
             "gpt-4": OpenAICaller(openai_client, "gpt-4o", 128_000),
+            "gpt-5-mini": OpenAICaller(openai_client, "gpt-5-mini", 400_000),
         }
 
-    def query(self, system, user, temp=1, model="gpt-4", n=1, max_tokens=1024):
+    def query(
+        self, system, user, temp=None, model="gpt-4", max_tokens=16_000, **kwargs
+    ):
         if model not in self.models:
             raise ValueError(
                 f"Model {model} not found. Available models: {list(self.models.keys())}"
@@ -126,7 +157,7 @@ class AICaller:
 
         selected_model = self.models[model]
 
-        return selected_model.query(system, user, temp, n, max_tokens)
+        return selected_model.query(system, user, temp, max_tokens=max_tokens, **kwargs)
 
 
 ai_caller = AICaller()
