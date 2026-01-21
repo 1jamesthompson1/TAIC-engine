@@ -36,8 +36,8 @@ class BaseAICaller:
         self.limit = limit
 
     def get_tokens(self, texts):
-        # No need to check for model as all models have the same encoding
-        enc = tiktoken.encoding_for_model("gpt-3.5-turbo-16k")
+        # No need to check for model as all models have the same or broadly similar tokenization
+        enc = tiktoken.encoding_for_model("gpt-5")
         return [len(enc.encode(text)) for text in texts]
 
     def check_query_above_limit(self, query):
