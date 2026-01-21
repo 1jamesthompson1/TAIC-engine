@@ -106,6 +106,9 @@ class OpenAICaller(BaseAICaller):
         if raw_output:
             return response
 
+        if output_structure is not None:
+            return response.output_parsed
+
         return response.output_text
 
 

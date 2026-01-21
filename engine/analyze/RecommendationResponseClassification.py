@@ -1,11 +1,40 @@
 import os
+from enum import Enum
 
 import pandas as pd
+from pydantic import BaseModel
 from tqdm import tqdm
 
 from engine.utils.AICaller import ai_caller
 
 tqdm.pandas()
+
+
+class ResponseCategory(str, Enum):
+    ACCEPTED_AND_IMPLEMENTED = "Accepted and Implemented"
+    ACCEPTED = "Accepted"
+    UNDER_CONSIDERATION = "Under consideration"
+    REJECTED = "Rejected"
+    NA = "N/A"
+
+
+# Mapping descriptions
+CATEGORY_DESCRIPTIONS = {
+    "Accepted and Implemented": "The recommendation was accepted (wholly) and has been implemented",
+    "Accepted": "The recommendation was accepted and is being, or will be implemented",
+    "Under consideration": "The recipient has acknowledged the recommendation and will consider it",
+    "Rejected": "The recommendation will not be implemented",
+    "N/A": "Not applicable, redirecting to a different department or needs more information",
+}
+
+
+class ResponseCategoryOutput(BaseModel):
+    category: ResponseCategory
+    description: str
+
+    @classmethod
+    def create(cls, category: ResponseCategory):
+        return cls(category=category, description=CATEGORY_DESCRIPTIONS[category])
 
 
 class RecommendationResponseClassifier:
@@ -14,43 +43,16 @@ class RecommendationResponseClassifier:
     """
 
     def __init__(self):
-        self.response_categories = [
-            {
-                "category": "Accepted and Implemented",
-                "definition": "The recommendation was accepted (wholly) and has been implemented",
-            },
-            {
-                "category": "Accepted",
-                "definition": "The recommendation was accepted (wholly) and is being, or will be implemented",
-            },
-            {
-                "category": "Under consideration",
-                "definition": "The recipient has acknowledged that the recommendation is received and will consider it.",
-            },
-            {
-                "category": "Rejected",
-                "definition": "The recommendation will not be implemented",
-            },
-        ]
-
         pass
 
     def classify_response(self, response, recommendation, recommendation_num):
-        categories = "\n".join(
-            [
-                f"{element['category']} - {element['definition']}"
-                for element in self.response_categories
-            ]
-        )
-
-        system_prompt = f"""
+        system_prompt = """
     You are helping me put responses into categories.
 
-    These responses are to recommendations that were made in a transport accident investigation report. These recommendations are issued directly to a particular party.
-
-    There are three categories:
-
-    {categories}
+    These responses are to recommendations that were made in a transport accident investigation report. These recommendations are issued directly to a particular party. 
+    
+    You should respond with one of 4 categories, take note which one fits best.
+    {CATEGORY_DESCRIPTIONS}
 
     However if there are responses that don't fit into any of the categories then you can put them as N/A. These may be responses that request further information or want recommendation to be sent elsewhere.
 
@@ -69,16 +71,17 @@ class RecommendationResponseClassifier:
     """
 
         openai_response = ai_caller.query(
-            system_prompt, user_prompt, model="gpt-4", temp=0
+            system_prompt,
+            user_prompt,
+            model="gpt-4",
+            temp=0,
+            output_structure=ResponseCategoryOutput,
+        )
+        print(
+            f"Classified recommendation {recommendation_num} response as: {openai_response}"
         )
 
-        if openai_response in [
-            category["category"] for category in self.response_categories
-        ] + ["N/A"]:
-            return openai_response.lower()
-        else:
-            print(f"Did not match any of the categories - {openai_response}")
-            return "Classification Error"
+        return openai_response.category.value.lower()
 
 
 class RecommendationResponseClassificationProcessor:
