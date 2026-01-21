@@ -53,7 +53,7 @@ class OpenAICaller(BaseAICaller):
         system,
         user,
         temp,
-        max_tokens=16_000,
+        max_tokens=32_000,
         output_structure=None,
         reasoning=None,
         raw_output=False,
@@ -68,19 +68,24 @@ class OpenAICaller(BaseAICaller):
             print("Too many tokens, not sending to OpenAI")
             return None
 
-        if reasoning != "none" and temp is not None:
+        if (
+            reasoning != "none"
+            and temp is not None
+            and not self.model.startswith("gpt-4")
+        ):
             warnings.warn(
                 "Temperature is ignored when reasoning is enabled. "
                 "Set temperature to None to avoid this warning.",
                 UserWarning,
             )
+            temp = None
 
         # If rate limit error happens then just wait a minute and try again
         params = {
             "model": self.model,
             "instructions": system,
             "input": user,
-            "temperature": temp if reasoning != "none" else None,
+            "temperature": temp,
             "max_output_tokens": max_tokens,
             "store": False,
         }
