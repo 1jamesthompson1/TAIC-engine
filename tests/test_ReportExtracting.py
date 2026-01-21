@@ -44,7 +44,7 @@ from engine.extract.ReportExtracting import (
         ),
         pytest.param(
             "TAIC_a_2018_006",
-            ["1 - Executive summar", " 40  \nCargo pod 40  ", 1538],
+            ["1 - Executive summar", " 40  \nCargo pod 40  ", 1438],
             id="TAIC_a_2018_006",
         ),
         pytest.param(
@@ -196,8 +196,8 @@ def test_safety_issue_content_section_reading(report_id, expected):
     if expected is None:
         assert pages_to_read is None
     else:
-        assert set(pages_to_read).issuperset(expected)
-        assert len(pages_to_read) <= math.ceil(len(expected) * 1.6)
+        assert set(pages_to_read.to_tuples()).issuperset(expected)
+        assert len(pages_to_read.pages) <= math.ceil(len(expected) * 1.6)
 
 
 class TestSafetyIssueExtraction:
@@ -1236,17 +1236,17 @@ class TestRecommendationExtraction:
         [
             pytest.param(
                 "ATSB_a_2003_980",
-                [(26, 28)],
+                (26, 28),
                 id="ATSB_a_2003_980",
             ),
             pytest.param(
                 "ATSB_m_2006_234",
-                [(19, 21)],
+                (19, 21),
                 id="ATSB_m_2006_234",
             ),
             pytest.param(
                 "ATSB_r_2004_004",
-                [(23, 25)],
+                (23, 25),
                 id="ATSB_r_2004_004",
             ),
             pytest.param(
@@ -1256,17 +1256,17 @@ class TestRecommendationExtraction:
             ),
             pytest.param(
                 "ATSB_r_2014_024",
-                [(12, 14)],
+                (12, 14),
                 id="ATSB_r_2014_024",
             ),
             pytest.param(
                 "ATSB_a_2002_710",
-                [(36, 36)],
+                (36, 36),
                 id="ATSB_a_2002_710 (Safety section is last section)",
             ),
             pytest.param(
                 "ATSB_m_2001_163",
-                [(21, 25)],
+                (21, 25),
                 id="ATSB_m_2001_163 (No safety action section)",
             ),
         ],
@@ -1284,8 +1284,13 @@ class TestRecommendationExtraction:
 
         pages = extractor.extract_pages_to_read(content_section)
 
-        print(f"reading {content_section}")
-        assert pages == expected
+        if expected is None:
+            assert pages is None
+        else:
+            assert pages[0].start_page == expected[0]
+            assert pages[0].end_page == expected[1]
+
+            assert len(pages) == 1
 
     @pytest.mark.parametrize(
         "report_id",
@@ -1336,7 +1341,7 @@ class TestRecommendationExtraction:
         for extracted, expected in zip(
             extracted_recommendations, expected_recommendations
         ):
-            assert extracted["recommendation"] == expected["recommendation"]
+            assert extracted["recommendation"] == expected["recommendation"].strip()
             assert extracted["recommendation_id"] == expected["recommendation_id"]
             assert (
                 SequenceMatcher(

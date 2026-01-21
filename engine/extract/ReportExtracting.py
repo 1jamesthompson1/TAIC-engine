@@ -1,10 +1,12 @@
 import concurrent.futures
 import os
+from enum import Enum
 from functools import lru_cache
+from typing import Optional
 
 import pandas as pd
 import regex as re
-import yaml
+from pydantic import BaseModel, Field
 from tqdm import tqdm
 
 from engine.utils.AICaller import ai_caller
@@ -13,6 +15,42 @@ from engine.utils.AICaller import ai_caller
 @lru_cache(maxsize=20000)
 def get_regex(regex_string, flags=0):
     return re.compile(regex_string, flags)
+
+
+# Structured output classes
+
+
+class roman_numerals(str, Enum):
+    i = "i"
+    ii = "ii"
+    iii = "iii"
+    iv = "iv"
+    v = "v"
+    vi = "vi"
+    vii = "vii"
+    viii = "viii"
+    ix = "ix"
+    x = "x"
+
+
+class PageToRead(BaseModel):
+    start_page: int | roman_numerals | None = Field(
+        default=None, description="The starting page number to read (Inclusive)."
+    )
+    end_page: int | roman_numerals | None = Field(
+        default=None, description="The ending page number to read (Exclusive)."
+    )
+
+
+class PagesToReadOutput(BaseModel):
+    pages: list[PageToRead] | None = Field(default_factory=list)
+
+    def to_tuples(self):
+        result = []
+        for page in self.pages:
+            if page.start_page is not None and page.end_page is not None:
+                result.append((page.start_page, page.end_page))
+        return result
 
 
 class ReportExtractor:
@@ -59,10 +97,10 @@ class ReportExtractor:
                 lambda x: x if x is not None else "",
                 [
                     self.extract_text_between_page_numbers(
-                        page_to_read[0], page_to_read[1]
+                        page_to_read.start_page, page_to_read.end_page
                     )
-                    if (len(page_to_read) == 2)
-                    else self.extract_page(page_to_read[0])
+                    if (page_to_read.end_page != page_to_read.start_page)
+                    else self.extract_page(page_to_read.start_page)
                     for page_to_read in pages_to_read
                 ],
             )
@@ -206,62 +244,50 @@ class ReportExtractor:
 
         raw_content_section = self.report_text[startMatch.start() : endMatch.end()]
 
-        cleaned_content_section = ai_caller.query(
+        class ContentSectionItem(BaseModel):
+            section_number: Optional[int] = None
+            section_title: Optional[str] = None
+            page_number: Optional[str | roman_numerals] = None
+            subsections: Optional[list["ContentSectionItem"]] = None
+
+        class StructuredContentSection(BaseModel):
+            items: list[ContentSectionItem] = None
+
+        structured_content_section = ai_caller.query(
             system="""
 You are a helpful assistant. You will just respond with the answer no need to explain.
 Can you please format this table of contents? Please include in the format the section number (if it has one) the section title and section page number. Make sure to include all of the pages the the table of contents has even it they are roman numerals.
+Figures and table lists should be ommitted. Yet appendices should be included.
 
-Your output table of contents should look like this:
-[Section number*] - [Section title] [Page number]
-
-*Section numbers are optional. They should only be included if they are present in the original table of contents.
-Figures and table list should be omitted but appendices should be included.
-
-Example output:
-Executive summary i
-1 - Introduction 1
-2 - Narrative 2
-3.0 - Analysis 4
-3.1 - Introduction 4
-3.2 - Why did the cylinder burst 6
-      - Bad construction 6
-      - Maintenance 8
-3.3 - Emergency response 10
-4.0 Findings 12
-   - Important 12
-   - Incidental 13
-5.0 Safety actions 14
-
-Example output:
-Executive summary i
-- The occurrence 1
-- Context 3
-  - Aircraft information 3
-  - Component history 7
-  - Related occurrences 10
-    - R22 crashes 12
-    - R44 crashes 13
-- Safety analysis 15
-  - Failure sequence 16
-  - Tail rotor tip cap adhesive 17
-- Findings 18
-  - Contributing factors 18
-- Safety issues 19
-- General details 20
-- Australian Transport Safety Bureau 21
-  - About the ATSB 21
-  - Purpose of safety investigations 22
-  - Terminology 22
 """,
             user=f"""
 {raw_content_section}
 """,
             temp=0,
-            max_tokens=16_000,
             model="gpt-4",
+            output_structure=StructuredContentSection,
         )
 
-        cleaned_content_section = cleaned_content_section.replace("```", "").strip("\n")
+        # Convert the structured content section back to a string representation
+
+        def to_string(item, indent=""):
+            if item.section_number:
+                return f"{indent}{item.section_number} - {item.section_title} {item.page_number}\n"
+            else:
+                return f"{indent}- {item.section_title} {item.page_number}\n"
+
+        def process_item(item, indent=""):
+            result = to_string(item, indent)
+            if item.subsections:
+                for subsection in item.subsections:
+                    result += process_item(subsection, indent + "  ")
+                return result
+            return result
+
+        cleaned_content_section = ""
+        for item in structured_content_section.items:
+            cleaned_content_section += process_item(item)
+
         return cleaned_content_section, raw_content_section
 
     def extract_pages_to_read(self, content_section) -> list:
@@ -284,68 +310,34 @@ class SafetyIssueExtractor(ReportExtractor):
         self.agency = agency
 
     def extract_pages_to_read(self, content_section) -> list:
-        attempts_left = 5
-
-        pages_to_read = None
-
-        while attempts_left > 0:  # Repeat until the LLMs gives a valid response
-            model_response = None
-            try:
-                # Get 5 responses and only includes pages that are in atleast 3 of the responses
-                model_response = ai_caller.query(
-                    system="""
+        model_response = ai_caller.query(
+            system="""
 You are helping me read the content section of a report from a transport accident investigation.
 The content section is either a text extraction from the pdf or a parsing of the pdf header links. Note that the content section may be malformed.
 I am looking to find the section of the reports that will help me identify safety issues. I need to the page ranges I need to read.
 
 The sections I want you to find:
-     - Analysis
-     - Findings (any section that mentions findings)
-     - Executive Summary / Summary / Safety summary (normally at the start of the report, but it does not always exist)
-     - Safety issues (any section the explicitly mentions safety issues) 
+- Analysis
+- Findings (any section that mentions findings)
+- Executive Summary / Summary / Safety summary (normally at the start of the report, but it does not always exist)
+- Safety issues (any section the explicitly mentions safety issues) 
 
 I want to know the page ranges of the sections you found in the report. Include the start page and end page, where the end page is the page number that the next section starts on. For sections you can't find just omit them from your response. If no sections were found just return "None".
-
-Your response should only include the page numbers of the sections. For each section found put the starting and ending page numbers separate by a comma. Then separate each section with a space.
-
-Example responses: 
-"1,2 7,17"
-"1 4,8 12,16"
-"i,2 10,12"
-"7,13 20"
 """,
-                    user=content_section,
-                    model="gpt-4",
-                    temp=0,
-                )
+            user=content_section,
+            model="gpt-4",
+            temp=0,
+            output_structure=PagesToReadOutput,
+        )
 
-                cleaned_response = model_response.strip(" '\"")
-
-                if cleaned_response == "None":
-                    return None
-
-                sections = [page.strip() for page in cleaned_response.split(" ")]
-                pages_to_read = [
-                    tuple(
-                        int(num)
-                        if num.isdigit()
-                        else (num if set(num).issubset(set("vixVXI")) else int(num))
-                        for num in section.split(",")
-                    )
-                    for section in sections
-                ]
-
-                break
-            except ValueError as e:
-                print(
-                    f"  Incorrect response '{model_response}' from model retrying, error: {e}'"
-                )
-                attempts_left -= 1
-
-        if pages_to_read is None:
+        if (
+            model_response is None
+            or model_response.pages is None
+            or len(model_response.pages) == 0
+        ):
             return None
 
-        return pages_to_read
+        return model_response.pages
 
     def extract_safety_issues(self):
         """
@@ -497,27 +489,6 @@ If no safety issues are stated explicitly, then you need to inferred them. These
 
 {instruction_core}
 
-Can your response please be in yaml format as shown below.
-
-- safety_issue: |
-    bla bla talking about this and that bla bla bla
-  quality: exact
-- safety_issue: |
-    bla bla talking about this and that bla bla bla
-  quality: exact
-
-or it could be 
-
-- safety_issue: |
-    bla bla talking about this and that bla bla bla
-  quality: inferred
-- safety_issue: |
-    bla bla talking about this and that bla bla bla
-  quality: inferred
-
-
-There is no need to enclose the yaml in any tags.
-
 =Here are some definitions=
 
 Safety factor - Any (non-trivial) events or conditions, which increases safety risk. If they occurred in the future, these would
@@ -539,62 +510,37 @@ cover a single safety issue, or two or more related safety
 issues.
 """
 
-        temp = 0
-        while temp < 0.1:
-            response = ai_caller.query(
-                system_message,
-                message(important_text),
-                model="gpt-4",
-                temp=temp,
-                max_tokens=9096,
+        class SafetyIssueQuality(str, Enum):
+            exact = "exact"
+            inferred = "inferred"
+
+        class SafetyIssueItem(BaseModel):
+            safety_issue: str = Field(
+                ...,
+                description="The text of the actual safety issue (e.g ignore 'safety issue -').",
+            )
+            quality: SafetyIssueQuality
+
+        class SafetyIssueListOutput(BaseModel):
+            items: list[SafetyIssueItem] = Field(
+                default_factory=list,
+                description="List of safety issues found in the report, if none found then return an empty list. Only include each safety issue once.",
             )
 
-            if response is None:
-                print("  Could not get safety issues from the report.")
-                return None
+        parsed = ai_caller.query(
+            system_message,
+            message(important_text),
+            model="gpt-5-mini",
+            output_structure=SafetyIssueListOutput,
+        )
 
-            if response[:7] == '"""yaml' or response[:7] == "```yaml":
-                response = response[7:-3]
+        if len(parsed.items) == 0:
+            print("  Could not get safety issues from the report.")
+            return None
 
-            try:
-                safety_issues = yaml.safe_load(response)
-                safety_issues = [
-                    {
-                        "safety_issue": safety_issue["safety_issue"].strip(),
-                        "quality": safety_issue["quality"],
-                    }
-                    for safety_issue in safety_issues
-                ]
-            except (yaml.YAMLError, TypeError) as exc:
-                print(exc)
-                print(
-                    f'  Problem with formatting, trying again with slightly higher temp\nResponse was is \n"""\n{response}\n"""'
-                )
-                temp += 0.01
-                continue
+        safety_issues = parsed.model_dump()["items"]
 
-            if not isinstance(safety_issues, list):
-                print(
-                    f'  Response was not a yaml list. It was instead {type(safety_issues)}.\n\nWhich is \n"""\n{response}\n"""'
-                )
-                print(f"  Safety issues are:\n{safety_issues}")
-
-                temp += 0.01
-                continue
-
-            if len(
-                set([safety_issues["safety_issue"] for safety_issues in safety_issues])
-            ) != len(safety_issues):
-                print(
-                    f"Safety issues are not unique. Retrying with higher tempThey are:\n{safety_issues}"
-                )
-                temp += 0.01
-                continue
-
-            return safety_issues
-
-        print("  Could not extract safety issues with inference")
-        return None
+        return safety_issues
 
 
 @lru_cache(maxsize=15000)
@@ -612,18 +558,18 @@ def get_section_start_end_regexs(section_str: str):
 
     split_section = section_str.split(".")
     section = split_section[0]
-    endRegex_nextSection = base_regex_template(rf"{int(section)+1}\.1\.?")
+    endRegex_nextSection = base_regex_template(rf"{int(section) + 1}\.1\.?")
     startRegex = base_regex_template(rf"{int(section)}\.1\.?")
     endRegexs = [endRegex_nextSection]
     if len(split_section) > 1:
         paragraph = split_section[1]
         # Added to prevent single unfindable section ruining search
         endRegex_nextnextSubSection = base_regex_template(
-            rf"{section}\.{int(paragraph)+2}\.?"
+            rf"{section}\.{int(paragraph) + 2}\.?"
         )
         endRegexs.insert(0, endRegex_nextnextSubSection)
         endRegex_nextSubSection = base_regex_template(
-            rf"{section}\.{int(paragraph)+1}\.?"
+            rf"{section}\.{int(paragraph) + 1}\.?"
         )
         endRegexs.insert(0, endRegex_nextSubSection)
         startRegex = base_regex_template(rf"{section}\.{int(paragraph)}\.?")
@@ -631,11 +577,11 @@ def get_section_start_end_regexs(section_str: str):
     if len(split_section) > 2:
         sub_paragraph = split_section[2]
         endRegex_nextnextParagraph = base_regex_template(
-            rf"{section}\.{paragraph}\.{int(sub_paragraph)+2}\.?"
+            rf"{section}\.{paragraph}\.{int(sub_paragraph) + 2}\.?"
         )
         endRegexs.insert(0, endRegex_nextnextParagraph)
         endRegex_nextParagraph = base_regex_template(
-            rf"{section}\.{paragraph}\.{int(sub_paragraph)+1}\.?"
+            rf"{section}\.{paragraph}\.{int(sub_paragraph) + 1}\.?"
         )
         endRegexs.insert(0, endRegex_nextParagraph)
         startRegex = base_regex_template(
@@ -807,12 +753,11 @@ class ReportSectionExtractor(ReportExtractor):
 
         pages = ai_caller.query(
             """
-            You are helping me read a content section.
+You are helping me read a content section.
 
-I will send you a content section and a section and you will return the pages with which that section will cover.
-
-Your response is only a list of integers. No words are allowed in your response. e.g '12,45' or '10,23'. If you cant find the section number given then just return "None".
-            """,
+I will send you a content section and a section and you will return the pages with which that section will cover. Include all of the pages that section covers up until the next section starts.
+If not found just return None for the pages
+""",
             f"""
 '''
 {content_section}
@@ -822,9 +767,10 @@ The section number I am looking for is {section}
             """,
             model="gpt-4",
             temp=0,
+            output_structure=PageToRead,
         )
 
-        if pages == "None":
+        if pages.start_page is None or pages.end_page is None:
             print(
                 f"  Failed to find the section using the LLM, it responded with '{pages}'. The search was for section '{section}'"
             )
@@ -832,14 +778,9 @@ The section number I am looking for is {section}
 
         print(" Found the section using the LLM" + pages)
 
-        pages_to_read = [int(num) for num in pages.split(",")]
-
-        # Make the array every page between first and last
-        pages_to_read = list(range(pages_to_read[0], pages_to_read[-1] + 1))
-
         # Retrieve that actual text for the page numbers.
         section_text = self.extract_text_between_page_numbers(
-            pages_to_read[0], pages_to_read[-1]
+            pages.start_page, pages.end_page
         )
 
         return section_text
@@ -937,7 +878,13 @@ class RecommendationsExtractor(ReportExtractor):
 
     def _extract_recommendations_from_text(self, text):
         """
-        This will look for the recommendations that are present in the given text
+        This will look for the recommendations that are present in the given text.
+        Returns a list of dicts with the following keys:
+        - recommendation
+        - recommendation_id
+        - recipient
+        - recommendation_context
+        - made
         """
 
         agency = self.report_id.split("_")[0]
@@ -948,6 +895,22 @@ class RecommendationsExtractor(ReportExtractor):
                 f"{agency} is not currently supported yet for recommendation extraction."
             )
 
+        class RecommendationItem(BaseModel):
+            recommendation: str
+            recommendation_id: str | None = None
+            recipient: str | None = None
+            recommendation_context: str | None = None
+            made: str | None = None
+
+        class RecommendationListOutput(BaseModel):
+            items: list[RecommendationItem] = Field(
+                default_factory=list,
+                description="List of recommendations made by the agency in the report. Copy the recommendations verbatim. If none were made then return an empty list.",
+            )
+
+            def as_dicts(self) -> list[dict]:
+                return [i.model_dump(exclude_none=True) for i in self.items]
+
         response = ai_caller.query(
             f"""
 You are going help me read and parse a transport accident investigation report.
@@ -956,78 +919,38 @@ This is the section of a report that may or may not contain recommendations. I w
 Recommendations are made to those who can make the changes needed to address safety issues identified during an inquiry.  I only want recommendations that were made by the {agency_text}.
 
 If no appropriate recommendations were made then return "None".
-
-Can your response please be in yaml format.
-
-- recommendation: |
-    bla bla stating the recommendation that was made.
-  recommendation_id: 
-  recipient: organization who it was directed at.
-  recommendation_context: |
-    Extra context around why the recommendation was made. Potentially teh safety issue that prompted the recommendation.
-  made: date the recommendation was made. Leave empty if not known.
-- recommendation: |
-    bla bla stating the recommendation that was made.
-  recommendation_id: 
-  recipient: organization who it was directed at.
-  recommendation_context: |
-    Extra context around why the recommendation was made. Potentially teh safety issue that prompted the recommendation.
-  made: date the recommendation was made. Leave empty if not known.
-
-There is no need to enclose the yaml in any tags.
 """,
             text,
             model="gpt-4",
             temp=0,
+            output_structure=RecommendationListOutput,
         )
 
-        response = response.strip().strip(" `").replace("yaml", "")
-
-        try:
-            recommendations = yaml.safe_load(response)
-        except yaml.YAMLError as exc:
-            print(exc)
-            print("  Assuming that there are no recommendations in the report.")
-            print(f"  The response was: {response}")
+        if response is None or len(response.items) == 0:
             return None
 
-        if recommendations == "None":
-            return None
-
-        return recommendations
+        return response.model_dump().get("items")
 
     def extract_pages_to_read(self, content_section):
         """
         This will get the pages that need to be read to get the recommendations section
         """
-        model_response = ai_caller.query(
+
+        pages_to_read = ai_caller.query(
             system="""
 You are helping me read the content sections of a report.
 
-Can you please find the starting and end sections of the recommendations or safety actions section. The end of it is the same as the start of the next section. Note that generally the page number will be on the right. If it is the final section in the report then just return the last page number.
-If neither of these sections exist just return "None". A single page should just be 25,25
-
-Your response should just be 2 numbers for example: 23,26.
+Can you please find the starting and end sections of the recommendations/safety actions section. Start page is inclusive and end page is exclusive. The end of it is the same as the start of the next section. Note that generally the page number will be on the right side of the content page. If it is the final section in the report then just return the last page number of the report as the end page.
+A single page should look like "start_page": 25, "end_page": 25
+If not found just return None for the pages.
 """,
             user=content_section,
             model="gpt-4",
             temp=0,
+            output_structure=PagesToReadOutput,
         )
 
-        if model_response.strip() == "None":
-            return None
-
-        parsed_model_response = model_response.strip().split(",")
-
-        if len(parsed_model_response) != 2:
-            print(f"  Error: Could not parse the pages to read: {model_response}")
-            return None
-
-        try:
-            return [tuple(int(x) for x in parsed_model_response)]
-        except ValueError:
-            print(f"  Error: Could not parse the pages to read: {model_response}")
-            return None
+        return pages_to_read.pages
 
 
 class ReportExtractingProcessor:
