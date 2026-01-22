@@ -1,4 +1,5 @@
 """
+This is designed for TAIC staff to easily download/copy/delete blobs. There are some assumtpions made about storage structure.
 
 Why:
 - In containers, `azcopy login` can fail (no keyring).
@@ -14,6 +15,12 @@ Expected `.env` (repo root):
 - AZURE_STORAGE_ACCOUNT_KEY
 
 Usage examples:
+- Download the latest output run:
+  uv run azure --latest-output
+
+- Download the latest production DB:
+- uv run azure --prod-db
+
 - Download a run folder into local output/:
   uv run azure --container engineoutput --src 2025-11-17_10:09:19 --local output
 
@@ -33,6 +40,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import dotenv
+
+from engine.utils.AzureStorage import EngineOutputManager
 
 
 def _repo_root() -> Path:
@@ -60,7 +69,7 @@ def _run(cmd: list[str]) -> int:
 
 
 def _generate_sas(
-    *, account: str, key: str, container: str, expiry_hours: int = 24
+    *, account: str, key: str, container: str, expiry_hours: int = 1
 ) -> str:
     expiry = (datetime.now(timezone.utc) + timedelta(hours=expiry_hours)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
@@ -106,8 +115,16 @@ def main(argv: list[str] | None = None) -> int:
         description="Generate SAS and run azcopy (download/copy/delete).",
     )
     parser.add_argument(
-        "--src", required=True, help="Source folder/prefix inside container"
+        "--latest-output",
+        action="store_true",
+        help="Use latest engine output folder as source",
     )
+    parser.add_argument(
+        "--prod-db",
+        action="store_true",
+        help="Use latest production vectordb folder as source",
+    )
+    parser.add_argument("--src", help="Source folder/prefix inside container")
     parser.add_argument("--dst", help="Destiniation container prefix)")
     parser.add_argument(
         "--local",
@@ -115,14 +132,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--container",
-        default="vectordb",
-        help="Container name (default: vectordb)",
+        help="Container name",
     )
     parser.add_argument(
         "--expiry-hours",
         type=int,
-        default=24,
-        help="SAS token expiry in hours (default: 24)",
+        default=1,
+        help="SAS token expiry in hours (default: 1)",
     )
     parser.add_argument(
         "--yes",
@@ -137,6 +153,16 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
+    if args.latest_output or args.prod_db:
+        if any([args.src, args.dst, args.container]):
+            raise ValueError(
+                "--latest-output and --prod-db cannot be combined with --src, --dst, or --container."
+            )
+        if args.local is None:
+            raise ValueError(
+                "--latest-output and --prod-db require --local to be specified."
+            )
+
     if args.local and args.dst:
         raise ValueError("Only Local or dst can be specified, not both.")
     if not args.local and not args.dst:
@@ -144,6 +170,21 @@ def main(argv: list[str] | None = None) -> int:
 
     account = _require_env("AZURE_STORAGE_ACCOUNT_NAME")
     key = _require_env("AZURE_STORAGE_ACCOUNT_KEY")
+
+    if args.latest_output:
+        output_container = "engineoutput"
+        manager = EngineOutputManager(account, key, output_container)
+        latest_folder = manager._get_latest_output()
+        if not latest_folder:
+            raise SystemExit("No engine output folders found in storage.")
+        args.container = output_container
+        args.src = latest_folder
+        print(f"Using latest engine output folder: {args.src}")
+
+    if args.prod_db:
+        args.containers = "vectordb"
+        args.src = "production_db"
+        print(f"Using production vectordb folder: {args.src}")
 
     sas = _generate_sas(
         account=account,
