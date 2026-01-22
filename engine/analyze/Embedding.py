@@ -7,6 +7,7 @@ import lancedb
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import tiktoken
 from azure.ai.inference import EmbeddingsClient
 from azure.core.credentials import AzureKeyCredential
 from lancedb.embeddings import EmbeddingFunctionRegistry
@@ -15,7 +16,6 @@ from lancedb.embeddings.registry import register
 from lancedb.embeddings.utils import TEXT
 from lancedb.pydantic import LanceModel, Vector
 from tqdm import tqdm
-from transformers import AutoTokenizer
 
 
 @register("azure-ai-text")
@@ -175,17 +175,7 @@ class VectorDB:
 
         self.VectorDBSchema = VectorDBSchema
 
-        # using Cohere tokenizer for tokenization as a proxy to give me a rough guage.
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                "Cohere/Cohere-embed-english-v3.0",
-            )
-        except Exception:
-            print("Could not download the tokenizer. Will try again")
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                "Cohere/Cohere-embed-english-v3.0",
-                force_download=True,
-            )
+        self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
         self.table = self._get_or_create_table()
 
@@ -222,11 +212,11 @@ class VectorDB:
     def tokenize_documents(self, df, document_column_name, tokenization_column_name):
         if tokenization_column_name not in df.columns:
             df[tokenization_column_name] = df[document_column_name].apply(
-                lambda x: len(self.tokenizer.tokenize(x))
+                lambda x: len(self.tokenizer.encode(x))
             )
         else:
             df[tokenization_column_name] = df.apply(
-                lambda x: len(self.tokenizer.tokenize(x[document_column_name]))
+                lambda x: len(self.tokenizer.encode(x[document_column_name]))
                 if not isinstance(x[tokenization_column_name], int)
                 else x[tokenization_column_name],
                 axis=1,
