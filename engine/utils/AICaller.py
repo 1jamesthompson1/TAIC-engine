@@ -1,6 +1,5 @@
 import os
 
-import anthropic
 import openai
 import tiktoken
 from dotenv import load_dotenv
@@ -10,7 +9,6 @@ load_dotenv()
 
 # Initialize clients only if API keys are available
 openai_client = None
-anthropic_client = None
 
 # For OpenAI, prioritize Azure OpenAI if credentials are available, otherwise use standard OpenAI
 azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
@@ -26,9 +24,6 @@ if azure_api_key and azure_endpoint:
 elif openai_api_key:
     # Use standard OpenAI
     openai_client = OpenAI(api_key=openai_api_key)
-
-if os.getenv("ANTHROPIC_API_KEY"):
-    anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 
 class BaseAICaller:
@@ -82,34 +77,6 @@ class OpenAICaller(BaseAICaller):
             return completion.choices[0].message.content
         else:
             return [choice.message.content for choice in completion.choices]
-
-
-class AnthropicCaller(BaseAICaller):
-    def __init__(self, client, model, limit):
-        super().__init__(client, model, limit)
-
-    def query(self, system, user, temp, n=1, max_tokens=1024):
-        if self.client is None:
-            raise ValueError(
-                "Anthropic client is not available. Please set the ANTHROPIC_API_KEY environment variable."
-            )
-
-        if n != 1:
-            raise ValueError("Anthropic only supports n=1")
-
-        if self.check_query_above_limit(system + user):
-            print("Too many tokens, not sending to Anthropic")
-            return None
-
-        completion = self.client.messages.create(
-            model=self.model,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-            temperature=temp,
-            max_tokens=max_tokens,
-        )
-
-        return completion.content[0].text
 
 
 class AICaller:
