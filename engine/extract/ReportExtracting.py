@@ -430,34 +430,29 @@ I want to know the page ranges of the sections you found in the report. Include 
         Search for safety issues using inference from GPT 4 turbo.
         """
 
-        system_message = """
+        definitions = """
+Safety factor - Any (non-trivial) events or conditions, which increases safety risk. If they occurred in the future, these would increase the likelihood of an occurrence, and/or the severity of any adverse consequences associated with the occurrence.
+
+Safety issue - A safety factor that:
+• can reasonably be regarded as having the potential to adversely affect the safety of future operations, and
+• is characteristic of an organisation, a system, or an operational environment at a specific point in time.
+
+Safety Issues are derived from safety factors classified either as Risk Controls or Organisational Influences.
+
+Safety theme - Indication of recurring circumstances or causes, either across transport modes or over time. A safety theme may cover a single safety issue, or two or more related safety issues.
+"""
+
+        system_message = f"""
 You are going help me read a transport accident investigation report.
 
 I want you to please read the report and respond with the safety issues identified in the report.
 
-Please only respond with safety issues that are quite clearly stated ("exact" safety issues) or implied ("inferred" safety issues) in the report. Each report will only contain one type of safety issue.
+Please only respond with safety issues that are quite clearly stated ("exact" safety issues) or implied ("inferred" safety issues) in the report. Each report will only contain one type of safety issue. If exact safety issues are stated then only respond with those. If no exact safety issues are stated then respond with inferred safety issues.
 
 An exact safety issue will start with something like 'safety issue: ...' and will generaly go until the end of the "paragraph" (i.e until it reaches a line that breaks earlier)
 
 Remember the definitions given
-
-Safety factor - Any (non-trivial) events or conditions, which increases safety risk. If they occurred in the future, these would
-increase the likelihood of an occurrence, and/or the
-severity of any adverse consequences associated with the
-occurrence.
-
-Safety issue - A safety factor that:
-• can reasonably be regarded as having the
-potential to adversely affect the safety of future
-operations, and
-• is characteristic of an organisation, a system, or an
-operational environment at a specific point in time.
-Safety Issues are derived from safety factors classified
-either as Risk Controls or Organisational Influences.
-
-Safety theme - Indication of recurring circumstances or causes, either across transport modes or over time. A safety theme may
-cover a single safety issue, or two or more related safety
-issues.
+{definitions}
 """
 
         def message(text):
@@ -465,7 +460,7 @@ issues.
             match agency:
                 case "TSB":
                     instruction_core = """
-I want to know the safety issues which this investigation has found. If the safety issues are not explicitly stated you will need to infer them. You need to respond with what safety issues this report has identified. Note that sometimes will not have any relevant safety issues. In this case you can respond with an empty list.
+I want to know the safety issues which this investigation has found. If the safety issues are not explicitly stated you will need to infer them. You need to respond with what safety issues this report has identified. Note that sometimes the report will not have any relevant safety issues. In this case you can respond with an empty list.
 
 If no safety issues are stated explicitly, then you need to inferred them. These inferred safety issues are "inferred" safety issues."""
                 case "TAIC":
@@ -489,25 +484,8 @@ If no safety issues are stated explicitly, then you need to inferred them. These
 
 {instruction_core}
 
-=Here are some definitions=
-
-Safety factor - Any (non-trivial) events or conditions, which increases safety risk. If they occurred in the future, these would
-increase the likelihood of an occurrence, and/or the
-severity of any adverse consequences associated with the
-occurrence.
-
-Safety issue - A safety factor that:
-• can reasonably be regarded as having the
-potential to adversely affect the safety of future
-operations, and
-• is characteristic of an organisation, a system, or an
-operational environment at a specific point in time.
-Safety Issues are derived from safety factors classified
-either as Risk Controls or Organisational Influences.
-
-Safety theme - Indication of recurring circumstances or causes, either across transport modes or over time. A safety theme may
-cover a single safety issue, or two or more related safety
-issues.
+Remember the definitions given
+{definitions}
 """
 
         class SafetyIssueQuality(str, Enum):
