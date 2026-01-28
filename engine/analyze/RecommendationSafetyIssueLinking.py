@@ -1,12 +1,24 @@
 import os
 import textwrap
+from enum import Enum
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
+from pydantic import BaseModel
 from tqdm import tqdm
 
 from engine.utils.AICaller import ai_caller
+
+
+class RecommendationSafetyIssueLink(str, Enum):
+    NONE = "None"
+    POSSIBLE = "Possible"
+    CONFIRMED = "Confirmed"
+
+
+class RecommendationSafetyIssueLinkOutput(BaseModel):
+    link: RecommendationSafetyIssueLink
 
 
 class RecommendationSafetyIssueLinker:
@@ -114,45 +126,50 @@ class RecommendationSafetyIssueLinker:
     def _link_recommendation_with_safety_issue(
         self, recommendation: str, safety_issue: str
     ):
-        response = ai_caller.query(
-            system="""
-            You are going to help me find find links between recommendations and safety issues identified in transport accident investigation reports.
+        system_prompt = """
+            You are going to help me find links between recommendations and safety issues identified in transport accident investigation reports.
 
-            Each transport accident investigation report will identify safety issues. These reports will then issue recommendation that will address one or more of the safety issues identified in the report.
+            Each transport accident investigation report will identify safety issues. These reports will then issue recommendation(s) that will address one or more of the safety issues identified in the report.
 
             For each pair given you need to respond with one of three answers.
 
             - None (The recommendation is not directly related to the safety issue)
             - Possible (The recommendation is reasonably likely to directly address the safety issue)
-            - Confirmed (The recommendation explicitly mention that safety issue that it is trying address)
-            """,
-            user=f"""
+            - Confirmed (The recommendation explicitly mentions that safety issue that it is trying to address)
+            """
+
+        user_prompt = f"""
             Here is the safety issue:
 
             {safety_issue}
 
-
             Here is the recommendation:
 
             {recommendation}
+            """
 
-            Now can you please respond with one of three options
+        try:
+            parsed = ai_caller.query(
+                system_prompt,
+                user_prompt,
+                model="gpt-4",
+                temp=0,
+                output_structure=RecommendationSafetyIssueLinkOutput,
+            )
+        except Exception as e:
+            # Defensive fallback: older callers / schema mismatch shouldn't crash the pipeline.
+            print(f"Failed to parse link response: {e}")
+            return "undetermined"
 
-            - None
-            - Possible
-            - Confirmed
+        if parsed is None:
+            return "undetermined"
 
-            Your response should just be a single word that is either None, Possible, or Confirmed. No other text is required.
-            """,
-            model="gpt-4",
-            temp=0,
-        )
-        # Validate response
+        # Return canonical string values expected elsewhere in this module.
+        link_value = parsed.link.value if parsed.link is not None else None
+        if link_value in {"None", "Possible", "Confirmed"}:
+            return link_value
 
-        if response.strip().lower() in ["none", "possible", "confirmed"]:
-            return response
-
-        print(f"Model response is incorrect and is '{response}'")
+        print(f"Model response is incorrect and is '{link_value}'")
         return "undetermined"
 
     def _evaluate_all_possible_links(

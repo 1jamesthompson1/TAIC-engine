@@ -1,7 +1,9 @@
 import concurrent.futures
 import os
+from typing import Literal, Tuple
 
 import pandas as pd
+from pydantic import Field, create_model
 from tqdm import tqdm
 
 import engine.utils.Modes as Modes
@@ -38,6 +40,35 @@ class ReportTypeAssigner:
             self.all_event_types.set_index("mode", inplace=True, drop=True)
         else:
             raise ValueError(f"{report_event_type_df_path} does not exist")
+
+        # Build the structured output models per mode
+        self._event_type_output_model_by_mode: dict[Modes.Mode, Tuple[type, str]] = {}
+        for mode in self.all_event_types.index.unique():
+            allowed_event_types = self.all_event_types.loc[mode]["Value"].to_list()
+            if not allowed_event_types:
+                raise ValueError(f"No allowed event types for mode {mode}")
+
+            AllowedType = Literal[tuple(allowed_event_types)]
+            AllowedTypesModel = create_model(
+                f"EventTypeResponse_{mode.name}",
+                type=(
+                    AllowedType,
+                    Field(
+                        description=(
+                            "The event type extracted from the report title. "
+                            "Must be one of the possible event types provided."
+                        )
+                    ),
+                ),
+            )
+            allowed_event_types_str = "\n".join(
+                [f"- {event_type}" for event_type in allowed_event_types]
+            )
+
+            self._event_type_output_model_by_mode[mode] = (
+                AllowedTypesModel,
+                allowed_event_types_str,
+            )
 
     def assign_report_types(self):
         print("==================================================" * 2)
@@ -90,6 +121,9 @@ class ReportTypeAssigner:
 
     def process_report(self, index, report_id, report_title, event_type):
         report_mode = Modes.get_report_mode_from_id(report_id)
+        if report_mode is None:
+            # If we can't infer mode, fall back to the suggested event_type (or None)
+            return index, event_type
         if event_type in self.all_event_types.loc[report_mode]["Value"].to_list():
             return index, event_type
         assigned_event_type = self.assign_report_type(
@@ -100,19 +134,17 @@ class ReportTypeAssigner:
     def assign_report_type(
         self, report_title: str, mode: Modes.Mode, suggested_event_type: str
     ):
-        mode_event_types_str = "\n".join(
-            [
-                f"- {event_type}"
-                for event_type in self.all_event_types.loc[mode]["Value"].to_list()
-            ]
-        )
+        EventTypeResponse, allowed_event_types_str = (
+            self._event_type_output_model_by_mode.get(mode)
+        )  # type: ignore
+
         system_message = f"""
 You are helping me extract and assign event types to reports based off their titles.
 
 Can you please extract the accident event type from the report title.
 
 Here is a list of the possible event types:
-{mode_event_types_str}
+{allowed_event_types_str}
 
 Some events types overlap so make sure to read the entire list and choose the most specific one.
 
@@ -138,16 +170,17 @@ Extract event category from "Stern trawler Pantas No.1, fatality while working c
 Fatality
 
 Extract event category from "{f"{suggested_event_type} - " if suggested_event_type else ""}{report_title}":
-
-Here are the possible event types:
-{mode_event_types_str}
 """
 
-        type = ai_caller.query(
+        result = ai_caller.query(
             system=system_message,
             user=user_message,
             model="gpt-4",
             temp=0,
+            output_structure=EventTypeResponse,
         )
 
-        return type
+        if result is None:
+            return None
+
+        return result.type

@@ -1,46 +1,85 @@
 import pytest
+from pydantic import BaseModel, Field, ValidationError
 
 from engine.utils.AICaller import ai_caller
 
 
 @pytest.mark.parametrize(
-    "model, user, temp, n, expected_response",
+    "model, user, expected_response",
     [
-        pytest.param("gpt-4", "Hello this is a test", 0, 1, True, id="gpt-4"),
+        pytest.param("gpt-4", "Hello this is a test", True, id="gpt-4"),
         pytest.param(
             "gpt-4",
             "Hello this is a test" * (10**6),
-            0,
-            1,
             False,
             id="gpt-4 over limit",
         ),
-        pytest.param(
-            "gpt-4",
-            "Testing multiple responses with changing n",
-            0,
-            2,
-            True,
-            id="gpt-4 multiple responses",
-        ),
+        pytest.param("gpt-5-mini", "Hello can you respond?", True, id="gpt-5-mini"),
     ],
 )
-def test_ai_caller(model, user, temp, n, expected_response):
-    response = ai_caller.query(
-        model=model, system="", user=user, temp=temp, n=n, max_tokens=100
-    )
+def test_ai_caller(model, user, expected_response):
+    response = ai_caller.query(model=model, system="", user=user, max_tokens=100)
 
     print(f"Response: '{response}'")
-    if n == 1:
-        assert isinstance(response, str) == expected_response
-        return
-    elif not expected_response:
-        assert response is None
+    assert isinstance(response, str) == expected_response
+    return
 
-    assert isinstance(response, list)
-    assert len(response) == n
 
-    assert all([isinstance(res, str) for res in response])
+def test_structured_output():
+    class CountrySummary(BaseModel):
+        country: str = Field(..., description="Name of the country")
+        population: int = Field(..., description="Population of the country")
+        gdp: float = Field(..., description="GDP of the country in USD")
+
+    response = ai_caller.query(
+        model="gpt-5-mini",
+        system="Your job is too provide structured data about countries in JSON format.",
+        user="Provide a summary for the country France including its population and GDP.",
+        max_tokens=4000,
+        output_structure=CountrySummary,
+    )
+
+    assert response is not None, "Response should not be None"
+
+    try:
+        assert response.country == "France"
+        assert isinstance(response.population, int)
+        assert isinstance(response.gdp, float)
+    except ValidationError as e:
+        pytest.fail(f"Response validation failed: {e}")
+
+
+def test_varying_reasoning_levels():
+    reasoning_tokens = []
+    for reasoning_level in ["minimal", "low", "high"]:
+        response = ai_caller.query(
+            model="gpt-5-mini",
+            system="",
+            user="Explain the theory of relativity in simple terms.",
+            reasoning=reasoning_level,
+            max_tokens=1000,
+            raw_output=True,
+        )
+
+        assert (
+            response.output_text is not None
+        ), f"Response should not be None for reasoning={reasoning_level}"
+        print(f"Response with reasoning={reasoning_level}:\n{response.output_text}\n")
+
+        if reasoning_level == "none":
+            assert response.usage.output_tokens_details.reasoning_tokens == 0
+
+        else:
+            reasoning_tokens.append(
+                response.usage.output_tokens_details.reasoning_tokens
+            )
+
+    # Make sure that low reasoning uses fewer tokens than high reasoning
+    if len(reasoning_tokens) == 3:
+        assert (
+            reasoning_tokens[0] < reasoning_tokens[1]
+            and reasoning_tokens[1] < reasoning_tokens[2]
+        ), "Low reasoning should use fewer tokens than high reasoning"
 
 
 def test_ai_caller_invalid_model():
@@ -50,6 +89,5 @@ def test_ai_caller_invalid_model():
             system="",
             user="Hello this is a test",
             temp=0,
-            n=1,
             max_tokens=100,
         )
