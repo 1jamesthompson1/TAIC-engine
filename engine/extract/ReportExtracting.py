@@ -248,13 +248,21 @@ class ReportExtractor:
         raw_content_section = self.report_text[startMatch.start() : endMatch.end()]
 
         class ContentSectionItem(BaseModel):
-            section_number: Optional[int] = None
-            section_title: Optional[str] = None
-            page_number: Optional[str | roman_numerals] = None
-            subsections: Optional[list["ContentSectionItem"]] = None
+            section_number: Optional[int] = Field(
+                default=None, description="The section number, not always present."
+            )
+            section_title: str = Field(..., description="The title of the section.")
+            page_number: str | roman_numerals = Field(
+                ..., description="The page number of the section."
+            )
+            subsections: Optional[list["ContentSectionItem"]] = Field(
+                default=None, description="List of subsections under this section."
+            )
 
         class StructuredContentSection(BaseModel):
-            items: list[ContentSectionItem] = None
+            items: list[ContentSectionItem] = Field(
+                ..., description="List of content section items."
+            )
 
         structured_content_section = ai_caller.query(
             system="""
