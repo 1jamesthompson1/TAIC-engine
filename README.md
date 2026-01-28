@@ -21,14 +21,24 @@ Get code and install dependencies:
 git clone https://github.com/1jamesthompson1/TAIC-engine
 cd TAIC-engine
 
-# Install uv if you haven't already
+# Install uv if you haven't already see https://docs.astral.sh/uv/#installation
 curl -Ls https://astral.sh/uv/install.sh | sh
+source $HOME/.local/bin/env # needed to load uv into path (or just restart terminal)
 
 # Install project dependencies
 uv sync --dev
 
 # Setup pre-commits
 uv run pre-commit install
+```
+
+Running from scratch (i.e scraping all websites processing all reports etc) can take multiple days depending on your hardware and internet connection. It is recommended to instead download the current data state from the previous runs. This data is not publicly avialable now. For TAIC staff information can be found in the internal setup wiki.
+
+To install previous data state (Only for TAIC staff with internal setup):
+
+```bash
+uv run azure --latest-output --local output/
+uv run azure --prod-db --local workbench/vectordb/
 ```
 
 Engine can then be ran with 
