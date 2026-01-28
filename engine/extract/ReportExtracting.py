@@ -38,12 +38,13 @@ class PageToRead(BaseModel):
         default=None, description="The starting page number to read (Inclusive)."
     )
     end_page: int | roman_numerals | None = Field(
-        default=None, description="The ending page number to read (Exclusive)."
+        default=None,
+        description="The ending page number to read (Inclusive). Include up to the next section's starting page. This is to make sure that no relevant text is missed.",
     )
 
 
 class PagesToReadOutput(BaseModel):
-    pages: list[PageToRead] | None = Field(
+    pages: Optional[list[PageToRead]] = Field(
         default_factory=list,
         description="List of page ranges to read. If no relevant pages found, return an empty list.",
     )
@@ -260,8 +261,9 @@ class ReportExtractor:
             )
 
         class StructuredContentSection(BaseModel):
-            items: list[ContentSectionItem] = Field(
-                ..., description="List of content section items."
+            items: Optional[list[ContentSectionItem]] = Field(
+                ...,
+                description="List of content section items. There is a small chance that there is no actual items in the content section.",
             )
 
         structured_content_section = ai_caller.query(
@@ -324,8 +326,8 @@ class SafetyIssueExtractor(ReportExtractor):
         model_response = ai_caller.query(
             system="""
 You are helping me read the content section of a report from a transport accident investigation.
-The content section is either a text extraction from the pdf or a parsing of the pdf header links. Note that the content section may be malformed.
-I am looking to find the section of the reports that will help me identify safety issues. I need to the page ranges I need to read.
+The content section is either a text extraction from the pdf or a parsing of the pdf header links. Note that the content section may be malformed. Furthermore there is a slim chance that the content section contains nonsense, if it doesn't look like a meaningful content section then just return None.
+I am looking to find the section of the reports that will help me identify safety issues. I need to the page ranges I need to read. I will provide you with the content section below.
 
 The sections I want you to find:
 - Analysis
@@ -333,10 +335,11 @@ The sections I want you to find:
 - Executive Summary / Summary / Safety summary (normally at the start of the report, but it does not always exist)
 - Safety issues (any section the explicitly mentions safety issues) 
 
-I want to know the page ranges of the sections you found in the report. Include the start page and end page, where the end page is the page number that the next section starts on. For sections you can't find just omit them from your response. If no sections were found just return "None".
+Make sure to inlude the start and end page for each section you find. I want all the pages so the eng page should be inclusive of the next section's start page. If you can't find a section just omit it from your response.
 """,
-            user=content_section,
-            model="gpt-4",
+            user=content_section
+            + "\n\nI want to know the page ranges of the sections you found in the report. Include the start page and end page, where the end page is the page number that the next section starts on (i.e include the start of the next section). For sections you can't find just omit them from your response. If no sections were found that are relevant just return 'None'.",
+            model="gpt-5-mini",
             temp=0,
             output_structure=PagesToReadOutput,
         )
@@ -479,7 +482,7 @@ If no safety issues are stated explicitly, then you need to inferred them. These
 I want to know the safety issues which this investigation has found.
 
 For each safety issue you find I need to know what is the quality of this safety issue.
-Some reports will have safety issues explicitly stated with something like "safety issue - ..." or "safety issue: ...", these are "exact" safety issues. Note that the text may have extra spaces or characters in it. Furthermore findings do not count as safety issues.
+Some reports will have safety issues explicitly stated with something like "safety issue - ..." or "safety issue: ...", these are "exact" safety issues.  Furthermore findings do not count as safety issues.
 
 If no safety issues are stated explicitly, then you need to inferred them. These inferred safety issues are "inferred" safety issues.
 """
@@ -494,6 +497,8 @@ If no safety issues are stated explicitly, then you need to inferred them. These
 =Instructions=
 
 {instruction_core}
+
+Note that the text may have extra spaces or characters in it which can be cleaned (as text was parsed from a pdf so may have errors). Take care however as there may be technical terms with specific spellings/punctuation.
 
 Remember the definitions given
 {definitions}
@@ -511,9 +516,9 @@ Remember the definitions given
             quality: SafetyIssueQuality
 
         class SafetyIssueListOutput(BaseModel):
-            items: list[SafetyIssueItem] = Field(
+            items: Optional[list[SafetyIssueItem]] = Field(
                 default_factory=list,
-                description="List of safety issues found in the report, if none found then return an empty list. Only include each safety issue once.",
+                description="List of safety issues found in the report, if none found then return None. Only include each safety issue once.",
             )
 
         parsed = ai_caller.query(
@@ -523,7 +528,7 @@ Remember the definitions given
             output_structure=SafetyIssueListOutput,
         )
 
-        if len(parsed.items) == 0:
+        if parsed.items is None or len(parsed.items) == 0:
             print("  Could not get safety issues from the report.")
             return None
 
