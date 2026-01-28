@@ -43,7 +43,10 @@ class PageToRead(BaseModel):
 
 
 class PagesToReadOutput(BaseModel):
-    pages: list[PageToRead] | None = Field(default_factory=list)
+    pages: list[PageToRead] | None = Field(
+        default_factory=list,
+        description="List of page ranges to read. If no relevant pages found, return an empty list.",
+    )
 
     def to_tuples(self):
         result = []
@@ -101,7 +104,7 @@ class ReportExtractor:
                     )
                     if (page_to_read.end_page != page_to_read.start_page)
                     else self.extract_page(page_to_read.start_page)
-                    for page_to_read in pages_to_read
+                    for page_to_read in pages_to_read.pages
                 ],
             )
         )
@@ -257,7 +260,7 @@ class ReportExtractor:
             system="""
 You are a helpful assistant. You will just respond with the answer no need to explain.
 Can you please format this table of contents? Please include in the format the section number (if it has one) the section title and section page number. Make sure to include all of the pages the the table of contents has even it they are roman numerals.
-Figures and table lists should be ommitted. Yet appendices should be included.
+Figures and table lists should be ommitted. Yet appendices if present should be included
 
 """,
             user=f"""
@@ -337,7 +340,7 @@ I want to know the page ranges of the sections you found in the report. Include 
         ):
             return None
 
-        return model_response.pages
+        return model_response
 
     def extract_safety_issues(self):
         """
@@ -811,7 +814,7 @@ class RecommendationsExtractor(ReportExtractor):
             self.table_of_contents
         )
 
-        if recommendation_section is None:
+        if recommendation_section is None or recommendation_section.strip() == "":
             print(
                 "  Could not get recommendations as there was no recommendation section"
             )
@@ -874,11 +877,26 @@ class RecommendationsExtractor(ReportExtractor):
             )
 
         class RecommendationItem(BaseModel):
-            recommendation: str
-            recommendation_id: str | None = None
-            recipient: str | None = None
-            recommendation_context: str | None = None
-            made: str | None = None
+            recommendation: str = Field(
+                ...,
+                description="The text of the recommendation made by the agency in the report. Copy the recommendation verbatim.",
+            )
+            recommendation_id: str | None = Field(
+                default=None,
+                description="The unique identifier for the recommendation if it exists in the report. If none is given then return None.",
+            )
+            recipient: str | None = Field(
+                default=None,
+                description="The recipient of the recommendation. I.e who the recommendation was addressed to.",
+            )
+            recommendation_context: str | None = Field(
+                default=None,
+                description="The context or background information related to the recommendation, if available. Sometimes this is given in the report as a paragraph before the recommendation itself.",
+            )
+            made: str | None = Field(
+                default=None,
+                description="The date or time when the recommendation was made, if available.",
+            )
 
         class RecommendationListOutput(BaseModel):
             items: list[RecommendationItem] = Field(
@@ -888,6 +906,8 @@ class RecommendationsExtractor(ReportExtractor):
 
             def as_dicts(self) -> list[dict]:
                 return [i.model_dump(exclude_none=True) for i in self.items]
+
+        print(f"Text to look at is {len(text)} characters long\n{text}")
 
         response = ai_caller.query(
             f"""
@@ -920,7 +940,7 @@ You are helping me read the content sections of a report.
 
 Can you please find the starting and end sections of the recommendations/safety actions section. Start page is inclusive and end page is exclusive. The end of it is the same as the start of the next section. Note that generally the page number will be on the right side of the content page. If it is the final section in the report then just return the last page number of the report as the end page.
 A single page should look like "start_page": 25, "end_page": 25
-If not found just return None for the pages.
+If recommendation or safety action section is not found just return an empty list.
 """,
             user=content_section,
             model="gpt-4",
@@ -928,7 +948,9 @@ If not found just return None for the pages.
             output_structure=PagesToReadOutput,
         )
 
-        return pages_to_read.pages
+        print(f"Read {content_section}")
+
+        return pages_to_read
 
 
 class ReportExtractingProcessor:

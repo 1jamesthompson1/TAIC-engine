@@ -42,11 +42,9 @@ def test_structured_output():
     assert response is not None, "Response should not be None"
 
     try:
-        print(response)
-        country_summary = CountrySummary.model_validate_json(response)
-        assert country_summary.country == "France"
-        assert isinstance(country_summary.population, int)
-        assert isinstance(country_summary.gdp, float)
+        assert response.country == "France"
+        assert isinstance(response.population, int)
+        assert isinstance(response.gdp, float)
     except ValidationError as e:
         pytest.fail(f"Response validation failed: {e}")
 
