@@ -44,6 +44,7 @@ dependencies = [
     "azure-storage-blob>=12.26.0",
     "pytest-cov>=6.2.1",
     "lxml>=6.0.0",
+    "langchain-text-splitters>=1.1.0",
 ]
 
 [dependency-groups]
@@ -73,6 +74,7 @@ omit = ["tests/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = "-n auto"
 
 [tool.uv]
 package = true
