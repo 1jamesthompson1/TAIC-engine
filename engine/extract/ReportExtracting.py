@@ -1,8 +1,7 @@
 import concurrent.futures
 import os
-from enum import Enum
 from functools import lru_cache
-from typing import Optional
+from typing import Literal, Optional
 
 import pandas as pd
 import regex as re
@@ -20,24 +19,17 @@ def get_regex(regex_string, flags=0):
 # Structured output classes
 
 
-class roman_numerals(str, Enum):
-    i = "i"
-    ii = "ii"
-    iii = "iii"
-    iv = "iv"
-    v = "v"
-    vi = "vi"
-    vii = "vii"
-    viii = "viii"
-    ix = "ix"
-    x = "x"
-
-
 class PageToRead(BaseModel):
-    start_page: int | roman_numerals | None = Field(
-        default=None, description="The starting page number to read (Inclusive)."
-    )
-    end_page: int | roman_numerals | None = Field(
+    start_page: (
+        int
+        | Literal["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"]
+        | None
+    ) = Field(default=None, description="The starting page number to read (Inclusive).")
+    end_page: (
+        int
+        | Literal["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"]
+        | None
+    ) = Field(
         default=None,
         description="The ending page number to read (Inclusive). Include up to the next section's starting page. This is to make sure that no relevant text is missed.",
     )
@@ -253,9 +245,10 @@ class ReportExtractor:
                 default=None, description="The section number, not always present."
             )
             section_title: str = Field(..., description="The title of the section.")
-            page_number: str | roman_numerals = Field(
-                ..., description="The page number of the section."
-            )
+            page_number: (
+                str
+                | Literal["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"]
+            ) = Field(..., description="The page number of the section.")
             subsections: Optional[list["ContentSectionItem"]] = Field(
                 default=None, description="List of subsections under this section."
             )
@@ -403,42 +396,6 @@ Make sure to inlude the start and end page for each section you find. I want all
 
         return safety_issues, important_text, pages_read
 
-    def _extract_safety_issues_with_regex(self, important_text=None):
-        """
-        This function will use regex and search the text for any safety issues.
-        It will not be used in the main engine pipeline but it useful for development purposes while we dont have a reliable inference extraction.
-        """
-        if important_text is None:
-            raise Exception(
-                "  No important text provided to extract safety issues from"
-            )
-
-        def safety_regex(x):
-            return f"s ?a ?f ?e ?t ?y ? ?i ?s ?s ?u ?e ?s? {{0,3}}{x} {{0,3}}"
-
-        end_regex = r"([\s\S]+?)(?=(?:\d+\.(?:\d+\.)?(?:\d+)?)|(?:s ?a ?f ?e ?t ?y ? ?i ?s ?s ?u ?e ?s?))"
-
-        uncompiled_regexes = [
-            "(" + safety_regex(sep) + end_regex + ")" for sep in ["-", ":"]
-        ]
-
-        safety_issue_regexes = [
-            re.compile(regex, re.MULTILINE | re.IGNORECASE)
-            for regex in uncompiled_regexes
-        ]
-
-        safety_issues_from_report = []
-
-        matches = [regex.findall(important_text) for regex in safety_issue_regexes]
-
-        # Choose one of the matches that has the most matches
-        matches = max(matches, key=lambda x: len(x))
-
-        for full_match, safety_issue_match in matches:
-            safety_issues_from_report.append(safety_issue_match)
-
-        return safety_issues_from_report
-
     def _extract_safety_issues_with_inference(self, important_text):
         """
         Search for safety issues using inference from GPT 4 turbo.
@@ -504,16 +461,12 @@ Remember the definitions given
 {definitions}
 """
 
-        class SafetyIssueQuality(str, Enum):
-            exact = "exact"
-            inferred = "inferred"
-
         class SafetyIssueItem(BaseModel):
             safety_issue: str = Field(
                 ...,
                 description="The text of the actual safety issue (e.g ignore 'safety issue -').",
             )
-            quality: SafetyIssueQuality
+            quality: Literal["exact", "inferred"]
 
         class SafetyIssueListOutput(BaseModel):
             items: Optional[list[SafetyIssueItem]] = Field(
