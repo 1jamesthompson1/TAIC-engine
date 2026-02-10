@@ -9,6 +9,7 @@ from engine.extract.ReportExtracting import (
     SafetyIssueItem,
     SafetyIssueType,
     ai_read_report,
+    chunk_report_into_sections,
 )
 
 
@@ -317,3 +318,35 @@ class TestAIExtraction:
             assert (
                 context_similarity >= 0.9
             ), f"Expected near perfect context match but got similarity {context_similarity:.2f}"
+
+
+@pytest.mark.parametrize(
+    "report_id, num_sections",
+    [
+        pytest.param(
+            "TAIC_m_2004_203",
+            37,
+        ),
+        pytest.param(
+            "TSB_a_2023_W0096",
+            42,
+        ),
+        pytest.param(
+            "TAIC_a_2020_003",
+            69,
+        ),
+        pytest.param(
+            "ATSB_r_2010_007",
+            22,
+        ),
+    ],
+)
+def test_chunking_into_section(report_id, num_sections):
+    """Test that does a basic sanity check on the chunking of a report into sections."""
+    report_text = get_report_text(report_id)
+
+    sections = chunk_report_into_sections(report_text)
+
+    assert (
+        len(sections) == num_sections
+    ), f"Expected {num_sections} sections but got {len(sections)}"

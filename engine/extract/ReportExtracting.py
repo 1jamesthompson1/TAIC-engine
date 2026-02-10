@@ -243,14 +243,25 @@ def chunk_report_into_sections(report_text: str) -> dict[str, str]:
         position_to_page[match.start()] = match.group(1)
 
     # Split the report into chunks
-    reporter_splitter = RecursiveCharacterTextSplitter()
+    reporter_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=2000,
+        chunk_overlap=200,
+        length_function=len,  # Use character length for splitting
+    )
     sections = reporter_splitter.split_text(report_text)
 
     # Assign each chunk to a page number based on where it starts in the original text
     chunks_with_pages = {}
+    page_for_sections = []
+    search_from = 0
+
+    # Find out which page each section belongs to by looking at where it starts in the original text and finding the most recent page marker before that position
     for section in sections:
-        # Find where this section starts in the original text
-        section_start = report_text.find(section)
+        section_start = report_text.find(section, search_from)
+        if section_start == -1:
+            section_start = report_text.find(section)
+        else:
+            search_from = section_start + len(section)
 
         # Find the most recent page marker before this position
         current_page = "pre"
@@ -260,8 +271,22 @@ def chunk_report_into_sections(report_text: str) -> dict[str, str]:
             else:
                 break
 
-        # Use page number as key
-        page_key = f"page_{current_page}"
+        page_for_sections.append((current_page, section))
+
+    # Count how many sections belong to each page
+    page_totals = {}
+    for page, _section in page_for_sections:
+        page_totals[page] = page_totals.get(page, 0) + 1
+
+    # Create the final mapping of page keys to section text, adding suffixes for multiple sections on the same page
+    page_counts = {}
+    for page, section in page_for_sections:
+        page_counts[page] = page_counts.get(page, 0) + 1
+        suffix = page_counts[page]
+        if page_totals[page] > 1:
+            page_key = f"page_{page}.{suffix}"
+        else:
+            page_key = f"page_{page}"
         chunks_with_pages[page_key] = section
 
     return chunks_with_pages
