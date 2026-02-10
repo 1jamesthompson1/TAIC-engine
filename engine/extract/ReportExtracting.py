@@ -1,29 +1,40 @@
-from enum import Enum
+"""A module for extracting structured informatin from accident investigation reports.
 
+This includes extracting safety issues, recommendations, and chunking the report into sections based on page numbers. The safety issue and recommendation extracting is done by AI. While chunking is a simple recursive text splitter.
+"""
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Literal
+
+import pandas as pd
 import regex as re
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel, Field, create_model
+from tqdm import tqdm
 
 from engine.utils.AICaller import ai_caller
 
 
-class SafetyIssueType(str, Enum):
-    EXACT = "exact"
-    INFERRED = "inferred"
-
-
 class SafetyIssueItem(BaseModel):
+    """Represents a safety issue extracted from the report."""
+
     safety_issue: str = Field(
         ...,
         description="The text of the actual safety issue (e.g ignore 'safety issue -').",
     )
-    quality: SafetyIssueType = Field(
+    quality: Literal["exact", "inferred"] = Field(
         ...,
-        description="Whether the safety issue is an exact safety issue (i.e a verbatim safety issue) or an inferred safety issue (i.e implied in the report).",
+        description=(
+            "Whether the safety issue is an exact safety issue "
+            "(i.e a verbatim safety issue) or an inferred safety issue "
+            "(i.e implied in the report)."
+        ),
     )
 
 
 class RecommendationItem(BaseModel):
+    """Represents a recommendation extracted from the report."""
+
     recommendation: str = Field(
         ...,
         description="The text of the recommendation made by the agency in the report. Copy the recommendation verbatim.",
@@ -46,89 +57,24 @@ class RecommendationItem(BaseModel):
     )
 
 
-class CompleteExtractedReport(BaseModel):
-    safety_issues: list[SafetyIssueItem] = Field(
-        ...,
-        description="A list of all safety issues identified in the report.",
-    )
-    recommendations: list[RecommendationItem] = Field(
-        ...,
-        description="A list of all recommendations made in the report.",
-    )
-    sections: dict[str, str] = Field(
-        ...,
-        description="A dictionary mapping section titles to their corresponding text in the report. This is the chunking of the report into sections.",
-    )
-
-
-# A config setup of which agnecies need ai extraction of the items
-
-ai_extraction_needed = {
-    "ATSB": {
-        "safety_issues": False,
-        "recommendations": True,
-    },
-    "TSB": {
-        "safety_issues": True,
-        "recommendations": False,
-    },
-    "TAIC": {
-        "safety_issues": True,
-        "recommendations": False,
-    },
-}
-
-
-def extract_report(report_id: str, report_text: str) -> CompleteExtractedReport:
-    """
-    Extracts safety issues, recommendations, and sections from the report.
-
-    This is the main function that orchestrates the extraction process.
-    """
-
-    agency = report_id.split("_")[0]
-
-    extraction_config = ai_extraction_needed[agency]
-
-    # Read report using AI to extract safety issues and/or recommendations
-    extracted_data = ai_read_report(
-        agency_name=agency,
-        report_text=report_text,
-        **extraction_config,
-    )
-
-    if extraction_config["safety_issues"]:
-        safety_issues = extracted_data.safety_issues
-    else:
-        safety_issues = []
-
-    if extraction_config["recommendations"]:
-        recommendations = extracted_data.recommendations
-    else:
-        recommendations = []
-
-    # Chunk the report into sections
-    sections = chunk_report_into_sections(report_text)
-
-    return CompleteExtractedReport(
-        safety_issues=safety_issues,
-        recommendations=recommendations,
-        sections=sections,
-    )
-
-
 def ai_read_report(
     agency_name: str, report_text: str, safety_issues: bool, recommendations: bool
-):
-    """
-    Uses AI to read the report and extract safety issues and recommendations as needed.
+) -> BaseModel:
+    """Use AI to read the report and extract safety issues and recommendations as needed.
 
     Args:
-        report_text (str): The full text of the report.
-        safety_issues (bool): Whether to extract safety issues using AI.
-        recommendations (bool): Whether to extract recommendations using AI.
-    """
+        agency_name: The name of the investigation agency (e.g., 'TAIC', 'TSB', 'ATSB').
+        report_text: The full text of the report.
+        safety_issues: Whether to extract safety issues using AI.
+        recommendations: Whether to extract recommendations using AI.
 
+    Returns:
+        A BaseModel containing the extracted safety issues and/or recommendations, depending on the input flags.
+
+    Raises:
+        ValueError: If neither safety_issues nor recommendations is True, or if the AI response is None.
+
+    """
     if not any([safety_issues, recommendations]):
         raise ValueError(
             "At least one of safety_issues or recommendations must be True"
@@ -223,8 +169,7 @@ Based on the provided report text, please extract the following information:
 
 
 def chunk_report_into_sections(report_text: str) -> dict[str, str]:
-    """
-    Chunks the report into sections based on headings, with each chunk labeled by its starting page.
+    """Chunks the report into sections based on headings, with each chunk labeled by its starting page.
 
     Args:
         report_text (str): The full text of the report.
@@ -232,6 +177,7 @@ def chunk_report_into_sections(report_text: str) -> dict[str, str]:
     Returns:
         dict[str, str]: A dictionary mapping page numbers (as strings) to their corresponding chunk text.
                        Keys are formatted as "page_X" where X is the page number.
+
     """
     # Find all page markers and their positions
     page_regex = re.compile(r"<< Page (\d+|[xvi]+) >>")
@@ -290,3 +236,166 @@ def chunk_report_into_sections(report_text: str) -> dict[str, str]:
         chunks_with_pages[page_key] = section
 
     return chunks_with_pages
+
+
+def extract_report(
+    report_row: pd.Series | dict,
+    ai_extraction_config: dict = {
+        "ATSB": {
+            "safety_issues": False,
+            "recommendations": True,
+        },
+        "TSB": {
+            "safety_issues": True,
+            "recommendations": False,
+        },
+        "TAIC": {
+            "safety_issues": True,
+            "recommendations": False,
+        },
+    },
+) -> dict:
+    """Extract safety issues, recommendations, and sections from a report row.
+
+    Args:
+        report_row: Row containing 'report_id' and 'report_text'.
+        ai_extraction_config: Configuration dictionary specifying which extraction tasks (safety_issues, recommendations) to perform for each agency. Defaults to extracting safety issues for TAIC and TSB, and recommendations for ATSB.
+
+    Returns:
+        dict: Extracted fields with keys 'report_id', 'safety_issues',
+              'recommendations', and 'sections'.
+
+    """
+    report_id = report_row["report_id"]
+    report_text = report_row["text"]
+    agency = report_id.split("_")[0]
+
+    extraction_config = ai_extraction_config[agency].copy()
+
+    # Add ATSB reports that are older than 2008
+    if agency == "ATSB":
+        report_year = int(report_id.split("_")[2])
+        if report_year < 2008:
+            extraction_config["safety_issues"] = True
+
+    # Read report using AI to extract safety issues and/or recommendations
+    extracted_data = ai_read_report(
+        agency_name=agency,
+        report_text=report_text,
+        **extraction_config,
+    )
+
+    safety_issues = (
+        extracted_data.safety_issues if extraction_config["safety_issues"] else []
+    )
+    recommendations = (
+        extracted_data.recommendations if extraction_config["recommendations"] else []
+    )
+
+    # Chunk the report into sections
+    sections = chunk_report_into_sections(report_text)
+
+    return {
+        "report_id": report_id,
+        "safety_issues": safety_issues,
+        "recommendations": recommendations,
+        "sections": sections,
+    }
+
+
+def process_reports_parallel(
+    reports_df: pd.DataFrame,
+    current_extracted_df: pd.DataFrame | None,
+    max_workers: int = 4,
+) -> pd.DataFrame:
+    """Process reports in parallel, skipping those already extracted.
+
+    This function identifies which reports need to be processed by comparing the input
+    reports_df with current_extracted_df. It then processes new reports in parallel
+    using ThreadPoolExecutor for improved performance.
+
+    Args:
+        reports_df: DataFrame with columns ['report_id', 'report_text'] containing the reports to process.
+        current_extracted_df: DataFrame with columns ['report_id', 'safety_issues', 'recommendations', 'sections'] containing already processed reports. Pass an empty DataFrame to process all reports.
+        max_workers: Maximum number of parallel workers (default: 4). Adjust based on your API rate limits and system resources.
+
+    Returns:
+        pd.DataFrame: Updated DataFrame containing both the input current_extracted_df reports and newly extracted reports. Columns include:
+                     - report_id: Unique identifier for the report
+                     - safety_issues: List of extracted safety issues
+                     - recommendations: List of extracted recommendations
+                     - sections: Dictionary of report sections
+
+    Example:
+        >>> reports = pd.DataFrame({
+        ...     'report_id': ['TAIC_001', 'TAIC_002'],
+        ...     'report_text': ['...', '...']
+        ... })
+        >>> current = pd.DataFrame({
+        ...     'report_id': ['TAIC_001'],
+        ...     'safety_issues': [[...]],
+        ...     'recommendations': [[...]],
+        ...     'sections': [{...}]
+        ... })
+        >>> result = process_reports_parallel(reports, current, max_workers=8)
+        >>> # Only TAIC_002 will be processed, TAIC_001 data preserved
+
+    """
+    # Identify reports that need processing
+    if current_extracted_df is not None and len(current_extracted_df) > 0:
+        already_processed = set(current_extracted_df["report_id"])
+        reports_to_process = reports_df[
+            ~reports_df["report_id"].isin(already_processed)
+        ]
+    else:
+        current_extracted_df = pd.DataFrame(
+            columns=["report_id", "safety_issues", "recommendations", "sections"]
+        )
+        reports_to_process = reports_df
+
+    print(
+        f"Processing {len(reports_to_process)} reports "
+        f"(skipping {len(reports_df) - len(reports_to_process)} already processed)"
+    )
+
+    if len(reports_to_process) == 0:
+        return current_extracted_df
+
+    # Process reports in parallel
+    results = []
+
+    # Use ThreadPoolExecutor for parallel processing
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_report = {
+            executor.submit(extract_report, row): row["report_id"]
+            for _, row in reports_to_process.iterrows()
+        }
+
+        # Process completed tasks with progress bar
+        for future in tqdm(
+            as_completed(future_to_report),
+            total=len(future_to_report),
+            desc="Processing",
+        ):
+            report_id = future_to_report[future]
+            try:
+                result = future.result()
+            except Exception as exc:
+                print(f"Error processing {report_id}: {exc}")
+                continue
+            if result is not None:
+                results.append(result)
+
+    # Create DataFrame from results
+    new_extracted_df = pd.DataFrame(results)
+
+    # Combine with existing data
+    if len(current_extracted_df) > 0:
+        completed_df = pd.concat(
+            [current_extracted_df, new_extracted_df], ignore_index=True
+        )
+    else:
+        completed_df = new_extracted_df
+
+    return completed_df
