@@ -1,4 +1,7 @@
+"""Pytest fixtures and session hooks for loading test config and Azure PDF storage cleanup."""
+
 import json
+import logging
 import os
 
 import dotenv
@@ -11,6 +14,22 @@ from engine.utils.AzureStorage import PDFStorageManager
 
 @pytest.fixture(scope="session", autouse=True)
 def load_test_config():
+    """Load test configuration and setup logging for the test session.
+
+    This fixture runs once per test session and configures:
+    - Logging at DEBUG level for all tests
+    - Test configuration from test_config.yaml
+    - Environment variables from .env file
+
+    The loaded configuration is stored in pytest.config and made available
+    to all tests in the session.
+    """
+    # Configure logging for tests - set to DEBUG level
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
     config = Config.ConfigReader(os.path.join("tests", "test_config.yaml")).get_config()
     pytest.config = config
 
@@ -22,8 +41,7 @@ def load_test_config():
 
 @pytest.fixture(scope="function")
 def test_pdf_storage_manager():
-    """
-    Create a PDF storage manager for tests.
+    """Create a PDF storage manager for tests.
 
     This fixture is available to all tests in the suite and provides access
     to the test Azure storage container for PDF operations.
@@ -40,6 +58,9 @@ def test_pdf_storage_manager():
     ```
 
     The fixture automatically connects to the test container specified in test_config.yaml.
+
+    Returns:
+        PDFStorageManager: Configured manager for the test PDF container.
     """
     return PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
@@ -50,8 +71,7 @@ def test_pdf_storage_manager():
 
 @pytest.fixture(scope="function")
 def stable_pdf_storage_manager():
-    """
-    Create a PDF storage manager for stable test PDFs.
+    """Create a PDF storage manager for stable test PDFs.
 
     This fixture connects to a separate container with a consistent set of test PDFs
     that are NOT automatically cleaned up. This is useful for tests that need
@@ -67,6 +87,9 @@ def stable_pdf_storage_manager():
 
     Note: This container is separate from the regular test container and is not
     subject to automatic cleanup.
+
+    Returns:
+        PDFStorageManager: Configured manager for the stable PDF container.
     """
     return PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
@@ -77,8 +100,7 @@ def stable_pdf_storage_manager():
 
 @pytest.fixture(scope="function", autouse=True)
 def cleanup_test_containers():
-    """
-    Universal cleanup fixture for Azure test containers.
+    """Universal cleanup fixture for Azure test containers.
 
     This fixture automatically cleans up Azure storage containers after each test
     to prevent accumulation of test data and associated storage costs.
@@ -114,9 +136,7 @@ def cleanup_test_containers():
 
 
 def pytest_sessionstart(session):
-    """
-    Called before tests start. Clean up previous cost files.
-    """
+    """Called before tests start. Clean up previous cost files."""
     # Only run on master
     if not hasattr(session.config, "workerinput"):
         # Ensure directory exists
@@ -130,9 +150,7 @@ def pytest_sessionstart(session):
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """
-    Called after whole test run finishes.
-    """
+    """Called after whole test run finishes."""
     # If we are in a worker node (xdist)
     if hasattr(session.config, "workerinput"):
         costs = get_api_costs()
@@ -144,9 +162,7 @@ def pytest_sessionfinish(session, exitstatus):
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
-    """
-    Aggregate and print costs from all workers (or just main process if not using xdist).
-    """
+    """Aggregate and print costs from all workers (or just main process if not using xdist)."""
     # Only run on master
     if not hasattr(config, "workerinput"):
         aggregated_costs = {

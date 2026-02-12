@@ -7,12 +7,11 @@ authors = [
 ]
 license = {text = "GPLv3"}
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = ["accident", "investigation", "reports", "llm", "analysis"]
 
 dependencies = [
     "python-dotenv>=1.0.0",
-    "pypdf>=5.1.0",
     "requests>=2.31.0",
     "tiktoken>=0.12.0",
     "pyyaml>=6.0.1",
@@ -36,6 +35,8 @@ dependencies = [
     "pytest-cov>=6.2.1",
     "lxml>=6.0.0",
     "langchain-text-splitters>=1.1.0",
+    "pymupdf-layout",
+    "pymupdf4llm",
 ]
 
 [dependency-groups]
@@ -47,6 +48,7 @@ dev = [
     "pre-commit>=3.7.1",
     "azure-data-tables>=12.7.0",
     "ruff>=0.15.0",
+    "pypdf>=6.7.0",
 ]
 
 [project.urls]

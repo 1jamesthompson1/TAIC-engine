@@ -1,5 +1,4 @@
-"""
-PDF Parser tests with stable test data.
+"""PDF Parser tests with stable test data.
 
 This module tests PDF parsing functionality using a dedicated Azure container
 (test-stable-reportpdfs) that contains a consistent set of test PDFs.
@@ -49,8 +48,27 @@ import re
 
 import pandas as pd
 import pytest
+import roman
 
 import engine.gather.PDFParser as PDFParser
+
+
+def expectedPageNumbersBuilder(roman_numerals: int, int_range: tuple[int, int]):
+    """Build a list of expected page numbers with roman numerals and integers.
+
+    Args:
+        roman_numerals (int): Number of roman numeral pages (starting from i).
+        int_range (tuple[int, int]): Range of integer page numbers (inclusive start and end).
+
+    Returns:
+        list: List containing lowercase roman numerals followed by integer page numbers.
+
+    Example:
+        >>> expectedPageNumbersBuilder(3, (1, 5))
+        ['i', 'ii', 'iii', 1, 2, 3, 4, 5]
+    """
+    romans = list(map(lambda n: roman.toRoman(n).lower(), range(1, roman_numerals + 1)))
+    return romans + list(range(int_range[0], int_range[1] + 1))
 
 
 @pytest.mark.parametrize(
@@ -58,116 +76,48 @@ import engine.gather.PDFParser as PDFParser
     [
         pytest.param(
             "ATSB_a_2007_030",
-            [
-                "i",
-                "ii",
-                "iii",
-                "iv",
-                "v",
-                1,
-                2,
-                3,
-                4,
-                5,
-                6,
-                7,
-                8,
-                9,
-                10,
-                11,
-                12,
-                13,
-                14,
-                15,
-                16,
-                17,
-                18,
-                19,
-                20,
-                21,
-                22,
-            ],
+            expectedPageNumbersBuilder(5, (1, 22)),
             id="ATSB_a_2007_030 (Incorrect roman numeral matches in text)",
         ),
         pytest.param(
             "ATSB_a_2002_646",
-            [
-                "i",
-                "ii",
-                1,
-                2,
-                3,
-                4,
-                5,
-                6,
-                7,
-                8,
-                9,
-                10,
-                11,
-                12,
-                13,
-                14,
-                15,
-                16,
-                17,
-                18,
-                19,
-                20,
-            ],
+            expectedPageNumbersBuilder(2, (1, 26)),
             id="ATSB_a_2002_646 (Lenient regex match of roman numerals causing error)",
         ),
         pytest.param(
-            "TSB_m_2021_A0041", [i for i in range(1, 57)], id="TSB_m_2021_A0041"
+            "ATSB_r_2021_010",
+            expectedPageNumbersBuilder(5, (6, 25)),
+            id="ATSB_r_2021_010 (Uses the > num < pattern, and the ints don't start at 1)",
         ),
         pytest.param(
-            "TSB_a_2011_F0012", [i for i in range(1, 20)], id="TSB_a_2011_F0012"
+            "TSB_m_2021_A0041",
+            expectedPageNumbersBuilder(0, (1, 56)),
+            id="TSB_m_2021_A0041",
+        ),
+        pytest.param(
+            "TSB_a_2011_F0012",
+            expectedPageNumbersBuilder(0, (1, 19)),
+            id="TSB_a_2011_F0012",
         ),
         pytest.param(
             "TAIC_r_2004_121",
-            [
-                "i",
-                "ii",
-                "iii",
-                "iv",
-                1,
-                2,
-                3,
-                4,
-                5,
-                6,
-                7,
-                8,
-                9,
-                10,
-                11,
-                12,
-                13,
-                14,
-                15,
-                16,
-            ],
+            expectedPageNumbersBuilder(4, (1, 16)),
             id="TAIC_r_2004_121",
         ),
         pytest.param(
             "TAIC_r_2014_103",
-            ["i", "ii", "iii", "iv"] + list(range(1, 39)),
+            expectedPageNumbersBuilder(4, (1, 38)),
             id="TAIC_r_2014_103",
         ),
         pytest.param(
             "TAIC_a_2019_006",
-            ["i", "ii", "iii", "iv", "v", "vi"] + list(range(1, 65)),
+            expectedPageNumbersBuilder(6, (1, 64)),
             id="TAIC_a_2019_006 (removing duplicate matches on the same page)",
         ),
     ],
 )
 def test_formatText(report_id, expected, stable_pdf_storage_manager):
-    """
-    Test PDF text formatting using PDFs from the stable container.
-
-    This test downloads the PDF from the stable Azure container instead of
-    expecting it to be in a local folder.
-    """
+    """Test PDF text formatting and page number extraction using PDFs from the stable Azure container."""
     # Download the PDF from the stable container to a temporary location
     pdf_data = stable_pdf_storage_manager.download_pdf(report_id)
 
@@ -182,18 +132,18 @@ def test_formatText(report_id, expected, stable_pdf_storage_manager):
 
     try:
         # Extract text from the temporary PDF file
-        text, headers = PDFParser.extractTextFromPDF(temp_pdf_path)
+        text = PDFParser.extractTextFromPDF(temp_pdf_path)
 
         # Format the text
-        text, valid, _ = PDFParser.formatText(text, report_id)
+        text = PDFParser.PageNumberSynchronizer.reconcile_pdf_and_text_page_numbers(
+            PDFParser.cleanText(text), report_id.split("_")[0]
+        )
 
         page_number_matches = list(
             re.finditer(
                 r"^<< Page (\d+|[LXVI]{1,8}) >>$", text, re.MULTILINE + re.IGNORECASE
             )
         )
-
-        assert valid
 
         matched = [
             int(match.group(1)) if match.group(1).isnumeric() else match.group(1)
@@ -214,12 +164,7 @@ def test_formatText(report_id, expected, stable_pdf_storage_manager):
 
 
 def test_PDFParser(tmpdir, stable_pdf_storage_manager):
-    """
-    Test PDF parsing using the stable PDF container with consistent test data.
-
-    This test uses a separate container (test-stable-reportpdfs) that contains
-    a known set of test PDFs that are not automatically cleaned up.
-    """
+    """Test PDF parsing processor using PDFs from the stable Azure container."""
     parsed_reports_df_file_name = os.path.join(
         tmpdir.strpath,
         pytest.output_config["parsed_reports_df_file_name"],
