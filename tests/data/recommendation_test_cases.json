@@ -1,0 +1,190 @@
+[
+  {
+    "id": "multiple recommendations present, old format, old one to be ignored",
+    "report_id": "ATSB_a_2000_157",
+    "expected": [
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the Federal Aviation Administration (Piston Engine Certification Directorate) review the certification requirements of piston engines with respect to the operating conditions under which combustion chamber deposits that may cause preignition are formed.",
+        "recommendation_id": "R20010254",
+        "recipient": "Federal Aviation Administration (Piston Engine Certification Directorate)",
+        "recommendation_context": "High power variants of horizontally opposed, six-cylinder, air-cooled reciprocating engines power many aircraft employed in low capacity public transport operations in Australia. At the time of publication of this report, there were 107 Piper Chieftains on the Australian aircraft register and a much greater number in operation worldwide. Many other single and multi engine aircraft are equipped with high-powered reciprocating engines. The engine failure analysis presented in this report highlighted a number of issues that affect the reliability of these engines. Accordingly, the following recommendations are issued:",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the Federal Aviation Administration FAA (Piston Engine Certification Directorate) review the practice during assembly of applying anti-galling compounds to the backs of connecting rod bearing inserts with respect to its affect on the safety margin for engine operation of the bearing insert retention forces achieved.",
+        "recommendation_id": "R20010255",
+        "recipient": "Federal Aviation Administration FAA (Piston Engine Certification Directorate)",
+        "recommendation_context": "High power variants of horizontally opposed, six-cylinder, air-cooled reciprocating engines power many aircraft employed in low capacity public transport operations in Australia. At the time of publication of this report, there were 107 Piper Chieftains on the Australian aircraft register and a much greater number in operation worldwide. Many other single and multi engine aircraft are equipped with high-powered reciprocating engines. The engine failure analysis presented in this report highlighted a number of issues that affect the reliability of these engines. Accordingly, the following recommendations are issued:",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that T extron Lycoming review the practice during assembly of applying anti-galling compounds to the backs of connecting rod bearing inserts with respect to its affect on the safety margin for engine operation of the bearing insert retention forces achieved during assembly.",
+        "recommendation_id": "R20010256",
+        "recipient": "T extron Lycoming",
+        "recommendation_context": "High power variants of horizontally opposed, six-cylinder, air-cooled reciprocating engines power many aircraft employed in low capacity public transport operations in Australia. At the time of publication of this report, there were 107 Piper Chieftains on the Australian aircraft register and a much greater number in operation worldwide. Many other single and multi engine aircraft are equipped with high-powered reciprocating engines. The engine failure analysis presented in this report highlighted a number of issues that affect the reliability of these engines. Accordingly, the following recommendations are issued:",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the Civil Aviation Safety Authority review the operating and maintenance procedures for high-powered piston engines fitted to Australian registered aircraft to ensure adequate management and control of combustion chamber deposits, preignition and detonation.",
+        "recommendation_id": "R20010257",
+        "recipient": "Civil Aviation Safety Authority",
+        "recommendation_context": "High power variants of horizontally opposed, six-cylinder, air-cooled reciprocating engines power many aircraft employed in low capacity public transport operations in Australia. At the time of publication of this report, there were 107 Piper Chieftains on the Australian aircraft register and a much greater number in operation worldwide. Many other single and multi engine aircraft are equipped with high-powered reciprocating engines. The engine failure analysis presented in this report highlighted a number of issues that affect the reliability of these engines. Accordingly, the following recommendations are issued:",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the Civil Aviation Safety Authority alert operators of aircraft equipped with turbo-charged engines to the potential risks of engine damage associated with detonation, and encourage the adoption of conservative fuel mixture leaning practices.",
+        "recommendation_id": "R20000250",
+        "recipient": "Civil Aviation Safety Authority",
+        "recommendation_context": "On 30 October 2000, the ATSB issued the following recommendation:",
+        "made": "30 October 2000"
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the Civil Aviation Safety Authority educate industry on procedures and techniques that may maximise the chances of survival of a ditching event. Part of that education program should include the development of formal guidance material of the type contained in the UK CAA General Aviation Safety Senses leaﬂet 21A Ditching.",
+        "recommendation_id": "R20010258",
+        "recipient": "Civil Aviation Safety Authority",
+        "recommendation_context": null,
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the Civil Aviation Safety Authority amend Civil Aviation Order Section 20.11 paragraph 5.1.2 to remove the restriction that it only applies to aircraft authorised to carry more than nine passengers.",
+        "recommendation_id": "R20000248",
+        "recipient": "Civil Aviation Safety Authority",
+        "recommendation_context": "On 30 October 2000, the ATSB issued the following recommendation:",
+        "made": "30 October 2000"
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the Civil Aviation Safety Authority ensure that Civil Aviation Orders provide for adequate emergency and life saving equipment for the protection of fare-paying passengers during over-water flights where an aircraft is operating beyond the distance from which it could reach the shore with all engines inoperative.",
+        "recommendation_id": "R20000249",
+        "recipient": "Civil Aviation Safety Authority",
+        "recommendation_context": "On 30 October 2000, the ATSB issued the following recommendation:",
+        "made": "30 October 2000"
+      }
+    ]
+  },
+  {
+    "id": "recommendations new format",
+    "report_id": "ATSB_a_2020_007",
+    "expected": [
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the New South Wales Rural Fire Service take further action to address the absence of policies and procedures for personnel to effectively manage and communicate task rejections on the basis of operational safety concerns.",
+        "recommendation_id": "AO-2020-007-SR-09",
+        "recipient": "NSW Rural Fire Service",
+        "recommendation_context": "While the ATSB acknowledges the commitment to undertake reviews and research, at the time of publication, the New South Wales Rural Fire Service had not yet committed to any safety action that would reduce the risk associated with the identified safety issue to an acceptable level. The RFS outlined to the ATSB during the course of the investigation that they had access to the US policies and procedures relating to the use of large air tankers and had referred to these in developing and managing the large air tanker program. Noting that the RFS are closely involved in aerial operations, the ATSB considers that the inclusion of policies and procedures for task rejections would provide RFS personnel with the necessary information to effectively manage and communicate taskings on the basis of safety. As such, the ATSB issues the following safety recommendation to the New South Wales Rural Fire Service to take further action to address this safety issue",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the New South Wales Rural Fire Service take further action to address the absence of policies and procedures regarding minimum aerial supervision requirements and the use of initial attack to assist frontline staff with making acceptable risk-based tasking decisions.",
+        "recommendation_id": "AO-2020-007-SR-10",
+        "recipient": "NSW Rural Fire Service",
+        "recommendation_context": "While the ATSB acknowledges the commitment to undertake various reviews and research, at time of publication, the New South Wales Rural Fire Service had not yet committed to any safety action that would reduce the risk associated with the identified safety issue to an acceptable level. The RFS outlined to the ATSB during the course of the investigation that they had access to the US policies and procedures relating to the use of large air tankers and had referred to these in developing and managing the large air tanker program. Policies and procedures regarding aerial supervision and the use of initial attack would ensure taskings can be conducted within their defined, accepted risk levels considering the elevated risks associated with such taskings. As such, the ATSB issues the following safety recommendation to the New South Wales Rural Fire Service to take further action to address this safety issue.",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the New South Wales Rural Fire Service address the ambiguity with the interpretation of 'initial attack' in the NSW and ACT Aviation Standard Operating Procedures with the intent of this requirement.",
+        "recommendation_id": "AO-2020-007-SR-08",
+        "recipient": "NSW Rural Fire Service",
+        "recommendation_context": "While the ATSB notes the intention to conduct an audit, undertake a review and conduct further research, it is uncertain how these proposed safety actions will remove the ambiguity between the procedure and intention for pilots to have the United States Department of Agriculture Forest Service (USFS) initial attack certification, first notified to the NSW RFS in July 2020. As such, there is no assurance that crews operating as initial attack will be consistently certified to the same requirements as that achieved through the USFS certification process. Therefore, the ATSB issues the following safety recommendation to the New South Wales Rural Fire Service to take further action to address this safety issue.",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that Coulson Aviation further consider the fitment of a windshear detection system to their C-130 aircraft to minimise the time taken for crews to recognise and respond to an encounter particularly when operating at low-level and low speed.",
+        "recommendation_id": "AO-2020-007-SR-11",
+        "recipient": "Coulson Aviation",
+        "recommendation_context": "The ATSB acknowledges that forward-looking (predictive) windshear warning systems may have reduced effectiveness in drier environments. However, on the day of the accident, the windshear system on the Boeing 737 (whether predictive or reactive) activated when operating in similar environmental conditions to that very likely experienced by N134CG. Further, the fitment of a windshear system in the Lockheed Martin 'FireHerc', and acknowledgement by some of the pilots interviewed that they have had a positive effect on managing a windshear encounter, would suggest that these systems have a degree of effectiveness. In the absence of an airborne detection system, a successful recovery from a windshear encounter is reliant on the pilot's timely recognition and response, which research has shown could take 5 to 15 seconds. When conducting firefighting operations in the low-level environment, there is often limited time and height available for such recognition and response. Therefore, the ATSB believes that the fitment of windshear detection systems to the C-130 aircraft would be an important safety enhancement for aerial firefighting operations. As such, the ATSB issues the following safety recommendation to Coulson Aviation to take further action to address this safety issue",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that Coulson Aviation take further action to incorporate foreseeable external factors into their pre-flight assessment tool to ensure the overall risk profile of a tasking can be consistently assessed by crews.",
+        "recommendation_id": "AO-2020-007-SR-12",
+        "recipient": "Coulson Aviation",
+        "recommendation_context": "The ATSB acknowledges that Coulson Aviation introduced a pre-flight risk assessment tool into their fixed-wing operations. However, this tool did not consider all foreseeable external factors that could elevate the risk of a flight, such as weather-related task rejections or cancellations by others, which was considered the highest risk factor by the Helicopter Association International. Without this factor, the overall risk profile for a tasking, or essentially the safety of the flight, could be underestimated by crews. Therefore, as it is critical that crews can differentiate between a low-risk and high-risk flight in the already elevated risk environment of aerial firefighting, the ATSB issues the following safety recommendation to Coulson Aviation to take further action to reduce the risk of this safety issue to low as reasonably practicable.",
+        "made": null
+      }
+    ]
+  },
+  {
+    "id": "recommendations present 2014 format",
+    "report_id": "ATSB_r_2014_001",
+    "expected": [
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that Sydney Trains revisits the recommendation from the Final Report of the Special Commission of Inquiry into the Waterfall Rail Accident Volume 2 viz: Customised human factors training for rail safety workers and management/supervisory level staff based on contemporary Crew Resource Management (now RRM) principles and takes action to ensure that RRM training is rolled out to all employees as categorised in the recommendation and especially RMC staff, and that RRM is embedded into Sydney Trains' training and certification processes. To assist in achieving this, it may be useful to benchmark RRM/CRM training and workplace application against both comparable rail operators and also against other high risk industries (such as aviation) both nationally and internationally.",
+        "recommendation_id": "RO-2014-001-SR-001",
+        "recipient": "Sydney Trains",
+        "recommendation_context": "Proactive safety action taken by: Sydney Trains\nAction number: RO-2014-001-NSA-025\nSydney trains advised of the following actions:\nAssess the status of rail resource management training within the organisation and consider its introduction, ongoing promotion and monitoring within defined safety critical areas of the Sydney Trains operation to enhance decision making, teamwork and communication skills.\nATSB comment/action in response\nThe Australian Transport Safety Bureau considers that Sydney Trains' proactive safety action is neither sufficiently robust nor inclusive enough to give assurance that this safety issue will be adequately addressed.",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that Sydney Trains, through a revision to its Incident Management Framework, adopts the positive appointment of an Officer in Charge for Level 2, 3 & 4 incidents once they have been reported. This requirement and the functions of an Officer in Charge should be included in the training of all operational RMC staff and all positions which may be required to adopt this role",
+        "recommendation_id": "RO-2014-001-SR-002",
+        "recipient": "Sydney Trains",
+        "recommendation_context": "Proactive safety action taken by: Sydney Trains\nTo examine the demand for sufficient incident response commanders and expeditiously act to fill any identified vacancies.\nATSB comment/action in response\nThe Australian Transport Safety Bureau considers that Sydney Trains' proactive safety action does not address the safety issue in its entirety. An adequate availability of IRC personnel should lessen the response time to have an IRC attend an incident site. However, the matter of not appointing an Officer in Charge until the arrival of the IRC has not been addressed.",
+        "made": null
+      }
+    ]
+  },
+  {
+    "id": "marime old format",
+    "report_id": "ATSB_m_2007_241",
+    "expected": [
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the Tasmanian Ports Corporation takes action to address this safety issue.",
+        "recommendation_id": "MR20090001",
+        "recipient": "Tasmanian Ports Corporation",
+        "recommendation_context": "The pilot had received no training in how to use anchors to assist him with handling a ship in the confined approaches to Grassy. As a result, he was not comfortable with using the ship's anchors to assist him with manoeuvring the ship in the close confines of the approaches to the inner harbour.",
+        "made": null
+      }
+    ]
+  },
+  {
+    "id": "marime new format, context far away",
+    "report_id": "ATSB_m_2022_007",
+    "expected": [
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that Lloyd's Register takes steps to approach the International Association of Classification Societies and seek safety action to address the risk associated with a single point of failure in electrical power supply for ship's rudder angle indicators.",
+        "recommendation_id": "MO-2022-007-SR-34",
+        "recipient": "Lloyd's Register",
+        "recommendation_context": "Response by Lloyd's Register\n\nOn 5 December 2024, Lloyd's Register (LR) advised the ATSB that while an additional alarm for a distribution circuit from a local distribution panel on the bridge may not be the best solution to this safety issue, alternate design solutions could include individual connection of each analogue rudder angle indicator to the local distribution board with each having its own short circuit protection. The LR response also noted that LR rules for rudder angle indicators replicated SOLAS regulations, and it therefore considered it problematic to amend or unilaterally re-interpret these requirements without amendments to SOLAS itself. However, LR advised that the Machinery Panel of the International Association of Classification Societies (IACS) may consider a unified interpretation (UI) of SOLAS requirements instead. \nThe ATSB acknowledges that alternate design solutions may effectively address the risk associated with a single point of failure in electrical power supply for ship's rudder angle indicators and that this may take the form of a unified interpretation (UI) of SOLAS requirements. The ATSB does not prescribe the form that corrective action to address the safety issue should take and it is up to the responsible organisation(s) to identify the most effective means of addressing the risk. In the absence of a detailed proposal and/or timeframe to approach IACS, raise this safety issue and best ensure safety action that will address the risk, the ATSB issues the following safety recommendation.",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the Australian Maritime Safety Authority provides the necessary support and assistance to the Liberia Maritime Authority in its efforts to seek safety action at the International Maritime Organization aimed at addressing the risk associated with a single point of failure in electrical power supply for ship's rudder angle indicators.",
+        "recommendation_id": "MO-2022-007-SR-35",
+        "recipient": "Australian Maritime Safety Authority",
+        "recommendation_context": "Response by Australian Maritime Safety Authority\n\nOn 2 December 2024, the Australian Maritime Safety Authority (AMSA) advised the ATSB that, in the event the Liberian Administration (as the ship's flag Administration) considered that the identified safety issue warranted amendments to the SOLAS Convention, AMSA would consider any Liberian requests for support or to co-sponsor a paper seeking safety action at the International Maritime Organization (IMO) to address this issue.\nThe ATSB notes AMSA's position that it will consider any requests for support from the Liberian Administration in progressing the safety issue and achieving safety action at the IMO. The safety issue was directed, both to AMSA and the Liberia Maritime Authority (LiMA), to best ensure safety action to address the safety issue. In addition, the ATSB will use its membership in the IMO's Casualty Analysis Correspondence Group (CACG) that reports to the Sub-Committee on Implementation of IMO Instruments (III) to highlight the safety issue and seek like-minded support. In the interim, to support AMSA in providing the Liberian Administration with the necessary assistance, the ATSB issues the following safety recommendation.",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the Liberia Maritime Authority takes steps to formally raise this safety issue with the International Maritime Organization to seek safety action aimed at addressing the risk associated with a single point of failure in electrical power supply for ship's rudder angle indicators.",
+        "recommendation_id": "MO-2022-007-SR-36",
+        "recipient": "Liberia Maritime Authority",
+        "recommendation_context": "Response by Liberia Maritime Authority\n\nOn 6 December 2024, the Liberia Maritime Authority (LiMA) advised the ATSB that the Liberian Administration was addressing this safety issue with the ship's classification society, Lloyd's Register and, if necessary, with the International Association of Classification Societies (IACS). On 7 December, the LiMA further advised that the issue of a marine advisory was being considered.\nATSB comment\n\nThe ATSB acknowledges the Liberia Maritime Authority's advice that the issuance of a marine advisory is being considered and that the safety issue is being addressed with the ship's classification society, Lloyd's Register, and with IACS. However, in the absence of a detailed proposal and/or timeframe for action from Lloyd's Register and IACS or of a proposal to raise this issue with the International Maritime Organization through the appropriate process and best ensure safety action aimed at addressing this issue, the ATSB issues the following safety recommendation.",
+        "made": null
+      }
+    ]
+  },
+  {
+    "id": "rail safety bulletin format",
+    "report_id": "ATSB_r_2010_007",
+    "expected": [
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that the Australian Rail Track Corporation take action to address this safety issue.",
+        "recommendation_id": "RO-2010-SR-006",
+        "recipient": "Australian Rail Track Corporation",
+        "recommendation_context": "Rule ANWT 304 does not stipulate that the Protection Officer must inform all persons or work groups who may be within the boundaries of a Track Occupancy Authority of its existence. This is regardless of whether or not these persons or work groups fit the definition of 'work parties' or 'workers'.",
+        "made": null
+      },
+      {
+        "recommendation": "The Australian Transport Safety Bureau recommends that RailCorp take action to address this safety issue.",
+        "recommendation_id": "RO-2010-SR-007",
+        "recipient": "RailCorp",
+        "recommendation_context": "Rule ANWT 304 does not stipulate that the Protection Officer must inform all persons or work groups who may be within the boundaries of a Track Occupancy Authority of its existence. This is regardless of whether or not these persons or work groups fit the definition of 'work parties' or 'workers'.",
+        "made": null
+      }
+    ]
+  },
+  {
+    "id": "previous recommendation listed yet not present in report text",
+    "report_id": "ATSB_a_2007_018",
+    "expected": []
+  }
+]

@@ -1,0 +1,55 @@
+[
+  {
+    "id": "safety issues are short and at the top (but no where else)",
+    "report_id": "TAIC_m_2004_203",
+    "expected": [
+      {
+        "safety_issue": "securing of vehicular cargo on car and rail decks",
+        "quality": "exact"
+      },
+      {
+        "safety_issue": "securing of heavy items of equipment in passenger accessible areas",
+        "quality": "exact"
+      }
+    ]
+  },
+  {
+    "id": "no safety issues present, this is explicitly stated",
+    "report_id": "TAIC_a_2020_003",
+    "expected": []
+  },
+  {
+    "id": "no safety issues present, this is explicitly stated 2",
+    "report_id": "TAIC_m_2023_204",
+    "expected": []
+  },
+  {
+    "id": "TSB report with inferred safety issues from findings",
+    "report_id": "TSB_a_2023_W0096",
+    "expected": [
+      {
+        "safety_issue": "If spin training is initiated from a height that does not provide a pilot a wide enough recovery margin, there is an increased risk of collision with terrain.",
+        "quality": "inferred"
+      },
+      {
+        "safety_issue": "If emergency locator transmitters are incorrectly installed and/or tested, they may not   function as designed, increasing the risk that search and rescue efforts are not timely.",
+        "quality": "inferred"
+      }
+    ]
+  },
+  {
+    "id": "TSB_a_2023_W0096 empty",
+    "report_id": "TSB_a_2023_W0096",
+    "expected": []
+  },
+  {
+    "id": "ATSB pre-2008 report",
+    "report_id": "ATSB_a_2005_912",
+    "expected": [
+      {
+        "safety_issue": "The current overhaul manual provides no guidance to assemblers on the maximum allowable assembly time following the tower shaft/bevel gear heating and cooling process to reduce the likelihood of producing surface damage (galling damage) to the components during assembly.",
+        "quality": "exact"
+      }
+    ]
+  }
+]

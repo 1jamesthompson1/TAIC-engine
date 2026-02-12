@@ -49,7 +49,7 @@ class RecommendationItem(BaseModel):
     )
     recommendation_context: str | None = Field(
         default=None,
-        description="The context or background information related to the recommendation, if available. This is not always present. It is normally a paragraph or two that states the reasoning behind the recommendation (typically can end with something along the lines of 'therefore we recommend...').",
+        description="The context or background information related to the recommendation, if available. This is not always present. It is normally a paragraph or two that states the reasoning behind the recommendation (typically can end with something along the lines of 'therefore we recommend...'). In some reports recommendation are made only if the safety actions were not sufficient. Then for these situations the context should bethe safety actions taken and why the investigation agency deemed these actions insufficient (i.e the reasoning behind the recommendation). If recommendation context is not present in the recommendaion section then it should be None (do not look for context in other sections of the report, only the section that is talking abuot safety issues/actions and recommendations).",
     )
     made: str | None = Field(
         default=None,
@@ -115,7 +115,7 @@ If the report conatins a phrase like "No safety issues were identified" or "No s
     recommendation_prompt = f"""
 Recommendation extraction instructions:
 Please extract all recommendations made in the report. Copy the recommendation verbatim. If there is a unique identifier for the recommendation (e.g Recommendation 1, Rec-01, etc) then include that as the recommendation_id. If there is any context or background information related to the recommendation, include that as recommendation_context (this is sometimes present like a paragraph just before or just after the stated recommendations).
-I only want recommendations that are formally made by {agency_name} in the report and which are specific to this particular accident (i.e not previous recommendations they have made). Do not include any recommendations made by other agencies or entities.
+I only want recommendations that are formally made by {agency_name} in the report and which are specific to this particular accident (i.e not previous recommendations they have made). Do not include any recommendations made by other agencies or entities. I want all recommendations regardless of their response status.
 """
 
     prompt = f"""
