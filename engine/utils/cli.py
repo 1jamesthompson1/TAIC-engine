@@ -1,4 +1,7 @@
+"""CLI entry points for downloading, extracting, analyzing, and uploading report data."""
+
 import argparse
+import logging
 import os
 import time
 
@@ -10,7 +13,7 @@ from ..analyze import (
     RecommendationSafetyIssueLinking,
 )
 from ..extract import ReportExtracting, ReportTypeAssignment
-from ..gather import DataGetting, PDFParser, WebsiteScraping
+from ..gather import DataGetting, PDFParsing, WebsiteScraping
 from . import Config, Modes
 from .AzureStorage import (
     EngineOutputDownloader,
@@ -18,8 +21,63 @@ from .AzureStorage import (
     PDFStorageManager,
 )
 
+logger = logging.getLogger(__name__)
+
+
+SECONDS_IN_MINUTE = 60
+SECONDS_IN_HOUR = 3600
+
+
+def format_duration(seconds):
+    """Format duration to show appropriate time units.
+
+    Returns:
+        str: A human-readable duration string.
+    """
+    if seconds < SECONDS_IN_MINUTE:
+        return f"{seconds:.2f} seconds"
+    if seconds < SECONDS_IN_HOUR:
+        minutes = int(seconds // SECONDS_IN_MINUTE)
+        remaining_seconds = seconds % SECONDS_IN_MINUTE
+        return f"{minutes}m {remaining_seconds:.1f}s ({seconds:.2f} seconds)"
+    hours = int(seconds // SECONDS_IN_HOUR)
+    minutes = int((seconds % SECONDS_IN_HOUR) // SECONDS_IN_MINUTE)
+    remaining_seconds = seconds % SECONDS_IN_MINUTE
+    return f"{hours}h {minutes}m {remaining_seconds:.1f}s ({seconds:.2f} seconds)"
+
+
+def log_timing_summary(timing_results, total_time):
+    """Log the timing summary for the executed steps."""
+    logger.info("%s", "=" * 60)
+    logger.info("TIMING SUMMARY")
+    logger.info("%s", "=" * 60)
+
+    for step, duration in timing_results.items():
+        formatted_time = format_duration(duration)
+        logger.info("%s: %s", step.upper().rjust(10), formatted_time)
+
+    if len(timing_results) > 1:
+        logger.info("%s", "-" * 60)
+        formatted_total = format_duration(total_time)
+        logger.info("%s: %s", "TOTAL".rjust(10), formatted_total)
+
+    logger.info("%s", "=" * 60)
+
+
+def run_step(step_name, func, timing_results, *args, **kwargs):
+    """Run a step function and record its timing."""
+    start_time = time.time()
+    func(*args, **kwargs)
+    timing_results[step_name] = time.time() - start_time
+
 
 def download(container, output_dir):
+    """Download the latest engine output from Azure Storage into the output directory.
+
+    Args:
+        container (str): The name of the Azure Storage container to download from.
+        output_dir (str): The local directory to save the downloaded files to.
+    """
     downloader = EngineOutputDownloader(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
         os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
@@ -30,31 +88,41 @@ def download(container, output_dir):
     downloader.download_latest_output()
 
 
-def gather(output_dir, config, refresh):
+def gather(output_dir: str, config: dict, refresh: bool):
+    """Gather raw data, scrape reports, and parse PDFs into intermediate outputs.
+
+    Args:
+        output_dir (str): Directory where output artifacts are written.
+        config (dict): Engine configuration settings.
+        refresh (bool): Whether to refresh cached data and re-download sources.
+    """
     output_config = config.get("output")
     download_config = config.get("download")
 
-    print("Getting all data needed for engine")
+    logger.info("Getting all data needed for engine")
 
-    dataGetter = DataGetting.DataGetter(
+    data_getter = DataGetting.DataGetter(
         config.get("data").get("data_local_folder_location"),
         config.get("data").get("data_remote_folder_location"),
         refresh,
     )
 
-    dataGetter.get_generic_data(
+    data_getter.get_generic_data(
         config.get("data").get("event_types_file_name"),
         os.path.join(output_dir, output_config.get("all_event_types_df_file_name")),
     )
-    print("Got event types")
+    logger.info("Got event types")
 
-    print("Setting up PDF storage manager...")
+    logger.info("Setting up PDF storage manager...")
     pdf_storage_manager = PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
         os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
         output_config["pdf_container_name"],
     )
-    print(f"PDF storage container: {output_config['pdf_container_name']}")
+    logger.info(
+        "PDF storage container: %s",
+        output_config["pdf_container_name"],
+    )
 
     # Download the PDFs
     report_scraping_settings = WebsiteScraping.ReportScraperSettings(
@@ -88,15 +156,17 @@ def gather(output_dir, config, refresh):
                     ),
                     report_scraping_settings,
                 ).collect_all()
+            case _:
+                logger.warning("Unknown agency '%s', skipping", agency)
 
     # Extract the text from the PDFs
-    PDFParser.convertPDFToText(
+    PDFParsing.process_all_pdfs_into_text(
         os.path.join(output_dir, output_config.get("parsed_reports_df_file_name")),
         refresh,
         pdf_storage_manager,
     )
 
-    ATSB_si_scraper = WebsiteScraping.ATSBSafetyIssueScraper(
+    atsb_si_scraper = WebsiteScraping.ATSBSafetyIssueScraper(
         os.path.join(
             output_dir, output_config.get("atsb_website_safety_issues_file_name")
         ),
@@ -104,28 +174,34 @@ def gather(output_dir, config, refresh):
         refresh,
     )
 
-    ATSB_si_scraper.extract_safety_issues_from_website()
+    atsb_si_scraper.extract_safety_issues_from_website()
 
-    TSB_recs_scraper = WebsiteScraping.TSBRecommendationsScraper(
+    tsb_recs_scraper = WebsiteScraping.TSBRecommendationsScraper(
         os.path.join(
             output_dir, output_config.get("tsb_website_recommendations_file_name")
         ),
         os.path.join(output_dir, output_config.get("report_titles_df_file_name")),
         refresh,
     )
-    TSB_recs_scraper.extract_recommendations_from_website()
+    tsb_recs_scraper.extract_recommendations_from_website()
 
-    TAIC_recs_scraper = WebsiteScraping.TAICRecommendationsScraper(
+    taic_recs_scraper = WebsiteScraping.TAICRecommendationsScraper(
         os.path.join(
             output_dir, output_config.get("taic_website_recommendations_file_name")
         ),
         os.path.join(output_dir, output_config.get("report_titles_df_file_name")),
         refresh,
     )
-    TAIC_recs_scraper.extract_recommendations_from_website()
+    taic_recs_scraper.extract_recommendations_from_website()
 
 
-def create_extracted_reports_df(output_dir, output_config):
+def create_extracted_reports_df(output_dir: str, output_config: dict):
+    """Create the combined extracted reports dataframe and persist it to disk.
+
+    Args:
+        output_dir (str): Directory where output artifacts are written.
+        output_config (dict): Output configuration containing expected file names.
+    """
     dataframes = [
         pd.read_pickle(os.path.join(output_dir, file_name)).set_index("report_id")
         for file_name in [
@@ -138,19 +214,17 @@ def create_extracted_reports_df(output_dir, output_config):
         ]
     ]
 
-    dataframes[-2].rename(
+    dataframes[-2] = dataframes[-2].rename(
         columns={
             "important_text": "important_text_recommendation",
             "pages_read": "pages_read_recommendation",
-        },
-        inplace=True,
+        }
     )
-    dataframes[-1].rename(
+    dataframes[-1] = dataframes[-1].rename(
         columns={
             "important_text": "important_text_safety_issue",
             "pages_read": "pages_read_safety_issue",
-        },
-        inplace=True,
+        }
     )
 
     combined_df = dataframes[0].join(dataframes[1:], how="outer")
@@ -170,14 +244,12 @@ def create_extracted_reports_df(output_dir, output_config):
     for report_id in combined_df["report_id"]:
         # Check to see if they follow the correct format defined by f"{self.agency}_{mode.name}_{year}_{id}"
         parts = str(report_id).split("_")
-        if len(parts) != 4:
+        report_id_parts = 4
+        if len(parts) != report_id_parts:
             problematic_ids.append((report_id, len(parts), parts))
 
     if problematic_ids:
-        print(f"Found {len(problematic_ids)} problematic report IDs:")
-        # for report_id, num_parts, parts in problematic_ids:
-        #     print(f"  Report ID: '{report_id}' has {num_parts} parts: {parts}")
-        # raise ValueError(f"Report IDs need to follow a particular format, instead found {len(problematic_ids)} problematic IDs. Here are some examples: {problematic_ids[:5]}...")
+        logger.warning("Found %s problematic report IDs", len(problematic_ids))
 
     # Drop all problematic ids
     combined_df = combined_df[
@@ -200,7 +272,14 @@ def create_extracted_reports_df(output_dir, output_config):
     )
 
 
-def extract(output_dir, config, refresh):
+def extract(output_dir: str, config: dict, refresh: bool):
+    """Extract report artifacts and persist derived dataframes to disk.
+
+    Args:
+        output_dir (str): Directory where output artifacts are written.
+        config (dict): Engine configuration settings.
+        refresh (bool): Whether to refresh cached data and reprocess sources.
+    """
     output_config = config.get("output")
 
     report_extractor = ReportExtracting.ReportExtractingProcessor(
@@ -243,14 +322,22 @@ def extract(output_dir, config, refresh):
         os.path.join(output_dir, output_config.get("report_event_types_df_file_name")),
     ).assign_report_types()
 
-    print(
-        f"Merging all dataframes into {output_config.get('extracted_reports_df_file_name')}"
+    logger.info(
+        "Merging all dataframes into %s",
+        output_config.get("extracted_reports_df_file_name"),
     )
 
     create_extracted_reports_df(output_dir, output_config)
 
 
 def analyze(output_dir, config, refresh):
+    """Analyze extracted reports by linking recommendations, classifying responses, and embedding content.
+
+    Args:
+        output_dir (str): Directory where output artifacts are written.
+        config (dict): Engine configuration settings.
+        refresh (bool): Whether to refresh cached data and reprocess sources.
+    """
     output_config = config.get("output")
 
     RecommendationSafetyIssueLinking.RecommendationSafetyIssueLinker().evaluate_links_for_report(
@@ -270,14 +357,14 @@ def analyze(output_dir, config, refresh):
     )
     vector_config = config.get("vector")
 
-    vectordb = Embedding.VectorDB(
+    vector_db = Embedding.VectorDB(
         os.path.join(output_dir, output_config.get("vector_db_document_ids_file_name")),
         os.environ["VECTORDB_URI"],
         vector_config["model"]["name"],
         vector_config["model"]["context_limit"],
         vector_config["table_name"],
     )
-    vectordb.process_extracted_reports(
+    vector_db.process_extracted_reports(
         os.path.join(output_dir, output_config.get("extracted_reports_df_file_name")),
         [
             (
@@ -301,6 +388,13 @@ def analyze(output_dir, config, refresh):
 
 
 def upload(container_name, output_dir, output_config):
+    """Upload the latest engine output artifacts to Azure Storage.
+
+    Args:
+        container_name (str): The name of the Azure Storage container to upload to.
+        output_dir (str): The local directory containing output artifacts.
+        output_config (dict): Output configuration settings.
+    """
     uploader = EngineOutputUploader(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
         os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
@@ -312,6 +406,11 @@ def upload(container_name, output_dir, output_config):
 
 
 def cli():
+    """Main CLI entry point for the engine."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
     parser = argparse.ArgumentParser(
         description="A engine that will download, extract, and summarize PDFs from the marine accident investigation reports. More information can be found here: https://github.com/1jamesthompson1/TAIC-engine/"
     )
@@ -347,99 +446,41 @@ def cli():
     # Set working directory to output folder
     output_path = engine_settings.get("output").get("folder_name")
 
-    if not os.path.exists(output_path):
-        # Create the directory
-        os.makedirs(output_path)
+    os.makedirs(output_path, exist_ok=True)
 
-    match args.run_type:
-        case "download":
-            start_time = time.time()
-            download(engine_settings.get("output").get("container_name"), output_path)
-            timing_results["download"] = time.time() - start_time
-        case "gather":
-            start_time = time.time()
-            gather(output_path, engine_settings, args.refresh)
-            timing_results["gather"] = time.time() - start_time
-        case "extract":
-            start_time = time.time()
-            extract(output_path, engine_settings, args.refresh)
-            timing_results["extract"] = time.time() - start_time
-        case "analyze":
-            start_time = time.time()
-            analyze(output_path, engine_settings, args.refresh)
-            timing_results["analyze"] = time.time() - start_time
-        case "upload":
-            start_time = time.time()
-            upload(
+    # Define step configurations
+    step_configs = {
+        "download": (
+            "download",
+            download,
+            (engine_settings.get("output").get("container_name"), output_path),
+        ),
+        "gather": ("gather", gather, (output_path, engine_settings, args.refresh)),
+        "extract": ("extract", extract, (output_path, engine_settings, args.refresh)),
+        "analyze": ("analyze", analyze, (output_path, engine_settings, args.refresh)),
+        "upload": (
+            "upload",
+            upload,
+            (
                 engine_settings.get("output").get("container_name"),
                 output_path,
                 engine_settings.get("output"),
-            )
-            timing_results["upload"] = time.time() - start_time
-        case "all":
-            # Download step
-            start_time = time.time()
-            download(engine_settings.get("output").get("container_name"), output_path)
-            timing_results["download"] = time.time() - start_time
+            ),
+        ),
+    }
 
-            # Gather step
-            start_time = time.time()
-            gather(output_path, engine_settings, args.refresh)
-            timing_results["gather"] = time.time() - start_time
-
-            # Extract step
-            start_time = time.time()
-            extract(output_path, engine_settings, args.refresh)
-            timing_results["extract"] = time.time() - start_time
-
-            # Analyze step
-            start_time = time.time()
-            analyze(output_path, engine_settings, args.refresh)
-            timing_results["analyze"] = time.time() - start_time
-
-            # Upload step
-            start_time = time.time()
-            upload(
-                engine_settings.get("output").get("container_name"),
-                output_path,
-                engine_settings.get("output"),
-            )
-            timing_results["upload"] = time.time() - start_time
+    if args.run_type == "all":
+        for step_name, func, step_args in step_configs.values():
+            run_step(step_name, func, timing_results, *step_args)
+    else:
+        step_name, func, step_args = step_configs[args.run_type]
+        run_step(step_name, func, timing_results, *step_args)
 
     # Calculate total time
     total_time = time.time() - total_start_time
 
     # Print timing summary
-    print("\n" + "=" * 60)
-    print("TIMING SUMMARY")
-    print("=" * 60)
-
-    def format_duration(seconds):
-        """Format duration to show appropriate time units"""
-        if seconds < 60:
-            return f"{seconds:.2f} seconds"
-        elif seconds < 3600:
-            minutes = int(seconds // 60)
-            remaining_seconds = seconds % 60
-            return f"{minutes}m {remaining_seconds:.1f}s ({seconds:.2f} seconds)"
-        else:
-            hours = int(seconds // 3600)
-            minutes = int((seconds % 3600) // 60)
-            remaining_seconds = seconds % 60
-            return (
-                f"{hours}h {minutes}m {remaining_seconds:.1f}s ({seconds:.2f} seconds)"
-            )
-
-    for step, duration in timing_results.items():
-        formatted_time = format_duration(duration)
-        print(f"{step.upper():>10}: {formatted_time}")
-
-    if len(timing_results) > 1:
-        print("-" * 60)
-        formatted_total = format_duration(total_time)
-        print(f"{'TOTAL':>10}: {formatted_total}")
-
-    print("=" * 60)
+    log_timing_summary(timing_results, total_time)
 
 
 if __name__ == "__main__":

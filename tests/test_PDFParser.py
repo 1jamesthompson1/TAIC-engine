@@ -50,7 +50,7 @@ import os
 import pandas as pd
 import pytest
 
-from engine.gather import PDFParser
+from engine.gather import PDFParsing
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +75,12 @@ def test_single_pdf_parsing(stable_pdf_storage_manager, report_id, expected_page
         report_id : ID of the report to test
         expected_pages: Expected number of pages in the PDF
     """
-    extracted_text = PDFParser.pdf_to_text(stable_pdf_storage_manager, report_id)
+    extracted_text = PDFParsing.pdf_to_text(stable_pdf_storage_manager, report_id)
 
     assert extracted_text is not None, "Extracted text should not be None"
 
     # Check that the extracted text contains the expected number of pages
-    page_numbers = PDFParser.PDF_PAGE_MARKER_REGEX.findall(extracted_text)
+    page_numbers = PDFParsing.PDF_PAGE_MARKER_REGEX.findall(extracted_text)
 
     assert (
         len(page_numbers) == expected_pages
@@ -90,7 +90,7 @@ def test_single_pdf_parsing(stable_pdf_storage_manager, report_id, expected_page
 def test_handling_of_nonexistent_pdf(stable_pdf_storage_manager):
     """Test that the parser handles a non-existent PDF gracefully."""
     non_existent_report_id = "non_existent_report"
-    extracted_text = PDFParser.pdf_to_text(
+    extracted_text = PDFParsing.pdf_to_text(
         stable_pdf_storage_manager, non_existent_report_id
     )
 
@@ -114,7 +114,7 @@ def test_process_all_pdfs_into_text(tmpdir, stable_pdf_storage_manager):
     logger.info("Found %s PDFs in stable container: %s", len(pdf_list), pdf_list)
 
     # Use the stable PDF storage manager for consistent test data
-    PDFParser.process_all_pdfs_into_text(
+    PDFParsing.process_all_pdfs_into_text(
         parsed_reports_df_file_name,
         refresh=True,
         pdf_storage_manager=stable_pdf_storage_manager,
