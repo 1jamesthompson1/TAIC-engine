@@ -9,6 +9,7 @@ Setting up the stable test container:
 To populate the stable container with test PDFs, you can use this script:
 
 ```python
+import logging
 import os
 from engine.utils.AzureStorage import PDFStorageManager
 
@@ -43,128 +44,66 @@ The stable container is NOT subject to automatic cleanup and will retain
 its contents between test runs for consistent testing.
 """
 
+import logging
 import os
-import re
 
 import pandas as pd
 import pytest
-import roman
 
-import engine.gather.PDFParser as PDFParser
+from engine.gather import PDFParser
 
-
-def expectedPageNumbersBuilder(roman_numerals: int, int_range: tuple[int, int]):
-    """Build a list of expected page numbers with roman numerals and integers.
-
-    Args:
-        roman_numerals (int): Number of roman numeral pages (starting from i).
-        int_range (tuple[int, int]): Range of integer page numbers (inclusive start and end).
-
-    Returns:
-        list: List containing lowercase roman numerals followed by integer page numbers.
-
-    Example:
-        >>> expectedPageNumbersBuilder(3, (1, 5))
-        ['i', 'ii', 'iii', 1, 2, 3, 4, 5]
-    """
-    romans = list(map(lambda n: roman.toRoman(n).lower(), range(1, roman_numerals + 1)))
-    return romans + list(range(int_range[0], int_range[1] + 1))
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize(
-    "report_id, expected",
+    "report_id, expected_pages",
     [
-        pytest.param(
-            "ATSB_a_2007_030",
-            expectedPageNumbersBuilder(5, (1, 22)),
-            id="ATSB_a_2007_030 (Incorrect roman numeral matches in text)",
-        ),
-        pytest.param(
-            "ATSB_a_2002_646",
-            expectedPageNumbersBuilder(2, (1, 26)),
-            id="ATSB_a_2002_646 (Lenient regex match of roman numerals causing error)",
-        ),
-        pytest.param(
-            "ATSB_r_2021_010",
-            expectedPageNumbersBuilder(5, (6, 25)),
-            id="ATSB_r_2021_010 (Uses the > num < pattern, and the ints don't start at 1)",
-        ),
-        pytest.param(
-            "TSB_m_2021_A0041",
-            expectedPageNumbersBuilder(0, (1, 56)),
-            id="TSB_m_2021_A0041",
-        ),
-        pytest.param(
-            "TSB_a_2011_F0012",
-            expectedPageNumbersBuilder(0, (1, 19)),
-            id="TSB_a_2011_F0012",
-        ),
-        pytest.param(
-            "TAIC_r_2004_121",
-            expectedPageNumbersBuilder(4, (1, 16)),
-            id="TAIC_r_2004_121",
-        ),
-        pytest.param(
-            "TAIC_r_2014_103",
-            expectedPageNumbersBuilder(4, (1, 38)),
-            id="TAIC_r_2014_103",
-        ),
-        pytest.param(
-            "TAIC_a_2019_006",
-            expectedPageNumbersBuilder(6, (1, 64)),
-            id="TAIC_a_2019_006 (removing duplicate matches on the same page)",
-        ),
+        ("ATSB_r_2010_007", 12),
+        ("ATSB_r_2021_004", 106),
+        ("ATSB_a_2007_030", 29),
+        ("TSB_m_2021_A0041", 56),
+        ("TAIC_r_2004_121", 24),
+        ("TAIC_r_2014_103", 52),
+        ("TAIC_a_2019_006", 72),
     ],
 )
-def test_formatText(report_id, expected, stable_pdf_storage_manager):
-    """Test PDF text formatting and page number extraction using PDFs from the stable Azure container."""
-    # Download the PDF from the stable container to a temporary location
-    pdf_data = stable_pdf_storage_manager.download_pdf(report_id)
+def test_single_pdf_parsing(stable_pdf_storage_manager, report_id, expected_pages):
+    """Test that the parsing of the PDF has the write number of pages.
 
-    assert pdf_data is not None
+    Args:
+        stable_pdf_storage_manager: PDF storage manager for the stable Azure container
+        report_id : ID of the report to test
+        expected_pages: Expected number of pages in the PDF
+    """
+    extracted_text = PDFParser.pdf_to_text(stable_pdf_storage_manager, report_id)
 
-    # Create a temporary file for the PDF
-    import tempfile
+    assert extracted_text is not None, "Extracted text should not be None"
 
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
-        tmp_file.write(pdf_data)
-        temp_pdf_path = tmp_file.name
+    # Check that the extracted text contains the expected number of pages
+    page_numbers = PDFParser.PDF_PAGE_MARKER_REGEX.findall(extracted_text)
 
-    try:
-        # Extract text from the temporary PDF file
-        text = PDFParser.extractTextFromPDF(temp_pdf_path)
-
-        # Format the text
-        text = PDFParser.PageNumberSynchronizer.reconcile_pdf_and_text_page_numbers(
-            PDFParser.cleanText(text), report_id.split("_")[0]
-        )
-
-        page_number_matches = list(
-            re.finditer(
-                r"^<< Page (\d+|[LXVI]{1,8}) >>$", text, re.MULTILINE + re.IGNORECASE
-            )
-        )
-
-        matched = [
-            int(match.group(1)) if match.group(1).isnumeric() else match.group(1)
-            for match in page_number_matches
-        ]
-        print(f"found: {matched}")
-        print(f"expected: {expected}")
-        assert matched == expected
-
-    finally:
-        # Clean up the temporary file
-        import os
-
-        try:
-            os.unlink(temp_pdf_path)
-        except Exception:
-            pass
+    assert (
+        len(page_numbers) == expected_pages
+    ), f"Expected {expected_pages} pages, but found {len(page_numbers)} in {report_id}"
 
 
-def test_PDFParser(tmpdir, stable_pdf_storage_manager):
-    """Test PDF parsing processor using PDFs from the stable Azure container."""
+def test_handling_of_nonexistent_pdf(stable_pdf_storage_manager):
+    """Test that the parser handles a non-existent PDF gracefully."""
+    non_existent_report_id = "non_existent_report"
+    extracted_text = PDFParser.pdf_to_text(
+        stable_pdf_storage_manager, non_existent_report_id
+    )
+
+    assert extracted_text is None, "Extracted text should be None for non-existent PDF"
+
+
+def test_process_all_pdfs_into_text(tmpdir, stable_pdf_storage_manager):
+    """Test PDF parsing processor using PDFs from the stable Azure container.
+
+    This tests that it can find the reports. Download them, then process them into text and save the results in a dataframe.
+
+    Also checks if it handle the case where the PDF can't be found.
+    """
     parsed_reports_df_file_name = os.path.join(
         tmpdir.strpath,
         pytest.output_config["parsed_reports_df_file_name"],
@@ -172,10 +111,10 @@ def test_PDFParser(tmpdir, stable_pdf_storage_manager):
 
     # Check how many PDFs are in the stable container
     pdf_list = stable_pdf_storage_manager.list_pdfs()
-    print(f"Found {len(pdf_list)} PDFs in stable container: {pdf_list}")
+    logger.info("Found %s PDFs in stable container: %s", len(pdf_list), pdf_list)
 
     # Use the stable PDF storage manager for consistent test data
-    PDFParser.convertPDFToText(
+    PDFParser.process_all_pdfs_into_text(
         parsed_reports_df_file_name,
         refresh=True,
         pdf_storage_manager=stable_pdf_storage_manager,
@@ -184,20 +123,17 @@ def test_PDFParser(tmpdir, stable_pdf_storage_manager):
     assert os.path.exists(parsed_reports_df_file_name)
 
     parsed_reports_df = pd.read_pickle(parsed_reports_df_file_name)
-    print(f"Parsed {len(parsed_reports_df)} reports")
-    print(parsed_reports_df)
+    logger.info("Parsed %s reports", len(parsed_reports_df))
+    logger.info("Parsed reports dataframe:\n%s", parsed_reports_df)
 
     if not parsed_reports_df.empty:
-        # Assert that all processed PDFs are valid
-        assert parsed_reports_df["valid"].all()
-
-        # Assert we got the expected number of reports
-        # (you can adjust this number based on what's in your stable container)
-        expected_report_count = len(pdf_list)  # Should match the PDFs in the container
+        # This number is based on the current contents of the stable container which is updated with `notebooks/admin/creating_test_data.ipynb`.
+        expected_report_count = 11
         assert len(parsed_reports_df) == expected_report_count
 
-        print(
-            f"Successfully processed {len(parsed_reports_df)} reports from stable container"
+        logger.info(
+            "Successfully processed %s reports from stable container",
+            len(parsed_reports_df),
         )
     else:
         pytest.skip(

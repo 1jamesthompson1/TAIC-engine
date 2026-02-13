@@ -1,5 +1,6 @@
 """Pytest fixtures and session hooks for loading test config and Azure PDF storage cleanup."""
 
+import contextlib
 import json
 import logging
 import os
@@ -24,10 +25,16 @@ def load_test_config():
     The loaded configuration is stored in pytest.config and made available
     to all tests in the session.
     """
-    # Configure logging for tests - set to DEBUG level
+    # Configure logging for tests.
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    # Silence noisy Azure HTTP logging in test output.
+    logging.getLogger("azure").setLevel(logging.WARNING)
+    logging.getLogger("azure.core.pipeline").setLevel(logging.WARNING)
+    logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(
+        logging.WARNING
     )
 
     config = Config.ConfigReader(os.path.join("tests", "test_config.yaml")).get_config()
@@ -124,11 +131,9 @@ def cleanup_test_containers():
         # Get list of all blobs and delete them silently
         all_blobs = pdf_storage_manager.list_blobs()
         for blob_name in all_blobs:
-            try:
-                pdf_storage_manager.delete_blob(blob_name)
-            except Exception:
+            with contextlib.suppress(Exception):
                 # Silently ignore individual deletion failures
-                pass
+                pdf_storage_manager.delete_blob(blob_name)
 
     except Exception:
         # Don't fail the test run if cleanup fails
@@ -143,10 +148,8 @@ def pytest_sessionstart(session):
         cache_dir = session.config.cache.makedir("aicosts")
         # Clear existing files
         for f in os.listdir(cache_dir):
-            try:
+            with contextlib.suppress(Exception):
                 os.remove(os.path.join(cache_dir, f))
-            except Exception:
-                pass
 
 
 def pytest_sessionfinish(session, exitstatus):
@@ -157,7 +160,11 @@ def pytest_sessionfinish(session, exitstatus):
         worker_id = session.config.workerinput["workerid"]
         # Save to cache
         cache_dir = session.config.cache.makedir("aicosts")
-        with open(os.path.join(str(cache_dir), f"costs_{worker_id}.json"), "w") as f:
+        with open(
+            os.path.join(str(cache_dir), f"costs_{worker_id}.json"),
+            "w",
+            encoding="utf-8",
+        ) as f:
             json.dump(costs, f)
 
 
@@ -193,7 +200,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
 
         for cost_file in cost_files:
             try:
-                with open(cost_file, "r") as f:
+                with open(cost_file, encoding="utf-8") as f:
                     all_costs_list.append(json.load(f))
             except Exception:
                 pass  # Ignore errors in reading these files

@@ -69,6 +69,10 @@ omit = ["tests/*"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 addopts = "-n auto"
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s %(levelname)s %(name)s - %(message)s"
+log_cli_date_format = "%H:%M:%S"
 
 [tool.uv]
 package = true
@@ -88,7 +92,28 @@ include = ["engine*"]
 extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
-select = ["E", "F", "D", "DOC"]
+select = [
+    "A",
+    "B",
+    "C4",
+    "D",
+    "DOC",
+    "E",
+    "ERA",
+    "F",
+    "I",
+    "N",
+    "PD",
+    "PIE",
+    "PL",
+    "RET",
+    "RUF",
+    "SIM",
+    "T20",
+    "TRY",
+    "UP",
+    "W",
+]
 
 ignore = ["E501"]  # Ignore line too long
 
