@@ -24,6 +24,10 @@ from engine.extract.ReportExtracting import (
     process_reports_parallel,
 )
 
+RECOMMENDATION_SIMILARITY_THRESHOLD = 0.95
+CONTEXT_SIMILARITY_THRESHOLD = 0.9
+EXPECTED_NEW_REPORT_COUNT = 2
+
 
 # Test data loading functions
 def load_json_test_data(filename: str) -> list | dict:
@@ -33,7 +37,7 @@ def load_json_test_data(filename: str) -> list | dict:
         list | dict: Parsed JSON data from the specified file.
     """
     test_data_path = Path(__file__).parent / "data" / filename
-    with open(test_data_path) as f:
+    with open(test_data_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -88,8 +92,9 @@ def get_report_text(report_id: str) -> str:
     )
     try:
         return extracted_reports.loc[report_id]["text"]
-    except KeyError:
-        raise ValueError(f"Report ID {report_id} not found in extracted reports.")
+    except KeyError as e:
+        msg = f"Report ID {report_id} not found in extracted reports."
+        raise ValueError(msg) from e
 
 
 class TestAIExtraction:
@@ -102,7 +107,7 @@ class TestAIExtraction:
         "report_id, expected",
         load_safety_issue_test_cases(),
     )
-    def test_safety_issue_extraction(
+    def test_safety_issue_extraction(  # noqa: PLR6301
         self, report_id: str, expected: list[SafetyIssueItem]
     ):
         """Test the extraction of safety issues from a report.
@@ -117,7 +122,7 @@ class TestAIExtraction:
         report_text = get_report_text(report_id)
 
         extracted_data = ai_read_report(
-            agency_name=report_id.split("_")[0],
+            agency_name=report_id.split("_", maxsplit=1)[0],
             report_text=report_text,
             safety_issues=True,
             recommendations=False,
@@ -133,7 +138,9 @@ class TestAIExtraction:
             )
 
         # 2. Check each item (count permitting)
-        for idx, (extracted_item, expected_item) in enumerate(zip(extracted, expected)):
+        for idx, (extracted_item, expected_item) in enumerate(
+            zip(extracted, expected, strict=False)
+        ):
             # Check similarity
             similarity = SequenceMatcher(
                 None,
@@ -163,7 +170,7 @@ class TestAIExtraction:
         assert not failures, "\n".join(failures)
 
     @pytest.mark.parametrize("report_id, expected", load_recommendation_test_cases())
-    def test_recommendation_extraction(
+    def test_recommendation_extraction(  # noqa: PLR6301
         self, report_id: str, expected: list[RecommendationItem]
     ):
         """Test the recommendation extraction of ATSB.
@@ -176,7 +183,7 @@ class TestAIExtraction:
         report_text = get_report_text(report_id)
 
         extracted_data = ai_read_report(
-            agency_name=report_id.split("_")[0],
+            agency_name=report_id.split("_", maxsplit=1)[0],
             report_text=report_text,
             safety_issues=False,
             recommendations=True,
@@ -224,9 +231,9 @@ class TestAIExtraction:
                 expected_item.recommendation.lower(),
             ).ratio()
 
-            if similarity < 0.95:
+            if similarity < RECOMMENDATION_SIMILARITY_THRESHOLD:
                 failures.append(
-                    f"Item {idx} ({extracted_item.recommendation_id}): Recommendation text similarity {similarity:.2f} < 0.95\n"
+                    f"Item {idx} ({extracted_item.recommendation_id}): Recommendation text similarity {similarity:.2f} < {RECOMMENDATION_SIMILARITY_THRESHOLD}\n"
                     f"  Expected: {expected_item.recommendation}\n"
                     f"  Got:      {extracted_item.recommendation}"
                 )
@@ -238,7 +245,7 @@ class TestAIExtraction:
                 (expected_item.recommendation_context or "").lower(),
             ).ratio()
 
-            if context_similarity < 0.9:
+            if context_similarity < CONTEXT_SIMILARITY_THRESHOLD:
                 failures.append(
                     f"Item {idx} ({extracted_item.recommendation_id}): Context similarity {context_similarity:.2f} < 0.9\n"
                     f"  Expected: {expected_item.recommendation_context}\n"
@@ -272,7 +279,7 @@ def test_chunking_into_section(report_id, num_sections):
     ), f"Expected {num_sections} sections but got {len(sections)}"
 
 
-def test_parallel_extraction():
+def test_parallel_extraction(tmp_path):
     """Test that we can extract from multiple reports in parallel without issues."""
     ids = {
         "ATSB_a_2000_157": {"si": 7, "recs": 8, "sections": 217},
@@ -294,11 +301,15 @@ def test_parallel_extraction():
         {"report_id": list(ids.keys()), "text": test_report_texts}
     )
 
+    reports_df_path = tmp_path / "reports.pkl"
+    extracted_df_path = tmp_path / "extracted.pkl"
+    report_texts_df.to_pickle(reports_df_path)
+
     # Extract from all reports in parallel
 
     results = process_reports_parallel(
-        reports_df=report_texts_df,
-        current_extracted_df=None,
+        reports_df_path=reports_df_path,
+        extracted_reports_df_path=extracted_df_path,
     )
 
     # Compare results to expected values
@@ -322,7 +333,7 @@ def test_parallel_extraction():
     assert not failures, "Extraction mismatches:\n  " + "\n  ".join(failures)
 
 
-def test_process_handle_already_processed():
+def test_process_handle_already_processed(tmp_path):
     """Test that process_reports_parallel only processes new reports and skips already processed ones."""
     already_processed_ids = [
         "ATSB_r_2014_001",
@@ -359,6 +370,11 @@ def test_process_handle_already_processed():
         }
     )
 
+    reports_df_path = tmp_path / "reports.pkl"
+    extracted_df_path = tmp_path / "extracted.pkl"
+    report_texts_df.to_pickle(reports_df_path)
+    current_extracted_df.to_pickle(extracted_df_path)
+
     # Mock the extract_report function to track calls
     with patch("engine.extract.ReportExtracting.extract_report") as mock_extract:
         # Configure mock to return a dict with expected structure
@@ -371,14 +387,14 @@ def test_process_handle_already_processed():
 
         # Process reports
         results_df = process_reports_parallel(
-            reports_df=report_texts_df,
-            current_extracted_df=current_extracted_df,
+            reports_df_path=reports_df_path,
+            extracted_reports_df_path=extracted_df_path,
         )
 
     # Assertions: Verify that extract_report was called only for new reports
     assert (
-        mock_extract.call_count == 2
-    ), f"extract_report should be called 2 times (for new reports), but was called {mock_extract.call_count} times"
+        mock_extract.call_count == EXPECTED_NEW_REPORT_COUNT
+    ), f"extract_report should be called {EXPECTED_NEW_REPORT_COUNT} times (for new reports), but was called {mock_extract.call_count} times"
 
     # Verify the correct reports were processed by checking the call arguments
     called_report_ids = [

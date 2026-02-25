@@ -1,26 +1,27 @@
-import os
+"""Tests for ReportTypeAssignment module."""
+
+from pathlib import Path
 
 import pandas as pd
 import pytest
 
-import engine.extract.ReportTypeAssignment as ReportTypeAssignment
-import engine.utils.Modes as Modes
+from engine.extract import ReportTypeAssignment
+from engine.utils import Modes
 
 
-def test_report_type_assignment(tmpdir):
-    report_event_types_path = os.path.join(
-        pytest.output_config["folder_name"],
-        pytest.output_config["all_event_types_df_file_name"],
+def test_report_type_assignment(tmp_path):
+    """Test the full report type assignment process."""
+    output_path = Path(pytest.output_config["folder_name"])
+    report_event_types_path = (
+        output_path / pytest.output_config["all_event_types_df_file_name"]
     )
-    report_titles_path = os.path.join(
-        pytest.output_config["folder_name"],
-        pytest.output_config["report_titles_df_file_name"],
+    report_titles_path = (
+        output_path / pytest.output_config["report_titles_df_file_name"]
     )
-    parsed_report_path = os.path.join(
-        pytest.output_config["folder_name"],
-        pytest.output_config["parsed_reports_df_file_name"],
+    parsed_report_path = (
+        output_path / pytest.output_config["parsed_reports_df_file_name"]
     )
-    report_types_path = tmpdir.join("report_types.pkl")
+    report_types_path = tmp_path / "report_types.pkl"
     report_type_assigner = ReportTypeAssignment.ReportTypeAssigner(
         report_event_types_path,
         report_titles_path,
@@ -29,7 +30,7 @@ def test_report_type_assignment(tmpdir):
     )
     report_type_assigner.assign_report_types()
 
-    assert os.path.exists(report_types_path)
+    assert report_types_path.exists()
 
     report_types_df = pd.read_pickle(report_types_path)
 
@@ -66,20 +67,20 @@ def test_report_type_assignment(tmpdir):
     ],
 )
 def test_single_report_type_assignment(report_title, mode, expected_type):
-    report_event_types_path = os.path.join(
-        pytest.output_config["folder_name"],
-        pytest.output_config["all_event_types_df_file_name"],
+    """Test report type assignment for a single report."""
+    output_path = Path(pytest.output_config["folder_name"])
+    report_event_types_path = (
+        output_path / pytest.output_config["all_event_types_df_file_name"]
     )
-    report_titles_path = os.path.join(
-        pytest.output_config["folder_name"],
-        pytest.output_config["report_titles_df_file_name"],
+    report_titles_path = (
+        output_path / pytest.output_config["report_titles_df_file_name"]
     )
-    parsed_reports = os.path.join(
-        pytest.output_config["folder_name"],
-        pytest.output_config["parsed_reports_df_file_name"],
-    )
+    parsed_reports = output_path / pytest.output_config["parsed_reports_df_file_name"]
     report_type_assigner = ReportTypeAssignment.ReportTypeAssigner(
-        report_event_types_path, report_titles_path, parsed_reports, None
+        report_event_types_path,
+        report_titles_path,
+        parsed_reports,
+        Path("unused_report_types.pkl"),
     )
 
     assert (

@@ -1,8 +1,10 @@
-import os
+"""Tests for DataGetting module."""
+
+from pathlib import Path
 
 import pytest
 
-import engine.gather.DataGetting as DataGetting
+from engine.gather import DataGetting
 
 
 @pytest.mark.parametrize(
@@ -12,20 +14,21 @@ import engine.gather.DataGetting as DataGetting
         pytest.param("non-existent_file.csv", False, id="Failed attempt"),
     ],
 )
-def test_get_generic(tmpdir, file_name, expected):
-    output_file = tmpdir.join("test_data.pkl")
+def test_get_generic(tmp_path, file_name, expected):
+    """Test generic data fetching functionality."""
+    output_file = tmp_path / "test_data.pkl"
 
-    dataGetter = DataGetting.DataGetter(
-        "data",
+    data_getter = DataGetting.DataGetter(
+        Path("data"),
         "https://raw.githubusercontent.com/1jamesthompson1/TAIC-engine/main/data/",
         False,
     )
 
     if expected:
-        dataGetter.get_generic_data(file_name, output_file)
+        data_getter.get_generic_data(file_name, output_file)
 
-        assert os.path.exists(output_file)
+        assert output_file.exists()
 
     else:
         with pytest.raises(FileNotFoundError):
-            dataGetter.get_generic_data(file_name, output_file)
+            data_getter.get_generic_data(file_name, output_file)

@@ -4,13 +4,12 @@ import argparse
 import logging
 import os
 import time
+from pathlib import Path
 
 import pandas as pd
 
 from ..analyze import (
     Embedding,
-    RecommendationResponseClassification,
-    RecommendationSafetyIssueLinking,
 )
 from ..extract import ReportExtracting, ReportTypeAssignment
 from ..gather import DataGetting, PDFParsing, WebsiteScraping
@@ -71,12 +70,13 @@ def run_step(step_name, func, timing_results, *args, **kwargs):
     timing_results[step_name] = time.time() - start_time
 
 
-def download(container, output_dir):
-    """Download the latest engine output from Azure Storage into the output directory.
+def download(container: str, output_dir: Path, refresh: bool):
+    """Download the latest engine output from Azure Storage and get generic data.
 
     Args:
         container (str): The name of the Azure Storage container to download from.
-        output_dir (str): The local directory to save the downloaded files to.
+        output_dir (Path): The local directory to save the downloaded files to.
+        refresh (bool): Whether to refresh cached data.
     """
     downloader = EngineOutputDownloader(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
@@ -87,31 +87,32 @@ def download(container, output_dir):
 
     downloader.download_latest_output()
 
+    # Get generic data
+    config = Config.config_reader.get_config()["engine"]
+    data_getter = DataGetting.DataGetter(
+        Path(config.get("data").get("data_local_folder_location")),
+        config.get("data").get("data_remote_folder_location"),
+        refresh,
+    )
+    data_getter.get_generic_data(
+        config.get("data").get("event_types_file_name"),
+        output_dir / config.get("output").get("all_event_types_df_file_name"),
+    )
+    logger.info("Got event types")
 
-def gather(output_dir: str, config: dict, refresh: bool):
-    """Gather raw data, scrape reports, and parse PDFs into intermediate outputs.
+
+def scrape(output_dir: Path, config: dict, refresh: bool):
+    """Scrape reports from websites and extract additional data.
 
     Args:
-        output_dir (str): Directory where output artifacts are written.
+        output_dir (Path): Directory where output artifacts are written.
         config (dict): Engine configuration settings.
         refresh (bool): Whether to refresh cached data and re-download sources.
     """
     output_config = config.get("output")
     download_config = config.get("download")
 
-    logger.info("Getting all data needed for engine")
-
-    data_getter = DataGetting.DataGetter(
-        config.get("data").get("data_local_folder_location"),
-        config.get("data").get("data_remote_folder_location"),
-        refresh,
-    )
-
-    data_getter.get_generic_data(
-        config.get("data").get("event_types_file_name"),
-        os.path.join(output_dir, output_config.get("all_event_types_df_file_name")),
-    )
-    logger.info("Got event types")
+    logger.info("Scraping reports from websites")
 
     logger.info("Setting up PDF storage manager...")
     pdf_storage_manager = PDFStorageManager(
@@ -126,7 +127,7 @@ def gather(output_dir: str, config: dict, refresh: bool):
 
     # Download the PDFs
     report_scraping_settings = WebsiteScraping.ReportScraperSettings(
-        os.path.join(output_dir, output_config.get("report_titles_df_file_name")),
+        output_dir / output_config.get("report_titles_df_file_name"),
         download_config.get("start_year"),
         download_config.get("end_year"),
         download_config.get("max_per_year"),
@@ -142,68 +143,55 @@ def gather(output_dir: str, config: dict, refresh: bool):
                 WebsiteScraping.TSBReportScraper(report_scraping_settings).collect_all()
             case "TAIC":
                 WebsiteScraping.TAICReportScraper(
-                    os.path.join(
-                        output_dir,
-                        output_config.get("taic_website_reports_table_file_name"),
-                    ),
+                    output_dir
+                    / output_config.get("taic_website_reports_table_file_name"),
                     report_scraping_settings,
                 ).collect_all()
             case "ATSB":
                 WebsiteScraping.ATSBReportScraper(
-                    os.path.join(
-                        output_dir,
-                        output_config.get("atsb_website_reports_table_file_name"),
-                    ),
+                    output_dir
+                    / output_config.get("atsb_website_reports_table_file_name"),
                     report_scraping_settings,
                 ).collect_all()
             case _:
                 logger.warning("Unknown agency '%s', skipping", agency)
 
-    # Extract the text from the PDFs
-    PDFParsing.process_all_pdfs_into_text(
-        os.path.join(output_dir, output_config.get("parsed_reports_df_file_name")),
-        refresh,
-        pdf_storage_manager,
-    )
-
     atsb_si_scraper = WebsiteScraping.ATSBSafetyIssueScraper(
-        os.path.join(
-            output_dir, output_config.get("atsb_website_safety_issues_file_name")
-        ),
-        os.path.join(output_dir, output_config.get("report_titles_df_file_name")),
+        output_dir / output_config.get("atsb_website_safety_issues_file_name"),
+        output_dir / output_config.get("report_titles_df_file_name"),
         refresh,
     )
 
     atsb_si_scraper.extract_safety_issues_from_website()
 
     tsb_recs_scraper = WebsiteScraping.TSBRecommendationsScraper(
-        os.path.join(
-            output_dir, output_config.get("tsb_website_recommendations_file_name")
-        ),
-        os.path.join(output_dir, output_config.get("report_titles_df_file_name")),
+        output_dir / output_config.get("tsb_website_recommendations_file_name"),
+        output_dir / output_config.get("report_titles_df_file_name"),
         refresh,
     )
     tsb_recs_scraper.extract_recommendations_from_website()
 
     taic_recs_scraper = WebsiteScraping.TAICRecommendationsScraper(
-        os.path.join(
-            output_dir, output_config.get("taic_website_recommendations_file_name")
-        ),
-        os.path.join(output_dir, output_config.get("report_titles_df_file_name")),
+        output_dir / output_config.get("taic_website_recommendations_file_name"),
+        output_dir / output_config.get("report_titles_df_file_name"),
         refresh,
     )
     taic_recs_scraper.extract_recommendations_from_website()
 
 
-def create_extracted_reports_df(output_dir: str, output_config: dict):
+def create_extracted_reports_df(output_dir: Path, output_config: dict):
     """Create the combined extracted reports dataframe and persist it to disk.
 
     Args:
-        output_dir (str): Directory where output artifacts are written.
+        output_dir (Path): Directory where output artifacts are written.
         output_config (dict): Output configuration containing expected file names.
     """
+    raise NotImplementedError(
+        "This needs to be updated to reflect the new simpler processing pipeline. It will take in all of the different dataframes and combine them into a single long dataframe"
+    )
+
     dataframes = [
-        pd.read_pickle(os.path.join(output_dir, file_name)).set_index("report_id")
+        pd.read_pickle(output_dir / file_name).set_index("report_id")
         for file_name in [
             output_config.get("parsed_reports_df_file_name"),
             output_config.get("toc_df_file_name"),
@@ -231,7 +219,7 @@ def create_extracted_reports_df(output_dir: str, output_config: dict):
 
     # Adding agency_id and url
     report_titles = pd.read_pickle(
-        os.path.join(output_dir, output_config.get("report_titles_df_file_name"))
+        output_dir / output_config.get("report_titles_df_file_name")
     )
     combined_df = combined_df.merge(
         report_titles[["report_id", "agency_id", "url", "summary"]],
@@ -268,104 +256,85 @@ def create_extracted_reports_df(output_dir: str, output_config: dict):
     ]
 
     combined_df.to_pickle(
-        os.path.join(output_dir, output_config.get("extracted_reports_df_file_name"))
+        output_dir / output_config.get("extracted_reports_df_file_name")
     )
 
 
-def extract(output_dir: str, config: dict, refresh: bool):
-    """Extract report artifacts and persist derived dataframes to disk.
+def extract(output_dir: Path, config: dict, refresh: bool):
+    """Extract report artifacts from PDFs.
 
     Args:
-        output_dir (str): Directory where output artifacts are written.
+        output_dir (Path): Directory where output artifacts are written.
         config (dict): Engine configuration settings.
         refresh (bool): Whether to refresh cached data and reprocess sources.
     """
     output_config = config.get("output")
 
-    report_extractor = ReportExtracting.ReportExtractingProcessor(
-        os.path.join(output_dir, output_config.get("parsed_reports_df_file_name")),
+    logger.info("Setting up PDF storage manager...")
+    pdf_storage_manager = PDFStorageManager(
+        os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
+        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
+        output_config["pdf_container_name"],
+    )
+    logger.info(
+        "PDF storage container: %s",
+        output_config["pdf_container_name"],
+    )
+
+    # Parse PDFs into text
+    PDFParsing.process_all_pdfs_into_text(
+        output_dir / output_config.get("parsed_reports_df_file_name"),
         refresh,
+        pdf_storage_manager,
     )
 
-    report_extractor.extract_table_of_contents_from_reports(
-        os.path.join(output_dir, output_config.get("toc_df_file_name"))
+    # Extract reports into structured data
+
+    ReportExtracting.process_reports_parallel(
+        output_dir / output_config.get("parsed_reports_df_file_name"),
+        output_dir / output_config.get("extracted_reports_df_file_name"),
     )
 
-    report_extractor.extract_safety_issues_from_reports(
-        os.path.join(output_dir, output_config.get("report_titles_df_file_name")),
-        os.path.join(output_dir, output_config.get("toc_df_file_name")),
-        os.path.join(
-            output_dir, output_config.get("atsb_website_safety_issues_file_name")
-        ),
-        os.path.join(output_dir, output_config.get("safety_issues_df_file_name")),
-    )
 
-    report_extractor.extract_recommendations(
-        os.path.join(output_dir, output_config.get("recommendations_df_file_name")),
-        os.path.join(
-            output_dir, output_config.get("tsb_website_recommendations_file_name")
-        ),
-        os.path.join(
-            output_dir, output_config.get("taic_website_recommendations_file_name")
-        ),
-        os.path.join(output_dir, output_config.get("toc_df_file_name")),
-    )
+def analyze(output_dir: Path, config: dict, refresh: bool):
+    """Analyze extracted reports by assigning types, linking recommendations, and classifying responses.
 
-    report_extractor.extract_sections_from_text(
-        15, os.path.join(output_dir, output_config.get("report_sections_df_file_name"))
-    )
+    Args:
+        output_dir (Path): Directory where output artifacts are written.
+        config (dict): Engine configuration settings.
+        refresh (bool): Whether to refresh cached data and reprocess sources.
+    """
+    output_config = config.get("output")
 
+    # Assign report types
     ReportTypeAssignment.ReportTypeAssigner(
-        os.path.join(output_dir, output_config.get("all_event_types_df_file_name")),
-        os.path.join(output_dir, output_config.get("report_titles_df_file_name")),
-        os.path.join(output_dir, output_config.get("parsed_reports_df_file_name")),
-        os.path.join(output_dir, output_config.get("report_event_types_df_file_name")),
+        output_dir / output_config.get("all_event_types_df_file_name"),
+        output_dir / output_config.get("report_titles_df_file_name"),
+        output_dir / output_config.get("parsed_reports_df_file_name"),
+        output_dir / output_config.get("report_event_types_df_file_name"),
     ).assign_report_types()
 
-    logger.info(
-        "Merging all dataframes into %s",
-        output_config.get("extracted_reports_df_file_name"),
-    )
 
-    create_extracted_reports_df(output_dir, output_config)
-
-
-def analyze(output_dir, config, refresh):
-    """Analyze extracted reports by linking recommendations, classifying responses, and embedding content.
+def embed(output_dir: Path, config: dict, refresh: bool):
+    """Embed extracted reports into the vector database.
 
     Args:
-        output_dir (str): Directory where output artifacts are written.
+        output_dir (Path): Directory where output artifacts are written.
         config (dict): Engine configuration settings.
         refresh (bool): Whether to refresh cached data and reprocess sources.
     """
     output_config = config.get("output")
-
-    RecommendationSafetyIssueLinking.RecommendationSafetyIssueLinker().evaluate_links_for_report(
-        os.path.join(output_dir, output_config.get("extracted_reports_df_file_name")),
-        os.path.join(
-            output_dir,
-            output_config.get("recommendation_safety_issue_links_df_file_name"),
-        ),
-    )
-
-    RecommendationResponseClassification.RecommendationResponseClassificationProcessor().process(
-        os.path.join(output_dir, output_config.get("recommendations_df_file_name")),
-        os.path.join(
-            output_dir,
-            output_config.get("recommendation_response_classification_df_file_name"),
-        ),
-    )
     vector_config = config.get("vector")
 
     vector_db = Embedding.VectorDB(
-        os.path.join(output_dir, output_config.get("vector_db_document_ids_file_name")),
+        output_dir / output_config.get("vector_db_document_ids_file_name"),
         os.environ["VECTORDB_URI"],
         vector_config["model"]["name"],
         vector_config["model"]["context_limit"],
         vector_config["table_name"],
     )
     vector_db.process_extracted_reports(
-        os.path.join(output_dir, output_config.get("extracted_reports_df_file_name")),
+        output_dir / output_config.get("extracted_reports_df_file_name"),
         [
             (
                 "safety_issues",
@@ -387,12 +356,12 @@ def analyze(output_dir, config, refresh):
     )
 
 
-def upload(container_name, output_dir, output_config):
+def upload(container_name: str, output_dir: Path, output_config: dict):
     """Upload the latest engine output artifacts to Azure Storage.
 
     Args:
         container_name (str): The name of the Azure Storage container to upload to.
-        output_dir (str): The local directory containing output artifacts.
+        output_dir (Path): The local directory containing output artifacts.
         output_config (dict): Output configuration settings.
     """
     uploader = EngineOutputUploader(
@@ -429,7 +398,7 @@ def cli():
     parser.add_argument(
         "-t",
         "--run_type",
-        choices=["download", "gather", "extract", "analyze", "upload", "all"],
+        choices=["download", "scrape", "extract", "analyze", "embed", "upload", "all"],
         required=True,
         help="This is function that you want to run.",
     )
@@ -441,23 +410,28 @@ def cli():
     total_start_time = time.time()
 
     # Get the config settings for the engine.
-    engine_settings = Config.configReader.get_config()["engine"]
+    engine_settings = Config.config_reader.get_config()["engine"]
 
     # Set working directory to output folder
-    output_path = engine_settings.get("output").get("folder_name")
+    output_path = Path(engine_settings.get("output").get("folder_name"))
 
-    os.makedirs(output_path, exist_ok=True)
+    output_path.mkdir(parents=True, exist_ok=True)
 
     # Define step configurations
     step_configs = {
         "download": (
             "download",
             download,
-            (engine_settings.get("output").get("container_name"), output_path),
+            (
+                engine_settings.get("output").get("container_name"),
+                output_path,
+                args.refresh,
+            ),
         ),
-        "gather": ("gather", gather, (output_path, engine_settings, args.refresh)),
+        "scrape": ("scrape", scrape, (output_path, engine_settings, args.refresh)),
         "extract": ("extract", extract, (output_path, engine_settings, args.refresh)),
         "analyze": ("analyze", analyze, (output_path, engine_settings, args.refresh)),
+        "embed": ("embed", embed, (output_path, engine_settings, args.refresh)),
         "upload": (
             "upload",
             upload,

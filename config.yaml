@@ -11,18 +11,11 @@ engine:
     container_name: "engineoutput"
     pdf_container_name: "prod-reportpdfs"
     parsed_reports_df_file_name: "parsed_reports.pkl"
-    recommendations_df_file_name: "recommendations.pkl"
     vector_db_document_ids_file_name: "vector_db_document_ids.pkl"
     all_event_types_df_file_name: "all_event_types.pkl"
     report_event_types_df_file_name: "report_event_types.pkl"
     report_titles_df_file_name: "report_titles.pkl"
-    report_sections_df_file_name: "report_sections.pkl"
-    important_text_df_file_name: "important_text.pkl"
-    toc_df_file_name: "table_of_contents.pkl"
-    safety_issues_df_file_name: "safety_issues.pkl"
     extracted_reports_df_file_name: "extracted_reports.pkl"
-    recommendation_safety_issue_links_df_file_name: "recommendation_safety_issue_links.pkl"
-    recommendation_response_classification_df_file_name: "recommendation_response_classification.pkl"
     atsb_website_safety_issues_file_name: "atsb_website_safety_issues.pkl"
     tsb_website_recommendations_file_name: "tsb_website_recommendations.pkl"
     taic_website_recommendations_file_name: "taic_website_recommendations.pkl"
@@ -32,9 +25,6 @@ engine:
     data_remote_folder_location: "https://raw.githubusercontent.com/1jamesthompson1/TAIC-engine/main/data/"
     data_local_folder_location: "data"
     event_types_file_name: "event_types.csv"
-    atsb_historic_aviation: "atsb_historic_aviation_investigations.csv"
-  validation:
-    folder_name: "validation"
   vector:
     table_name: "all_document_types"  # LanceDB table name
     model:

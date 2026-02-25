@@ -5,8 +5,8 @@ Uses pymupdf4llm for better structure preservation and markdown output.
 """
 
 import logging
-import os
 import re
+from pathlib import Path
 
 import pandas as pd
 import pymupdf4llm
@@ -24,7 +24,9 @@ PDF_PAGE_MARKER_REGEX = re.compile(r"<< PDF Page (\d+) start >>")
 
 
 def process_all_pdfs_into_text(
-    parsed_reports_df_file_name, refresh, pdf_storage_manager: PDFStorageManager
+    parsed_reports_df_file_name: Path,
+    refresh: bool,
+    pdf_storage_manager: PDFStorageManager,
 ):
     """Convert PDFs to text and save as dataframe.
 
@@ -55,7 +57,7 @@ def process_all_pdfs_into_text(
         return
     logger.info(f"Found {len(report_ids)} PDFs in storage container")
 
-    if os.path.exists(parsed_reports_df_file_name) and not refresh:
+    if parsed_reports_df_file_name.exists() and not refresh:
         parsed_reports_df = pd.read_pickle(parsed_reports_df_file_name)
     else:
         parsed_reports_df = pd.DataFrame(columns=["report_id", "text"])
@@ -134,8 +136,10 @@ def pdf_to_text(pdf_manager: PDFStorageManager, report_id: str) -> str | None:
         logger.exception(f"Error processing {report_id}")
         return None
     finally:
-        if "temp_pdf_path" in locals() and os.path.exists(temp_pdf_path):
-            os.remove(temp_pdf_path)
+        if "temp_pdf_path" in locals() and temp_pdf_path:
+            temp_path = Path(temp_pdf_path)
+            if temp_path.exists():
+                temp_path.unlink()
 
 
 def extract_text_from_pdf(pdf_path: str) -> str:

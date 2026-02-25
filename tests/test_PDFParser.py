@@ -10,7 +10,7 @@ To populate the stable container with test PDFs, you can use this script:
 
 ```python
 import logging
-import os
+from pathlib import Path
 from engine.utils.AzureStorage import PDFStorageManager
 
 # Create connection to stable container
@@ -45,7 +45,6 @@ its contents between test runs for consistent testing.
 """
 
 import logging
-import os
 
 import pandas as pd
 import pytest
@@ -97,16 +96,15 @@ def test_handling_of_nonexistent_pdf(stable_pdf_storage_manager):
     assert extracted_text is None, "Extracted text should be None for non-existent PDF"
 
 
-def test_process_all_pdfs_into_text(tmpdir, stable_pdf_storage_manager):
+def test_process_all_pdfs_into_text(tmp_path, stable_pdf_storage_manager):
     """Test PDF parsing processor using PDFs from the stable Azure container.
 
     This tests that it can find the reports. Download them, then process them into text and save the results in a dataframe.
 
     Also checks if it handle the case where the PDF can't be found.
     """
-    parsed_reports_df_file_name = os.path.join(
-        tmpdir.strpath,
-        pytest.output_config["parsed_reports_df_file_name"],
+    parsed_reports_df_file_name = (
+        tmp_path / pytest.output_config["parsed_reports_df_file_name"]
     )
 
     # Check how many PDFs are in the stable container
@@ -120,7 +118,7 @@ def test_process_all_pdfs_into_text(tmpdir, stable_pdf_storage_manager):
         pdf_storage_manager=stable_pdf_storage_manager,
     )
 
-    assert os.path.exists(parsed_reports_df_file_name)
+    assert parsed_reports_df_file_name.exists()
 
     parsed_reports_df = pd.read_pickle(parsed_reports_df_file_name)
     logger.info("Parsed %s reports", len(parsed_reports_df))

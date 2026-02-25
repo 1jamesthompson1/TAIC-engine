@@ -1,11 +1,20 @@
+"""Website scraping module for transportation safety investigation reports.
+
+This module provides classes for scraping reports, recommendations, and safety issues
+from various transportation safety agencies (TAIC, ATSB, TSB). It handles HTTP requests,
+It does the crawling of websitess and extracts report metadata and PDFs which is then uploaded to cloud storage.
+"""
+
 import os
 import random
 import re
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime
+from http import HTTPStatus
 from threading import Lock
-from typing import Literal
+from typing import ClassVar, Literal
 from urllib.parse import urljoin, urlparse
 
 import hrequests
@@ -22,15 +31,17 @@ from tqdm import tqdm
 
 from ..utils import Modes
 from ..utils.AzureStorage import PDFStorageManager
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
+@dataclass
 class ReportMetadata:
-    """
-    Small data class to hold the metadata so that it can be passed around easily between the functions.
-    """
+    """Small data class to hold the metadata so that it can be passed around easily between the functions."""
 
     # Define the column order based on property names
-    COLUMN_ORDER = [
+    COLUMN_ORDER: ClassVar[list[str]] = [
         "report_id",
         "title",
         "event_type",
@@ -41,72 +52,81 @@ class ReportMetadata:
         "agency_id",
     ]
 
-    def __init__(
-        self,
-        report_id,
-        title,
-        event_type,
-        investigation_type,
-        summary,
-        misc,
-        url,
-        agency_id,
-    ):
-        self.report_id = report_id
-        self.title = title
-        self.event_type = event_type
-        self.investigation_type = investigation_type
-        self.summary = summary
-        self.misc = misc
-        self.url = url
-        self.agency_id = agency_id
+    report_id: str
+    title: str
+    event_type: str | None
+    investigation_type: str
+    summary: str | None
+    misc: dict
+    url: str
+    agency_id: str | None
 
     def __repr__(self):
+        """Return string representation of ReportMetadata.
+
+        Returns:
+            String representation with report_id and title.
+        """
         return f"ReportMetadata({self.report_id}, {self.title})"
 
     def as_report_row(self):
-        """Return values in the order defined by COLUMN_ORDER"""
+        """Return values in the order defined by COLUMN_ORDER.
+
+        Returns:
+            List of attribute values in column order.
+        """
         return [getattr(self, col) for col in self.COLUMN_ORDER]
 
     @classmethod
     def get_column_names(cls):
-        """Return the column names in the correct order"""
+        """Return the column names in the correct order.
+
+        Returns:
+            Copy of the COLUMN_ORDER list.
+        """
         return cls.COLUMN_ORDER.copy()
 
 
+@dataclass
 class ReportScraperSettings:
-    def __init__(
-        self,
-        report_titles_file_path,
-        start_year,
-        end_year,
-        max_per_year,
-        modes: list[Modes.Mode],
-        ignored_report_ids: list[str],
-        refresh,
-        pdf_storage_manager: PDFStorageManager,
-        refresh_metadata=False,
-        scraper_workers=1,
-    ):
-        self.report_titles_file_path = report_titles_file_path
-        self.start_year = start_year
-        self.end_year = end_year
-        self.max_per_year = max_per_year
-        self.refresh = refresh
-        self.modes = modes
-        self.ignored_report_ids = ignored_report_ids
-        self.ignore_metadata = refresh_metadata
-        self.scraper_workers = scraper_workers
-        self.pdf_storage_manager = pdf_storage_manager
+    """Configuration settings for report scraping.
 
-
-class WebsiteScraper(ABC):
+    Holds all configuration parameters needed for scraping reports from
+    transportation safety agency websites.
     """
-    Abstract base class for scraping websites.
+
+    report_titles_file_path: str
+    start_year: int
+    end_year: int
+    max_per_year: int
+    modes: list[Modes.Mode]
+    ignored_report_ids: list[str]
+    refresh: bool
+    pdf_storage_manager: PDFStorageManager
+    refresh_metadata: bool = False
+    scraper_workers: int = 1
+
+    def __post_init__(self):
+        """Convert refresh_metadata to ignore_metadata for backward compatibility."""
+        self.ignore_metadata = self.refresh_metadata
+
+
+class WebsiteScraper:
+    """Base class for scraping websites.
+
     Provides common functionality for HTTP requests and ID conversion.
+    Subclasses handle agency-specific website structures.
     """
 
     def __init__(self, report_titles_file_path):
+        """Initialize WebsiteScraper.
+
+        Args:
+            report_titles_file_path: Path to the pickle file containing report metadata.
+
+        Raises:
+            ValueError: If the report titles file does not exist.
+        """
         # Keep the original headers as a fallback, but we'll use get_randomized_headers() instead
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36 Edg/94.0.992.50",
@@ -119,21 +139,24 @@ class WebsiteScraper(ABC):
         if os.path.exists(report_titles_file_path):
             report_titles_df = pd.read_pickle(report_titles_file_path)
         else:
-            raise ValueError(f"{report_titles_file_path} does not exist")
+            error_msg = f"{report_titles_file_path} does not exist"
+            raise ValueError(error_msg)
         self.id_dict = {
             agency: {
                 agency_id: report_id
-                for report_id, agency_id in ids[["report_id", "agency_id"]].values
+                for report_id, agency_id in ids[["report_id", "agency_id"]].to_numpy()
             }
             for agency, ids in report_titles_df.assign(
                 agency=report_titles_df["report_id"].map(lambda x: x.split("_")[0])
             ).groupby("agency")
         }
 
-    def get_randomized_headers(self):
-        """
-        Generate randomized headers to avoid bot detection.
-        Returns a random permutation of header options.
+    @staticmethod
+    def get_randomized_headers():
+        """Generate randomized headers to avoid bot detection.
+
+        Returns:
+            Dictionary of randomized HTTP headers with shuffled order.
         """
         # Various User-Agent strings for different browsers and platforms
         user_agents = [
@@ -188,6 +211,9 @@ class WebsiteScraper(ABC):
             ("Cache-Control", "max-age=0"),
         ]
 
+        # 70% chance to include each additional header
+        additional_header_probability = 0.7
+
         # Build the randomized headers dictionary
         headers = {
             "User-Agent": random.choice(user_agents),
@@ -199,7 +225,7 @@ class WebsiteScraper(ABC):
 
         # Randomly include some additional headers
         for header_name, header_value in additional_headers:
-            if random.random() < 0.7:  # 70% chance to include each additional header
+            if random.random() < additional_header_probability:
                 headers[header_name] = header_value
 
         # Randomly shuffle the order of headers
@@ -221,8 +247,18 @@ class WebsiteScraper(ABC):
         """HTTP GET with bounded retries and randomized headers.
 
         All website scrapers should use this instead of calling `hrequests.get` directly.
-        """
 
+        Args:
+            url: The URL to fetch.
+            headers: Optional additional headers to merge with randomized headers.
+            attempts: Maximum number of retry attempts.
+            wait_min_s: Minimum wait time between retries in seconds.
+            wait_max_s: Maximum wait time between retries in seconds.
+            **kwargs: Additional arguments passed to hrequests.get.
+
+        Returns:
+            Response object from hrequests.get.
+        """
         merged_headers = {**self.get_randomized_headers(), **(headers or {})}
 
         @retry(
@@ -239,23 +275,40 @@ class WebsiteScraper(ABC):
         return _inner()
 
     def id_converter(self, agency, agency_id):
-        """
-        This uses the COMPLETE report titles dataframe and creates a dictionary of agency_id:report_id.
-        The agency argument is needed as some of the agency ids are not globally unique but instead just unique within an agency.
+        """Convert agency-specific ID to report ID using the COMPLETE report titles dataframe.
+
+        The agency argument is needed as some of the agency IDs are not globally unique
+        but instead just unique within an agency.
+
+        Args:
+            agency: The agency name (e.g., 'ATSB', 'TAIC', 'TSB').
+            agency_id: The agency-specific identifier.
+
+        Returns:
+            The corresponding report_id or None if not found.
+
+        Raises:
+            ValueError: If the agency is not valid.
         """
         if agency not in self.id_dict:
-            raise ValueError(f"{agency} is not a valid agency")
-        else:
-            return self.id_dict[agency].get(agency_id)
+            error_msg = f"{agency} is not a valid agency"
+            raise ValueError(error_msg)
+        return self.id_dict[agency].get(agency_id)
 
 
 class ReportScraper(WebsiteScraper, ABC):
-    """
-    Abstract base class for scraping reports from different transportation safety agencies.
+    """Abstract base class for scraping reports from different transportation safety agencies.
+
     Subclasses must implement abstract methods to handle agency-specific website structures.
     """
 
     def __init__(self, settings: ReportScraperSettings, agency: str):
+        """Initialize ReportScraper.
+
+        Args:
+            settings: Configuration settings for the scraper.
+            agency: The agency name (e.g., 'TAIC', 'ATSB', 'TSB').
+        """
         self.settings = settings
         self._metadata_file_lock = Lock()
         if os.path.exists(self.settings.report_titles_file_path):
@@ -263,7 +316,7 @@ class ReportScraper(WebsiteScraper, ABC):
                 self.settings.report_titles_file_path
             )
             # Make sure index is from 0 to n-1
-            self.report_titles_df.reset_index(drop=True, inplace=True)
+            self.report_titles_df = self.report_titles_df.reset_index(drop=True)
         else:
             self.report_titles_df = pd.DataFrame(
                 columns=ReportMetadata.get_column_names()
@@ -271,33 +324,20 @@ class ReportScraper(WebsiteScraper, ABC):
             self.report_titles_df.to_pickle(self.settings.report_titles_file_path)
         self.agency = agency
         super().__init__(self.settings.report_titles_file_path)
-        print(
-            "=============================================================================================================================\n"
+        logger.info(f"Downloading report PDFs for {self.agency}")
+        logger.info(
+            f"PDF storage container: {self.settings.pdf_storage_manager.container_name}"
         )
-        print(
-            "|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||\n"
+        logger.info(f"Report titles file path: {self.settings.report_titles_file_path}")
+        logger.info(
+            f"Start year: {self.settings.start_year}, End year: {self.settings.end_year}"
         )
-        print(
-            f"- - - - - - - - - - - - - - - - - - - - - - - - - - - - Downloading report PDFs for {self.agency} - - - - - - - - - - - - - - - - - - - - - -"
-        )
-        print(
-            "|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||\n"
-        )
-        print(
-            "=============================================================================================================================\n"
-        )
-        print(
-            f"  PDF storage container: {self.settings.pdf_storage_manager.container_name}"
-        )
-        print(f"  Report titles file path: {self.settings.report_titles_file_path}")
-        print(
-            f"  Start year: {self.settings.start_year},  End year: {self.settings.end_year}"
-        )
-        print(f"  Max reports per year: {self.settings.max_per_year}")
-        print(f"  Modes: {self.settings.modes}")
-        print(f"  Ignoring report ids: {self.settings.ignored_report_ids}")
+        logger.info(f"Max reports per year: {self.settings.max_per_year}")
+        logger.info(f"Modes: {self.settings.modes}")
+        logger.info(f"Ignoring report ids: {self.settings.ignored_report_ids}")
 
     def collect_all(self):
+        """Collect reports for all configured modes."""
         # Loop through each mode
         for mode in self.settings.modes:
             self.collect_mode(mode)
@@ -306,35 +346,41 @@ class ReportScraper(WebsiteScraper, ABC):
     def get_report_urls(
         self, mode: Modes.Mode, year: int
     ) -> list[tuple[str, str, str | None]]:
-        """
-        Retrieves all the potential report urls and ids for a given mode and year.
+        """Retrieves all the potential report urls and ids for a given mode and year.
 
         This method must be implemented by subclasses to handle agency-specific
         website structures for finding report URLs.
 
-        Parameters
-        ----------
-        mode : Modes.Mode
-            The mode/type of transportation (aviation, rail, marine)
-        year : int
-            The year to search for reports
+        Args:
+            mode: The mode/type of transportation (aviation, rail, marine).
+            year: The year to search for reports.
 
-        Returns
-        -------
-        list[tuple[str, str, str | None]]
-            List of tuples containing (report_id, report_url, agency_id)
+        Returns:
+            List of tuples containing (report_id, report_url, agency_id).
         """
-        pass
 
-    def get_report_id(self, mode: Modes.Mode, year: int, id: str) -> str:
-        return f"{self.agency}_{mode.name}_{year}_{id}"
+    def get_report_id(self, mode: Modes.Mode, year: int, report_id: str) -> str:
+        """Generate a standardized report ID.
+
+        Args:
+            mode: The transportation mode.
+            year: The year of the report.
+            report_id: The agency-specific report ID.
+
+        Returns:
+            Standardized report ID in format '{agency}_{mode}_{year}_{id}'.
+        """
+        return f"{self.agency}_{mode.name}_{year}_{report_id}"
 
     def collect_mode(self, mode):
-        print(f"======== Downloading reports for mode: {mode.name}==========")
+        """Collect all reports for a specific transportation mode.
 
-        year_range = [
-            year for year in range(self.settings.start_year, self.settings.end_year + 1)
-        ]
+        Args:
+            mode: The transportation mode to collect reports for.
+        """
+        logger.info(f"Downloading reports for mode: {mode.name}")
+
+        year_range = list(range(self.settings.start_year, self.settings.end_year + 1))
 
         # Use ThreadPoolExecutor for parallel processing
         with ThreadPoolExecutor(
@@ -355,27 +401,35 @@ class ReportScraper(WebsiteScraper, ABC):
                     year_result = future.result()
                     completed_years.append(year_result)
 
-                    print(
-                        f"==Completed year {year_result['year']} for mode {mode.name}: "
+                    logger.info(
+                        f"Completed year {year_result['year']} for mode {mode.name}: "
                         f"{year_result['reports_collected']} reports collected out of {year_result['potential_reports']} in "
-                        f"{year_result['duration']:.2f} seconds=="
+                        f"{year_result['duration']:.2f} seconds"
                     )
 
-                except Exception as exc:
-                    print(f"==Year {year} generated an exception: {exc}==")
+                except Exception:
+                    logger.exception(f"Year {year} generated an exception")
 
         # Print final summary
         total_reports = sum(result["reports_collected"] for result in completed_years)
         total_time = sum(result["duration"] for result in completed_years)
         avg_time = total_time / len(completed_years) if completed_years else 0
 
-        print(f"==Finished downloading reports for mode: {mode.name}==")
-        print(f"  Total reports collected: {total_reports}")
-        print(f"  Total time: {total_time:.2f} seconds")
-        print(f"  Average time per year: {avg_time:.2f} seconds")
+        logger.info(f"Finished downloading reports for mode: {mode.name}")
+        logger.info(f"Total reports collected: {total_reports}")
+        logger.info(f"Total time: {total_time:.2f} seconds")
+        logger.info(f"Average time per year: {avg_time:.2f} seconds")
 
     def collect_year(self, year, mode):
-        """Helper method to collect a year's reports with timing information"""
+        """Helper method to collect a year's reports with timing information.
+
+        Args:
+            year: The year to collect reports for.
+            mode: The transportation mode.
+
+        Returns:
+            Dictionary with year, potential_reports, reports_collected, and duration.
+        """
         start_time = datetime.now()
 
         number_for_year = 0
@@ -402,6 +456,16 @@ class ReportScraper(WebsiteScraper, ABC):
         }
 
     def collect_report(self, report_id, url, agency_id=None):
+        """Collect a single report.
+
+        Args:
+            report_id: The unique identifier for the report.
+            url: The URL of the report page.
+            agency_id: Optional agency-specific identifier.
+
+        Returns:
+            True if report was successfully collected, False otherwise.
+        """
         if (
             not self.settings.ignore_metadata
             and self.report_titles_df.query(f"report_id == '{report_id}'").shape[0] > 0
@@ -411,18 +475,20 @@ class ReportScraper(WebsiteScraper, ABC):
         try:
             webpage = self.get(url)
         except hrequests.exceptions.ClientException as e:
-            print(f"  Timed out while trying to collect {url}: {e}")
+            logger.warning(f"Timed out while trying to collect {url}: {e}")
             return False
         except hrequests.exceptions.BrowserTimeoutException:
-            print(f"  Failed to collect {url}, timeout error")
+            logger.warning(f"Failed to collect {url}, timeout error")
             return False
         soup = BeautifulSoup(webpage.content, "html.parser")
 
-        if webpage.status_code != 200 and webpage.status_code != 404:
-            print(f"  Failed to collect {url}, status code: {webpage.status_code}")
+        if webpage.status_code not in {HTTPStatus.OK, HTTPStatus.NOT_FOUND}:
+            logger.warning(
+                f"Failed to collect {url}, status code: {webpage.status_code}"
+            )
             return False
-        elif webpage.status_code == 404:
-            print(f" Error 404: {url} not found")
+        if webpage.status_code == HTTPStatus.NOT_FOUND:
+            logger.warning(f"Error 404: {url} not found")
             return False
 
         parsed_url = urlparse(url)
@@ -440,8 +506,8 @@ class ReportScraper(WebsiteScraper, ABC):
             self.__add_report_metadata_to_df(
                 self.get_report_metadata(report_id, url, soup)
             )
-            if outcome is None:
-                outcome = True
+        elif outcome is None:
+            outcome = True
 
         return outcome
 
@@ -452,7 +518,17 @@ class ReportScraper(WebsiteScraper, ABC):
         base_url: str,
         agency_id: str | None = None,
     ):
-        """Download report directly to PDF storage container."""
+        """Download report directly to PDF storage container.
+
+        Args:
+            report_id: The standardized report identifier.
+            soup: BeautifulSoup object of the report page.
+            base_url: Base URL of the website.
+            agency_id: Optional agency-specific ID for filtering PDF links.
+
+        Returns:
+            True if successful, False if failed, None if no action taken.
+        """
         # Check if PDF already exists and we're not refreshing
         if not self.settings.refresh and self.settings.pdf_storage_manager.pdf_exists(
             report_id
@@ -474,24 +550,33 @@ class ReportScraper(WebsiteScraper, ABC):
                 timeout=30,
             )
             if response is None:
-                print(f"  {report_id}.pdf download failed: No response")
+                logger.warning(f"{report_id}.pdf download failed: No response")
                 return False
 
             # Upload to storage
             self.settings.pdf_storage_manager.upload_pdf(
                 report_id, response.content, overwrite=self.settings.refresh
             )
-
+        except Exception as e:
+            logger.warning(f"{report_id}.pdf processing failed: {e}")
+            return False
+        else:
             return True
 
-        except Exception as e:
-            print(f"  {report_id}.pdf processing failed: {e}")
-            return False
-
+    @staticmethod
     def _find_pdf_links(
-        self, soup: BeautifulSoup, report_id: str, agency_id: str | None = None
+        soup: BeautifulSoup, report_id: str, agency_id: str | None = None
     ) -> str | Literal[False]:
-        """Extract PDF links from BeautifulSoup object."""
+        """Extract PDF links from BeautifulSoup object.
+
+        Args:
+            soup: BeautifulSoup object of the report page.
+            report_id: The report identifier for logging.
+            agency_id: Optional agency-specific ID for filtering.
+
+        Returns:
+            URL of the PDF link, or False if no suitable link found.
+        """
         # Find all the links that end with .pdf and download them
         pdf_links = [
             a["href"]
@@ -503,8 +588,8 @@ class ReportScraper(WebsiteScraper, ABC):
         pdf_links = list(dict.fromkeys(pdf_links))
 
         if len(pdf_links) == 0:
-            print(
-                f"WARNING: Found no PDFs link for {report_id}. Will not download any."
+            logger.warning(
+                f"Found no PDFs link for {report_id}. Will not download any."
             )
             return False
         if len(pdf_links) > 1:
@@ -548,14 +633,14 @@ class ReportScraper(WebsiteScraper, ABC):
 
             if len(suitable_pdf_links) > 1:
                 links_str = "\n".join(suitable_pdf_links)
-                print(
-                    f"WARNING: Found more than one PDF for {report_id}. Will not download any.\n Here are the links: \n {links_str}"
+                logger.warning(
+                    f"Found more than one PDF for {report_id}. Will not download any. Here are the links: \n{links_str}"
                 )
                 return False
             if len(suitable_pdf_links) == 0:
                 links_str = "\n".join(pdf_links)
-                print(
-                    f"WARNING: Found no suitable PDF link for {report_id}. Will not download any. Here are the original links:\n{links_str}"
+                logger.warning(
+                    f"Found no suitable PDF link for {report_id}. Will not download any. Here are the original links:\n{links_str}"
                 )
                 return False
             pdf_links = suitable_pdf_links
@@ -566,29 +651,19 @@ class ReportScraper(WebsiteScraper, ABC):
     def get_report_metadata(
         self, report_id: str, url: str, soup: BeautifulSoup
     ) -> ReportMetadata:
-        """
-        Gets the investigation webpage and scrapes extra information about the report.
+        """Gets the investigation webpage and scrapes extra information about the report.
 
         This method must be implemented by subclasses to handle agency-specific
         metadata extraction from report pages.
 
-        Parameters
-        ----------
-        report_id : str
-            The identifier of the report
-        url : str
-            The URL of the report page
-        soup : BeautifulSoup
-            The BeautifulSoup object for the page
-        pbar : tqdm, optional
-            The progress bar to update, by default None
+        Args:
+            report_id: The identifier of the report.
+            url: The URL of the report page.
+            soup: The BeautifulSoup object for the page.
 
-        Returns
-        -------
-        ReportMetadata
-            The report metadata object containing extracted information
+        Returns:
+            The report metadata object containing extracted information.
         """
-        pass
 
     def __add_report_metadata_to_df(self, metadata: ReportMetadata):
         with self._metadata_file_lock:
@@ -622,7 +697,15 @@ class ReportScraper(WebsiteScraper, ABC):
 
 
 class TAICReportScraper(ReportScraper):
+    """Report scraper for the Transport Accident Investigation Commission (TAIC) of New Zealand."""
+
     def __init__(self, reports_table_path, settings: ReportScraperSettings):
+        """Initialize TAICReportScraper.
+
+        Args:
+            reports_table_path: Path to the pickle file storing TAIC investigation table.
+            settings: Configuration settings for the scraper.
+        """
         super().__init__(
             settings,
             agency="TAIC",
@@ -631,29 +714,36 @@ class TAICReportScraper(ReportScraper):
         self.agency_reports = self.__get_taic_investigations(reports_table_path)
 
     def __get_taic_investigations(self, reports_table_path):
-        """TAICs websites provides an investigation table than can be easily read by pandas read_html"""
+        """TAICs websites provides an investigation table than can be easily read by pandas read_html.
+
+        Args:
+            reports_table_path: Path to store/load the investigations table.
+
+        Returns:
+            DataFrame of TAIC investigations indexed by mode.
+        """
         if os.path.exists(reports_table_path):
             investigations = pd.read_pickle(reports_table_path)
         else:
             investigations = pd.DataFrame(columns=["id", "year"])
         page_num = 0
         while True:
-            print(f"Processing page {page_num}")
+            logger.info(f"Processing page {page_num}")
             try:
                 new_content = self.get(
                     f"https://taic.org.nz/inquiries-recommendations?type=investigation&field_jurisdiction[11]=11&field_status[260]=260&sort_by=incident&page={page_num}"
                 ).content
             except hrequests.exceptions.ClientException as e:
-                print(f"Timeout while scraping TAIC investigations: {e}")
-                print(f"Retrying page {page_num}")
+                logger.warning(f"Timeout while scraping TAIC investigations: {e}")
+                logger.info(f"Retrying page {page_num}")
                 continue
 
             soup = BeautifulSoup(new_content, "html.parser")
 
-            list = soup.find_all("div", class_="search-results__list")
+            results_list = soup.find_all("div", class_="search-results__list")
 
-            if not list or len(list) == 0:
-                print(f"Reached end of pages at page {page_num}, stopping.")
+            if not results_list or len(results_list) == 0:
+                logger.info(f"Reached end of pages at page {page_num}, stopping.")
                 break
 
             all_reports_on_page = [
@@ -665,40 +755,50 @@ class TAICReportScraper(ReportScraper):
                     .get_text(strip=True)
                     .split()[-1],
                 }
-                for report in list[0].find_all("div", recursive=False)
+                for report in results_list[0].find_all("div", recursive=False)
             ]
 
             new_reports = pd.DataFrame(
                 filter(
-                    lambda r: r["id"] not in investigations["id"].values,
+                    lambda r: r["id"] not in investigations["id"].to_numpy(),
                     all_reports_on_page,
                 )
             )
 
             if new_reports.empty:
-                print(f"No new reports found on page {page_num}, stopping.")
+                logger.info(f"No new reports found on page {page_num}, stopping.")
                 break
 
             investigations = pd.concat([investigations, new_reports], ignore_index=True)
 
-            print(
+            logger.info(
                 f"Found {len(all_reports_on_page)} reports, {len(investigations)} total"
             )
 
             page_num += 1
 
-        investigations.set_index(
-            investigations["id"].map(lambda x: Modes.Mode[x[0].lower()]),
-            inplace=True,
+        investigations_with_mode = investigations.copy()
+        investigations_with_mode.set_index(
+            investigations_with_mode["id"].map(lambda x: Modes.Mode[x[0].lower()]),
+            inplace=False,
         )
-        investigations.index.name = None
+        investigations_with_mode.index.name = None
 
         # Update the pickle file
         investigations.to_pickle(reports_table_path)
 
-        return investigations
+        return investigations_with_mode
 
     def get_report_urls(self, mode, year):
+        """Get report URLs for a specific mode and year.
+
+        Args:
+            mode: The transportation mode.
+            year: The year to get reports for.
+
+        Returns:
+            List of tuples (report_id, url, taic_id).
+        """
         return [
             (
                 self.get_report_id(mode, year, taic_id[-3:]),
@@ -710,20 +810,30 @@ class TAICReportScraper(ReportScraper):
             .to_list()
         ]
 
-    def get_report_metadata(self, report_id: str, url: str, soup: BeautifulSoup):
+    def get_report_metadata(self, report_id: str, url: str, soup: BeautifulSoup):  # noqa: PLR6301
+        """Extract report metadata from TAIC website.
+
+        Args:
+            report_id: The standardized report identifier.
+            url: The URL of the report page.
+            soup: BeautifulSoup object of the report page.
+
+        Returns:
+            ReportMetadata object with extracted information.
+        """
         headers = soup.find("div", class_="screen-head__title")
         if headers is not None:
             title = headers.find("span", class_="heading--english").text.strip()
             agency_id = headers.find("span", class_="heading--accent").text.strip()
         else:
-            print(f"Failed to get title for {report_id}")
+            logger.warning(f"Failed to get title for {report_id}")
             title = "Unknown Title"
             agency_id = None
 
         # Get the report text
         report_text_div = soup.find("div", class_="node--type-investigation")
         if report_text_div is None:
-            print(f"Failed to get report text for {report_id}")
+            logger.warning(f"Failed to get report text for {report_id}")
             summary = None
         else:
             sections = report_text_div.find_all("section", recursive=False)
@@ -732,7 +842,7 @@ class TAICReportScraper(ReportScraper):
 
             summary = executive_summary_section.find("p").get_text().strip()
 
-            if summary is None or summary == "":
+            if not summary:
                 summary = None
 
         return ReportMetadata(
@@ -748,16 +858,35 @@ class TAICReportScraper(ReportScraper):
 
 
 class ATSBReportScraper(ReportScraper):
+    """Report scraper for the Australian Transport Safety Bureau (ATSB)."""
+
     def __init__(
         self,
         website_reports_file_name,
         settings: ReportScraperSettings,
     ):
+        """Initialize ATSBReportScraper.
+
+        Args:
+            website_reports_file_name: Path to pickle file storing ATSB investigations.
+            settings: Configuration settings for the scraper.
+        """
         super().__init__(settings, agency="ATSB")
         self.agency_reports = self.__get_atsb_investigations(website_reports_file_name)
 
     def __get_atsb_investigations(self, website_reports_file_name=None):
-        """ATSBs websites provides an investigation table than can be easily read by pandas read_html. The only catch is that the aviation goes all the way back to 1960s and so only the first few pages of the aviation table is scraped. It will then be combined with a complete scrape of the table to find the new ids."""
+        """ATSBs websites provides an investigation table than can be easily read by pandas read_html.
+
+        The only catch is that the aviation goes all the way back to 1960s and so only the first few
+        pages of the aviation table is scraped. It will then be combined with a complete scrape of
+        the table to find the new ids.
+
+        Args:
+            website_reports_file_name: Path to existing investigations file.
+
+        Returns:
+            DataFrame of ATSB investigations indexed by mode.
+        """
         if website_reports_file_name is None or not os.path.exists(
             website_reports_file_name
         ):
@@ -818,13 +947,12 @@ class ATSBReportScraper(ReportScraper):
 
                     page_df = page_df.map(lambda x: x[0] if isinstance(x, tuple) else x)
 
-                    page_df.rename(
+                    page_df = page_df.rename(
                         {
                             "Occurrence date  Sort ascending": "Occurrence date",
                             "Occurrence date  Sort descending": "Occurrence date",
                         },
                         axis=1,
-                        inplace=True,
                     )
 
                     new_investigations = page_df[
@@ -861,16 +989,18 @@ class ATSBReportScraper(ReportScraper):
 
                     page_num += 1
                 except hrequests.exceptions.ClientException as e:
-                    print(f"Timeout while trying to scrape {mode} page {page_num}: {e}")
-                    print("Retrying...")
+                    logger.warning(
+                        f"Timeout while trying to scrape {mode} page {page_num}: {e}"
+                    )
+                    logger.info("Retrying...")
                     continue
                 except (ValueError, TypeError) as e:
-                    print(f"Failed to scrape {mode} page {page_num}: {e}")
-                    print(f"Assuming end of {mode} reports")
+                    logger.warning(f"Failed to scrape {mode} page {page_num}: {e}")
+                    logger.info(f"Assuming end of {mode} reports")
                     break
 
             if len(pages) == 0:
-                print(f"No investigations found for mode: {mode}")
+                logger.warning(f"No investigations found for mode: {mode}")
                 continue
 
             mode_investigations = pd.concat(
@@ -887,16 +1017,25 @@ class ATSBReportScraper(ReportScraper):
             dfs, axis=0, keys=self.settings.modes
         ).reset_index(level=1, drop=True)
 
-        investigations = investigations = pd.concat(
+        updated_investigations = pd.concat(
             [investigations, new_investigations],
             axis=0,
         )
         if website_reports_file_name is not None:
-            investigations.to_pickle(website_reports_file_name)
+            updated_investigations.to_pickle(website_reports_file_name)
 
-        return investigations
+        return updated_investigations
 
     def get_report_urls(self, mode, year):
+        """Get report URLs for a specific mode and year.
+
+        Args:
+            mode: The transportation mode.
+            year: The year to get reports for.
+
+        Returns:
+            List of tuples (report_id, url, atsb_id).
+        """
         return [
             (self.get_report_id(mode, year, str(atsb_id)[-3:]), url, str(atsb_id))
             for atsb_id, url in self.agency_reports.loc[mode]
@@ -913,6 +1052,16 @@ class ATSBReportScraper(ReportScraper):
     def get_report_metadata(
         self, report_id: str, url: str, soup: BeautifulSoup
     ) -> ReportMetadata:
+        """Extract report metadata from ATSB website.
+
+        Args:
+            report_id: The standardized report identifier.
+            url: The URL of the report page.
+            soup: BeautifulSoup object of the report page.
+
+        Returns:
+            ReportMetadata object with extracted information.
+        """
         report_mode = Modes.get_report_mode_from_id(report_id)
         event_type = None
         if report_mode is Modes.Mode.a:
@@ -945,7 +1094,7 @@ class ATSBReportScraper(ReportScraper):
         investigation_type = "unknown"
         if investigation_level is None:
             investigation_type = "unknown"
-        elif investigation_level in ["Defined", "Systemic"]:
+        elif investigation_level in {"Defined", "Systemic"}:
             investigation_type = "full"
         else:
             investigation_type = "short"
@@ -961,10 +1110,17 @@ class ATSBReportScraper(ReportScraper):
             misc={"investigation_level": investigation_level},
         )
 
-    def get_summary(self, soup):
-        """
-        Gets the summary from the soup object.
+    @staticmethod
+    def get_summary(soup):
+        """Gets the summary from the soup object.
+
         This is a placeholder as ATSB does not have a summary field in the report metadata.
+
+        Args:
+            soup: BeautifulSoup object of the report page.
+
+        Returns:
+            Summary text if found, None otherwise.
         """
         summary_div = soup.find("div", class_="field--type-text-with-summary")
         if summary_div is None:
@@ -984,9 +1140,7 @@ class ATSBReportScraper(ReportScraper):
                 break
 
         if h2 is None:  # Return the full text is no summary is found.
-            full_text = summary_div.get_text(" ", strip=True)
-            # Could do check to see if it is smale than som uppper bound but for now will just return the full scrap which may be very large.
-            return full_text
+            return summary_div.get_text(" ", strip=True)
 
         summary_parts = []
         for sibling in h2.find_next_siblings():
@@ -998,19 +1152,30 @@ class ATSBReportScraper(ReportScraper):
             ):
                 break
             summary_parts.append(sibling.get_text(" ", strip=True))
-        summary = "\n".join([part for part in summary_parts if part.strip()])
-        return summary
+        return "\n".join([part for part in summary_parts if part.strip()])
 
 
 class TSBReportScraper(ReportScraper):
+    """Report scraper for the Transportation Safety Board (TSB) of Canada."""
+
     def __init__(self, settings: ReportScraperSettings):
+        """Initialize TSBReportScraper.
+
+        Args:
+            settings: Configuration settings for the scraper.
+        """
         super().__init__(settings, agency="TSB")
 
         self.agency_reports = self.__get_tsb_investigations()
 
     def __get_tsb_investigations(self):
-        """
-        The TSB is very well setup and works friendly with the pandas read_html. Therefore I can just read all of the investigation tables from the TSB website and then have the exact IDs I need.
+        """The TSB is very well setup and works friendly with the pandas read_html.
+
+        Therefore I can just read all of the investigation tables from the TSB website
+        and then have the exact IDs I need.
+
+        Returns:
+            DataFrame of TSB investigations indexed by mode.
         """
         modes = ["aviation", "rail", "marine"]
 
@@ -1039,6 +1204,15 @@ class TSBReportScraper(ReportScraper):
         return merged_modes_df
 
     def get_report_urls(self, mode, year):
+        """Get report URLs for a specific mode and year.
+
+        Args:
+            mode: The transportation mode.
+            year: The year to get reports for.
+
+        Returns:
+            List of tuples (report_id, url, tsb_id).
+        """
         return [
             (
                 self.get_report_id(mode, year, tsb_id[-5:]),
@@ -1052,9 +1226,86 @@ class TSBReportScraper(ReportScraper):
             .to_list()
         ]
 
+    def _extract_title_from_title_block(self, title_block):  # noqa: PLR6301
+        """Extract title information from the title block element.
+
+        Args:
+            title_block: The BeautifulSoup element containing title block.
+
+        Returns:
+            Tuple of (title_text, event_type).
+        """
+        event_type = title_block.find("strong")
+        if event_type:
+            event_type = event_type.text
+
+        legacy_text_div = title_block.find(
+            "div", class_="field--name-field-occurrence-legacy-text"
+        )
+        paragraph_text = []
+        if legacy_text_div:
+            paragraph = legacy_text_div.find("p")
+            if paragraph:
+                paragraph_text = list(paragraph.stripped_strings)
+            else:
+                paragraph_text = list(legacy_text_div.stripped_strings)
+
+        date_div = title_block.find("div", class_="field--name-field-occurrence-date")
+        date_text = ""
+        if date_div:
+            time_tag = date_div.find("time")
+            if time_tag:
+                date_text = time_tag.text
+
+        title = ", ".join([*paragraph_text, date_text])
+        return title, event_type
+
+    def _extract_investigation_level(self, soup):  # noqa: PLR6301
+        """Extract investigation level from soup.
+
+        Args:
+            soup: BeautifulSoup object of the report page.
+
+        Returns:
+            Investigation level string or None.
+        """
+        investigation_level = None
+        h3_element = soup.find("h3", string="Class of investigation")
+        if h3_element:
+            text = h3_element.find_next_sibling("p").text
+            match = re.match(r"This is a class (\d) investigation", text)
+            if match:
+                investigation_level = match.group(1)
+        return investigation_level
+
+    def _get_investigation_type(self, investigation_level):  # noqa: PLR6301
+        """Get investigation type string from investigation level.
+
+        Args:
+            investigation_level: The investigation level string or None.
+
+        Returns:
+            Investigation type string.
+        """
+        if investigation_level is None:
+            return "unknown"
+        if investigation_level in {"1", "2", "3"}:
+            return "full"
+        return "short"
+
     def get_report_metadata(
         self, report_id: str, url: str, soup: BeautifulSoup
     ) -> ReportMetadata:
+        """Extract report metadata from TSB website.
+
+        Args:
+            report_id: The standardized report identifier.
+            url: The URL of the report page.
+            soup: BeautifulSoup object of the report page.
+
+        Returns:
+            ReportMetadata object with extracted information.
+        """
         # Due to TSB having the metadata on a page separate from the report pdf link, we need to get the new page
         split_id = report_id.split("_")
         tsb_id = f"{split_id[1]}{split_id[2][2:4]}{split_id[3]}"
@@ -1081,41 +1332,10 @@ class TSBReportScraper(ReportScraper):
                 misc={},
                 agency_id=None,
             )
-        else:
-            event_type = title_block.find("strong")
-            if event_type:
-                event_type = event_type.text
-        legacy_text_div = title_block.find(
-            "div", class_="field--name-field-occurrence-legacy-text"
-        )
-        paragraph_text = []
-        if legacy_text_div:
-            # Handle case where <p> tag is present
-            paragraph = legacy_text_div.find("p")
-            if paragraph:
-                paragraph_text = [text for text in paragraph.stripped_strings]
-            else:
-                # Handle case where <p> tag is not present
-                paragraph_text = [text for text in legacy_text_div.stripped_strings]
 
-        date_div = title_block.find("div", class_="field--name-field-occurrence-date")
-        date_text = ""
-        if date_div:
-            time_tag = date_div.find("time")
-            if time_tag:
-                date_text = time_tag.text
-
-        all_text = ", ".join(paragraph_text + [date_text])
-
-        # Get investigation level
-        investigation_level = None
-
-        h3_element = soup.find("h3", string="Class of investigation")
-        if h3_element:
-            text = h3_element.find_next_sibling("p").text
-            match = re.match(r"This is a class (\d) investigation", text)
-            if match:
-                investigation_level = match.group(1)
+        title, event_type = self._extract_title_from_title_block(title_block)
+        investigation_level = self._extract_investigation_level(soup)
+        investigation_type = self._get_investigation_type(investigation_level)
 
         agency_id = soup.find("h1", class_="page-header").text
         if agency_id is not None:
@@ -1124,13 +1344,9 @@ class TSBReportScraper(ReportScraper):
         return ReportMetadata(
             url=url,
             report_id=report_id,
-            title=all_text,
+            title=title,
             event_type=event_type,
-            investigation_type="unknown"
-            if investigation_level is None
-            else "full"
-            if investigation_level in ["1", "2", "3"]
-            else "short",
+            investigation_type=investigation_type,
             agency_id=agency_id,
             summary=None,  # TSB does not include summary text. However the press releases provide a summary of sorts.
             misc={"investigation_class": investigation_level},
@@ -1138,14 +1354,113 @@ class TSBReportScraper(ReportScraper):
 
 
 class ATSBSafetyIssueScraper(WebsiteScraper):
+    """Scraper for extracting safety issues from the Australian Transport Safety Bureau (ATSB) website."""
+
     def __init__(
         self, output_file_path: str, report_titles_file_path, refresh: bool = False
     ):
+        """Initialize ATSBSafetyIssueScraper.
+
+        Args:
+            output_file_path: Path to save the extracted safety issues.
+            report_titles_file_path: Path to the report titles pickle file.
+            refresh: Whether to refresh all safety issues from scratch.
+        """
         super().__init__(report_titles_file_path)
         self.output_file_path = output_file_path
         self.refresh = refresh
 
+    def _process_safety_issues_page(self, html_content, mode, current_page, pbar):  # noqa: PLR6301
+        """Process a single page of safety issues.
+
+        Args:
+            html_content: The HTML content of the page.
+            mode: The transportation mode (A, R, M).
+            current_page: The current page number.
+            pbar: The progress bar object.
+
+        Returns:
+            DataFrame of safety issues from the page, or None if page has no issues.
+        """
+        soup = BeautifulSoup(html_content, "html.parser")
+
+        if not soup.find("div", class_="view-content"):
+            pbar.write(
+                f"Failed to scrape page {current_page} of mode {mode}. No table found"
+            )
+            return None
+
+        safety_issues = [
+            {
+                field.find(class_="field__label").get_text(strip=True): field.find(
+                    class_="field__item"
+                ).get_text(strip=True)
+                for field in row.find_all(class_="field--label-inline")
+            }
+            for row in soup.find("div", class_="view-content").children
+            if not isinstance(row, str)
+        ]
+        table = pd.DataFrame(safety_issues)
+
+        if "Safety issue title" not in table.columns:
+            pbar.write(
+                f"Failed to scrape page {current_page} of mode {mode}. Page contains no safety issues"
+            )
+            return None
+
+        table["safety_issue"] = table.apply(
+            lambda row: (
+                f"{row['Safety issue title']}\n{row['Safety Issue Description']}"
+            ),
+            axis=1,
+        )
+
+        table["safety_issue_id"] = table["Issue number"].astype(str)
+        return table
+
+    def _format_and_save_safety_issues(self, safety_issue_df):
+        """Format safety issues and save to pickle file.
+
+        Args:
+            safety_issue_df: DataFrame containing all safety issues.
+        """
+        safety_issue_df = safety_issue_df.drop_duplicates(subset=["safety_issue_id"])
+
+        safety_issue_df["report_id"] = (
+            safety_issue_df["safety_issue_id"]
+            .map(
+                # This needed because the safety issue id is simply the agency_id plus some extrae identifiers on the end.
+                lambda x: "-".join(x.split("-")[0:3])
+            )
+            .map(
+                lambda x: (
+                    self.id_converter("ATSB", x)
+                    if self.id_converter("ATSB", x)
+                    else f"Unmatched ({x})"
+                )
+            )
+        )
+        safety_issue_df["quality"] = "exact"
+        safety_issue_df = safety_issue_df[
+            ["report_id", "safety_issue_id", "safety_issue", "quality"]
+        ]
+
+        logger.info(f"Now there are {safety_issue_df.shape[0]} safety issues")
+
+        grouped = safety_issue_df.groupby("report_id")
+        formatted_df = pd.DataFrame(
+            {
+                "report_id": grouped.groups.keys(),
+                "safety_issues": [group.reset_index(drop=True) for _, group in grouped],
+            }
+        )
+
+        logger.info(f"Spread across {formatted_df.shape[0]} reports")
+
+        formatted_df.to_pickle(self.output_file_path)
+
     def extract_safety_issues_from_website(self):
+        """Extract all safety issues from ATSB website."""
         if os.path.exists(self.output_file_path) and not self.refresh:
             safety_issues_df = pd.read_pickle(self.output_file_path)
         else:
@@ -1161,68 +1476,38 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
                 columns=["safety_issue_id", "safety_issue", "quality"]
             )
 
-        print(
-            "-------------------------- Scraping safety issues from ATSB ----------------------"
-        )
-        print(f"     Output file: {self.output_file_path}")
-        print(f"     Currently have {widened_safety_issues_df.shape[0]} safety issues")
-        print(f"     Spread across {len(safety_issues_df)} reports")
-        print(
-            "----------------------------------------------------------------------------------"
-        )
+        logger.info("Scraping safety issues from ATSB")
+        logger.info(f"Output file: {self.output_file_path}")
+        logger.info(f"Currently have {widened_safety_issues_df.shape[0]} safety issues")
+        logger.info(f"Spread across {len(safety_issues_df)} reports")
 
         for mode in (pbar := tqdm(["A", "R", "M"])):
             current_page = 0
             pbar.set_description(f"Scraping {mode} safety issues")
 
+            max_failures = 5
             failed = 0
             while True:
                 pbar.set_description(f"Scraping page {current_page} of mode {mode}")
                 url = base_url.format(mode=mode, page=current_page)
                 response = self.get(url)
 
-                if response.status_code != 200:
+                if response.status_code != HTTPStatus.OK:
                     pbar.write(
                         f"Failed to scrape page {current_page} of mode {mode}\nWith error {response.status_code}"
                     )
                     failed += 1
-                    if failed > 5:
+                    if failed > max_failures:
                         failed = 0
                         current_page += 1
                     continue
 
-                soup = BeautifulSoup(response.content, "html.parser")
-
-                if not soup.find("div", class_="view-content"):
-                    pbar.write(
-                        f"Failed to scrape page {current_page} of mode {mode}. No table found"
-                    )
-                    break
-
-                safety_issues = [
-                    {
-                        field.find(class_="field__label").get_text(
-                            strip=True
-                        ): field.find(class_="field__item").get_text(strip=True)
-                        for field in row.find_all(class_="field--label-inline")
-                    }
-                    for row in soup.find("div", class_="view-content").children
-                    if not isinstance(row, str)
-                ]
-                table = pd.DataFrame(safety_issues)
-
-                if "Safety issue title" not in table.columns:
-                    pbar.write(
-                        f"Failed to scrape page {current_page} of mode {mode}. Page contains no safety issues"
-                    )
-                    break
-
-                table["safety_issue"] = table.apply(
-                    lambda row: f"{row['Safety issue title']}\n{row['Safety Issue Description']}",
-                    axis=1,
+                table = self._process_safety_issues_page(
+                    response.content, mode, current_page, pbar
                 )
 
-                table["safety_issue_id"] = table["Issue number"].astype(str)
+                if table is None:
+                    break
 
                 new_safety_issues = table[
                     ~table["safety_issue_id"].isin(
@@ -1242,49 +1527,16 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
 
                 current_page += 1
 
-        widened_safety_issues_df = widened_safety_issues_df.drop_duplicates(
-            subset=["safety_issue_id"]
-        )
-
-        widened_safety_issues_df["report_id"] = (
-            widened_safety_issues_df["safety_issue_id"]
-            .map(
-                # This needed because the safety issue id is simply the agency_id plus some extrae identifiers on the end.
-                lambda x: "-".join(x.split("-")[0:3])
-            )
-            .map(
-                lambda x: self.id_converter("ATSB", x)
-                if self.id_converter("ATSB", x)
-                else f"Unmatched ({x})"
-            )
-        )
-        widened_safety_issues_df["quality"] = "exact"
-        widened_safety_issues_df = widened_safety_issues_df[
-            ["report_id", "safety_issue_id", "safety_issue", "quality"]
-        ]
-
-        print(f"  Now there are {widened_safety_issues_df.shape[0]} safety issues")
-
-        grouped = widened_safety_issues_df.groupby("report_id")
-        formatted_df = pd.DataFrame(
-            {
-                "report_id": grouped.groups.keys(),
-                "safety_issues": [group.reset_index(drop=True) for _, group in grouped],
-            }
-        )
-
-        print(f"  Spread across {formatted_df.shape[0]} reports")
-
-        formatted_df.to_pickle(self.output_file_path)
+        self._format_and_save_safety_issues(widened_safety_issues_df)
 
 
 class RecommendationScraper(WebsiteScraper, ABC):
-    """
-    Abstract base class for scraping recommendations from different transportation safety agencies.
+    """Abstract base class for scraping recommendations from different transportation safety agencies.
+
     Subclasses must implement abstract methods to handle agency-specific website structures.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913,PLR0917
         self,
         output_file_path: str,
         report_titles_file_path: str,
@@ -1294,6 +1546,17 @@ class RecommendationScraper(WebsiteScraper, ABC):
         agency: str,
         refresh: bool = False,
     ):
+        """Initialize RecommendationScraper.
+
+        Args:
+            output_file_path: Path to save the extracted recommendations.
+            report_titles_file_path: Path to the report titles pickle file.
+            columns: List of column names for the recommendations DataFrame.
+            base_url: Base URL of the agency website.
+            loop_iter: Iterator for pagination or mode iteration.
+            agency: The agency name (e.g., 'TSB', 'TAIC').
+            refresh: Whether to refresh all recommendations from scratch.
+        """
         super().__init__(report_titles_file_path)
 
         self.output_file_path = output_file_path
@@ -1304,6 +1567,7 @@ class RecommendationScraper(WebsiteScraper, ABC):
         self.agency = agency
 
     def extract_recommendations_from_website(self):
+        """Extract all recommendations from the agency website."""
         if not self.refresh and os.path.exists(self.output_file_path):
             recommendations_df = pd.read_pickle(self.output_file_path)
         else:
@@ -1311,22 +1575,17 @@ class RecommendationScraper(WebsiteScraper, ABC):
 
         new_recommendations = pd.DataFrame(columns=self.columns)
 
-        print(
-            "------------------------ Scraping recommendations ------------------------"
+        logger.info("Scraping recommendations")
+        logger.info(f"Output directory: {self.output_file_path}")
+        logger.info(f"Scraping from base url {self.base_url}")
+        logger.info(
+            f"Currently have {recommendations_df.shape[0]} reports with recommendations"
         )
-        print(f"    Output directory: {self.output_file_path}")
-        print(f"    Scraping from base url {self.base_url}")
-        print(
-            f"    Currently have {recommendations_df.shape[0]} reports with recommendations"
-        )
-        print(
-            f"    With {recommendations_df['recommendations'].apply(len).sum()} recommendations"
-        )
-        print(
-            "----------------------------------------------------------------------------------"
+        logger.info(
+            f"With {recommendations_df['recommendations'].apply(len).sum()} recommendations"
         )
 
-        print("  Reading recommendation tables to get recommendations webpages")
+        logger.info("Reading recommendation tables to get recommendations webpages")
 
         all_recommendation_ids = pd.concat(
             recommendations_df["recommendations"].tolist()
@@ -1351,8 +1610,8 @@ class RecommendationScraper(WebsiteScraper, ABC):
                 [new_recommendations, table], ignore_index=True
             )
 
-        print(
-            f"  Found {new_recommendations.shape[0]} new recommendations, reading each individual webpage now"
+        logger.info(
+            f"Found {new_recommendations.shape[0]} new recommendations, reading each individual webpage now"
         )
 
         for i, row in (phbar := tqdm(list(new_recommendations.iterrows()))):
@@ -1361,12 +1620,14 @@ class RecommendationScraper(WebsiteScraper, ABC):
             )
             recommendation_data = self.extract_recommendation_data(row["url"])
             for key, value in recommendation_data.items():
-                new_recommendations.at[i, key] = value
+                new_recommendations.loc[i, key] = value
 
         new_recommendations["report_id"] = new_recommendations["agency_id"].map(
-            lambda x: self.id_converter(self.agency, x)
-            if self.id_converter(self.agency, x)
-            else f"Unmatched {self.agency} ({x})"
+            lambda x: (
+                self.id_converter(self.agency, x)
+                if self.id_converter(self.agency, x)
+                else f"Unmatched {self.agency} ({x})"
+            )
         )
 
         recommendations_df = pd.concat(
@@ -1391,48 +1652,35 @@ class RecommendationScraper(WebsiteScraper, ABC):
 
     @abstractmethod
     def extract_recommendation_data(self, url) -> dict:
-        """
-        Goes to the URL and extracts the needed data.
+        """Goes to the URL and extracts the needed data.
 
         This method must be implemented by subclasses to handle agency-specific
         recommendation data extraction from individual recommendation pages.
 
-        Parameters
-        ----------
-        url : str
-            The URL of the recommendation page
+        Args:
+            url: The URL of the recommendation page.
 
-        Returns
-        -------
-        dict
-            Dictionary containing extracted recommendation data
+        Returns:
+            Dictionary containing extracted recommendation data.
         """
-        pass
 
     @abstractmethod
     def process_new_table(self, table) -> pd.DataFrame:
-        """
-        Takes a recently read table and processes it according to agency-specific rules.
+        """Takes a recently read table and processes it according to agency-specific rules.
 
         This method must be implemented by subclasses to handle agency-specific
         table processing and column mapping.
 
-        Parameters
-        ----------
-        table : pd.DataFrame
-            The raw table data from the website
+        Args:
+            table: The raw table data from the website.
 
-        Returns
-        -------
-        pd.DataFrame
-            Processed table with standardized columns
+        Returns:
+            Processed table with standardized columns.
         """
-        pass
 
     @abstractmethod
     def get_url(self, element) -> str:
-        """
-        Generates the URL for a given element (page number, mode, etc.).
+        """Generates the URL for a given element (page number, mode, etc.).
 
         This method must be implemented by subclasses to handle agency-specific
         URL generation patterns.
@@ -1442,17 +1690,15 @@ class RecommendationScraper(WebsiteScraper, ABC):
         element : Any
             The element used to generate the URL (e.g., page number, mode)
 
-        Returns
+        Returns:
         -------
         str
             The complete URL for the given element
         """
-        pass
 
     @abstractmethod
     def get_table(self, element) -> pd.DataFrame:
-        """
-        Retrieves the recommendation table from the website for a given element.
+        """Retrieves the recommendation table from the website for a given element.
 
         This method must be implemented by subclasses to handle agency-specific
         table retrieval logic.
@@ -1462,16 +1708,24 @@ class RecommendationScraper(WebsiteScraper, ABC):
         element : Any
             The element used to retrieve the table (e.g., page number, mode)
 
-        Returns
+        Returns:
         -------
         pd.DataFrame
             The recommendation table retrieved from the website
         """
-        pass
 
 
 class TSBRecommendationsScraper(RecommendationScraper):
+    """Recommendations scraper for the Transportation Safety Board (TSB) of Canada."""
+
     def __init__(self, output_file_path, report_titles_file_path, refresh=False):
+        """Initialize TSBRecommendationsScraper.
+
+        Args:
+            output_file_path: Path to save the extracted recommendations.
+            report_titles_file_path: Path to the report titles pickle file.
+            refresh: Whether to refresh all recommendations from scratch.
+        """
         columns = [
             "recommendation_id",
             "recommendation",
@@ -1498,16 +1752,32 @@ class TSBRecommendationsScraper(RecommendationScraper):
         )
 
     def get_url(self, element):
+        """Get the URL for a recommendation element.
+
+        Args:
+            element: The element identifier.
+
+        Returns:
+            The URL string for the recommendation.
+        """
         return (
             f"{self.base_url}/eng/recommandations-recommendations/{element}/index.html"
         )
 
     def get_table(self, element):
+        """Get the recommendations table for a specific element.
+
+        Args:
+            element: The element identifier.
+
+        Returns:
+            DataFrame containing the recommendations table.
+        """
         url = self.get_url(element)
         response = self.get(url)
 
-        if response.status_code != 200:
-            print(
+        if response.status_code != HTTPStatus.OK:
+            logger.warning(
                 f"Failed to scrape recommendations from {url}. Error code {response.status_code}"
             )
             return pd.DataFrame()
@@ -1519,21 +1789,34 @@ class TSBRecommendationsScraper(RecommendationScraper):
         )
 
         if len(tables) == 0:
-            print(f"No tables found on {url}")
+            logger.warning(f"No tables found on {url}")
             return pd.DataFrame()
         if len(tables) > 1:
-            print(f"Multiple tables found on {url}, using the first one")
+            logger.info(f"Multiple tables found on {url}, using the first one")
         return tables[0]
 
     def extract_recommendation_data(self, url):
-        """
+        """Read the webpage and extract recommendation data.
+
         This will read the webpage and extract:
         - recommendation (This is because sometimes the recommendation inside the website table is not complete)
         - recommednation date
         - recommendation context
         ## TODO: Add in the recipient and reply text. This is not done at the moment as it is not needed
         - recipient
-        - reply text
+        - reply text.
+
+        Args:
+            url: The URL of the recommendation page.
+
+        Returns:
+            Dictionary containing extracted recommendation data with keys:
+            - recommendation: The recommendation text
+            - made: The date recommendation was made
+            - recommendation_context: The context/rationale for the recommendation
+
+        Raises:
+            ValueError: If the webpage cannot be accessed (non-200 status code).
         """
         if url is None:
             return {
@@ -1544,10 +1827,9 @@ class TSBRecommendationsScraper(RecommendationScraper):
 
         response = self.get(url)
 
-        if response.status_code != 200:
-            raise ValueError(
-                f"Failed to scrape recommendations from {url}. Error code {response.status_code}"
-            )
+        if response.status_code != HTTPStatus.OK:
+            msg = f"Failed to scrape recommendations from {url}. Error code {response.status_code}"
+            raise ValueError(msg)
 
         soup = BeautifulSoup(response.content, "html.parser")
 
@@ -1579,6 +1861,14 @@ class TSBRecommendationsScraper(RecommendationScraper):
         }
 
     def process_new_table(self, table):
+        """Process a new recommendations table.
+
+        Args:
+            table: The raw recommendations table to process.
+
+        Returns:
+            Processed recommendations table with normalized columns.
+        """
         # filter out older recommendations that are from the previous century
         table = table[
             table["Number"]
@@ -1602,17 +1892,23 @@ class TSBRecommendationsScraper(RecommendationScraper):
 
         # Give proper column names
         table.columns = self.columns[:7]
-        table.drop("recommendation", axis=1, inplace=True)
-        return table
+        return table.drop("recommendation", axis=1)
 
 
 class TAICRecommendationsScraper(RecommendationScraper):
-    """
-    Recommendation scraper for the Transport Accident Investigation Commission (TAIC) of New Zealand.
+    """Recommendation scraper for the Transport Accident Investigation Commission (TAIC) of New Zealand.
+
     This scraper extracts recommendations from the TAIC recommendations webpage.
     """
 
     def __init__(self, output_file_path, report_titles_file_path, refresh=False):
+        """Initialize TAICRecommendationsScraper.
+
+        Args:
+            output_file_path: Path to save the extracted recommendations.
+            report_titles_file_path: Path to the report titles pickle file.
+            refresh: Whether to refresh all recommendations from scratch.
+        """
         columns = [
             "recommendation_id",
             "made",
@@ -1636,22 +1932,38 @@ class TAICRecommendationsScraper(RecommendationScraper):
         )
 
     def get_url(self, element):
+        """Get the URL for a recommendations page element.
+
+        Args:
+            element: The page number or element identifier.
+
+        Returns:
+            The URL string for the recommendations page.
+        """
         return f"{self.base_url}/inquiries-recommendations?type=recommendation&field_recipient_name=All&sort_by=latest&page={element}"
 
     def get_table(self, element) -> pd.DataFrame:
+        """Get the recommendations table for a specific page.
+
+        Args:
+            element: The page number or element identifier.
+
+        Returns:
+            DataFrame containing recommendations from the page.
+        """
         url = self.get_url(element)
 
         try:
             response = self.get(url)
         except hrequests.exceptions.ClientException as e:
-            print(f"Timeout while scraping TAIC recommendations listing: {e}")
+            logger.warning(f"Timeout while scraping TAIC recommendations listing: {e}")
             return pd.DataFrame(columns=["recommendation_id", "url"])
 
         soup = BeautifulSoup(response.content, "html.parser")
 
         results_list = soup.select_one("div.search-results__list")
         if not results_list:
-            print(
+            logger.info(
                 f"Reached end of pages at page {element} (no results list), stopping."
             )
             return pd.DataFrame(columns=["recommendation_id", "url"])
@@ -1664,7 +1976,7 @@ class TAICRecommendationsScraper(RecommendationScraper):
         #   </div>
         cards = results_list.select("div.card.card-type--recommendation")
         if not cards:
-            print(f"Reached end of pages at page {element} (no cards), stopping.")
+            logger.info(f"Reached end of pages at page {element} (no cards), stopping.")
             return pd.DataFrame(columns=["recommendation_id", "url"])
 
         rows: list[dict[str, str]] = []
@@ -1682,20 +1994,41 @@ class TAICRecommendationsScraper(RecommendationScraper):
 
         return pd.DataFrame(rows, columns=["recommendation_id", "url"])
 
-    def process_new_table(self, table):
+    def process_new_table(self, table):  # noqa: PLR6301
+        """Process a new recommendations table.
+
+        Args:
+            table: The raw recommendations table to process.
+
+        Returns:
+            Processed recommendations table (unchanged in this implementation).
+        """
         return table
 
     def extract_recommendation_data(self, url) -> dict:
-        """
-        It will read the actual recommendation page and extract the needed data.
-        This will extract information that is not found in the table
+        """Read the actual recommendation page and extract needed data.
+
+        This will extract information that is not found in the table:
         - recommendation_text
         - reply_text (not currently extracted because new website does not support it)
         - recipient
         - made
-        - agency_id
-        """
+        - agency_id.
 
+        Args:
+            url: The URL of the recommendation page.
+
+        Returns:
+            Dictionary containing extracted recommendation data with keys:
+            - recommendation: The recommendation text
+            - reply_text: Any reply text (may be None)
+            - recipient: The recipient of the recommendation
+            - made: The date the recommendation was made
+            - agency_id: The agency identifier
+
+        Raises:
+            ValueError: If the webpage cannot be accessed (non-200 status code).
+        """
         if url is None:
             return {
                 "recommendation": None,
@@ -1707,10 +2040,9 @@ class TAICRecommendationsScraper(RecommendationScraper):
 
         response = self.get(url)
 
-        if response.status_code != 200:
-            raise ValueError(
-                f"Failed to scrape recommendation from {url}. Error code {response.status_code}"
-            )
+        if response.status_code != HTTPStatus.OK:
+            msg = f"Failed to scrape recommendation from {url}. Error code {response.status_code}"
+            raise ValueError(msg)
 
         soup = BeautifulSoup(response.content, "html.parser")
 
@@ -1756,12 +2088,12 @@ class TAICRecommendationsScraper(RecommendationScraper):
             if "Related inquiries" in out
             else None
         )
-        made = out.get("Issue date", None)
+        made = out.get("Issue date")
 
         return {
             "recommendation": recommendation_text,
             "reply_text": None,
-            "recipient": out.get("Recipient", None),
+            "recipient": out.get("Recipient"),
             "made": made,
             "agency_id": agency_id,
         }

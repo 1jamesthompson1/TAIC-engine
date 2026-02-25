@@ -1,5 +1,4 @@
-"""
-This is designed for TAIC staff to easily download/copy/delete blobs. There are some assumtpions made about storage structure.
+"""This is designed for TAIC staff to easily download/copy/delete blobs. There are some assumtpions made about storage structure.
 
 Why:
 - In containers, `azcopy login` can fail (no keyring).
@@ -33,10 +32,9 @@ from __future__ import annotations
 
 import argparse
 import os
-import shlex
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import dotenv
@@ -56,22 +54,22 @@ dotenv.load_dotenv(_repo_root() / ".env")
 def _require_env(name: str) -> str:
     val = os.getenv(name)
     if not val:
-        raise SystemExit(
+        msg = (
             f"Missing required environment variable {name}. "
             f"Create {_repo_root() / '.env'} and set it, or export it in your shell."
         )
+        raise SystemExit(msg)
     return val
 
 
 def _run(cmd: list[str]) -> int:
-    print("+ " + " ".join(shlex.quote(c) for c in cmd))
     return subprocess.call(cmd)
 
 
 def _generate_sas(
     *, account: str, key: str, container: str, expiry_hours: int = 1
 ) -> str:
-    expiry = (datetime.now(timezone.utc) + timedelta(hours=expiry_hours)).strftime(
+    expiry = (datetime.now(UTC) + timedelta(hours=expiry_hours)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
 
@@ -97,19 +95,35 @@ def _generate_sas(
     try:
         out = subprocess.check_output(cmd, text=True).strip()
     except FileNotFoundError as e:
-        raise SystemExit(
-            "`az` (Azure CLI) not found. Install Azure CLI inside the dev machine."
-        ) from e
+        msg = "`az` (Azure CLI) not found. Install Azure CLI inside the dev machine."
+        raise SystemExit(msg) from e
     except subprocess.CalledProcessError as e:
-        raise SystemExit(f"Failed to generate SAS token (exit {e.returncode}).") from e
+        msg = f"Failed to generate SAS token (exit {e.returncode})."
+        raise SystemExit(msg) from e
 
     if not out:
-        raise SystemExit("Azure CLI returned an empty SAS token.")
+        msg = "Azure CLI returned an empty SAS token."
+        raise SystemExit(msg)
 
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0912, PLR0915
+    """Generate SAS token and execute azcopy operations.
+
+    Supports download, copy, and delete operations on Azure blob storage.
+
+    Args:
+        argv: Command line arguments. If None, uses sys.argv[1:].
+
+    Returns:
+        Exit code from azcopy command or 0 for successful completion.
+
+    Raises:
+        SystemExit: If required environment variables are missing, Azure CLI fails,
+                   or no engine output folders are found.
+        ValueError: If invalid argument combinations are provided.
+    """
     parser = argparse.ArgumentParser(
         prog="easy_azure",
         description="Generate SAS and run azcopy (download/copy/delete).",
@@ -155,18 +169,18 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.latest_output or args.prod_db:
         if any([args.src, args.dst, args.container]):
-            raise ValueError(
-                "--latest-output and --prod-db cannot be combined with --src, --dst, or --container."
-            )
+            msg = "--latest-output and --prod-db cannot be combined with --src, --dst, or --container."
+            raise ValueError(msg)
         if args.local is None:
-            raise ValueError(
-                "--latest-output and --prod-db require --local to be specified."
-            )
+            msg = "--latest-output and --prod-db require --local to be specified."
+            raise ValueError(msg)
 
     if args.local and args.dst:
-        raise ValueError("Only Local or dst can be specified, not both.")
+        msg = "Only Local or dst can be specified, not both."
+        raise ValueError(msg)
     if not args.local and not args.dst:
-        raise ValueError("Either --local or --dst must be specified.")
+        msg = "Either --local or --dst must be specified."
+        raise ValueError(msg)
 
     account = _require_env("AZURE_STORAGE_ACCOUNT_NAME")
     key = _require_env("AZURE_STORAGE_ACCOUNT_KEY")
@@ -176,15 +190,14 @@ def main(argv: list[str] | None = None) -> int:
         manager = EngineOutputManager(account, key, output_container)
         latest_folder = manager._get_latest_output()
         if not latest_folder:
-            raise SystemExit("No engine output folders found in storage.")
+            msg = "No engine output folders found in storage."
+            raise SystemExit(msg)
         args.container = output_container
         args.src = latest_folder
-        print(f"Using latest engine output folder: {args.src}")
 
     if args.prod_db:
         args.containers = "vectordb"
         args.src = "production_db"
-        print(f"Using production vectordb folder: {args.src}")
 
     sas = _generate_sas(
         account=account,
@@ -199,7 +212,6 @@ def main(argv: list[str] | None = None) -> int:
         # Local download
         dst_path = Path(args.local)
         dst_path.mkdir(parents=True, exist_ok=True)
-        print(f"Downloading {src_prefix} to local folder {dst_path}...")
         cmd = [
             "azcopy",
             "copy",
@@ -208,15 +220,12 @@ def main(argv: list[str] | None = None) -> int:
             "--recursive=true",
         ]
         if args.dry_run:
-            print("DRY RUN")
-            print("+ " + " ".join(shlex.quote(c) for c in cmd))
             return 0
         return _run(cmd)
 
     if args.dst:
         # Copy within container
         dst_prefix = args.dst.strip("/")
-        print(f"Copying {src_prefix} -> {dst_prefix} in container {args.container}...")
         cmd = [
             "azcopy",
             "copy",
@@ -227,8 +236,6 @@ def main(argv: list[str] | None = None) -> int:
             "--recursive=true",
         ]
         if args.dry_run:
-            print("DRY RUN")
-            print("+ " + " ".join(shlex.quote(c) for c in cmd))
             return 0
         return _run(cmd)
 
@@ -238,10 +245,8 @@ def main(argv: list[str] | None = None) -> int:
             f"Are you sure you want to delete {src_prefix}? [y/N]: "
         ).strip()
         if confirm.lower() != "y":
-            print("Delete operation cancelled.")
             return 0
 
-    print(f"Deleting {src_prefix}...")
     cmd = [
         "azcopy",
         "remove",
@@ -249,8 +254,6 @@ def main(argv: list[str] | None = None) -> int:
         "--recursive=true",
     ]
     if args.dry_run:
-        print("DRY RUN")
-        print("+ " + " ".join(shlex.quote(c) for c in cmd))
         return 0
     return _run(cmd)
 

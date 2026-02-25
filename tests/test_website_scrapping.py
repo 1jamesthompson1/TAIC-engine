@@ -1,5 +1,4 @@
-"""
-Website scraping tests with automatic Azure container cleanup.
+"""Website scraping tests with automatic Azure container cleanup.
 
 This test module includes a session-scoped fixture that automatically cleans up
 the test-reportpdfs Azure storage container after all tests complete. This helps
@@ -17,24 +16,29 @@ To use this in other test files, you can copy the cleanup_test_pdf_container fix
 import itertools
 import os
 import shutil
+import socket
 from unittest.mock import patch
 
 import pandas as pd
 import pytest
 
-import engine.gather.WebsiteScraping as WebsiteScraping
-import engine.utils.Modes as Modes
+from engine.gather import WebsiteScraping
+from engine.utils import Modes
+
+MINIMUM_SAFETY_ISSUES_COUNT = 388
 
 
 def _can_connect(host: str, port: int = 443, timeout_s: float = 2.0) -> bool:
-    """Best-effort network check so these tests can be skipped in offline/CI sandboxes."""
-    try:
-        import socket
+    """Best-effort network check so these tests can be skipped in offline/CI sandboxes.
 
+    Returns:
+        True if connection succeeds, False otherwise.
+    """
+    try:
         socket.create_connection((host, port), timeout=timeout_s).close()
-        return True
     except Exception:
         return False
+    return True
 
 
 # Tests in this module hit real websites; they are skipped when offline.
@@ -52,7 +56,6 @@ def require_internet(request):
     - Tests marked with @pytest.mark.integration(site="...") will additionally
       check connectivity to the specific host for that site.
     """
-
     # Module-wide baseline check: if we can't reach *any* common host, skip.
     if not (
         _can_connect("www.taic.org.nz")
@@ -64,6 +67,11 @@ def require_internet(request):
 
 @pytest.fixture(scope="function")
 def report_scraping_settings(tmpdir, test_pdf_storage_manager):
+    """Create report scraping settings for tests.
+
+    Returns:
+        ReportScraperSettings: Configured settings for scraping.
+    """
     return WebsiteScraping.ReportScraperSettings(
         os.path.join(tmpdir, "report_titles.pkl"),
         2004,
@@ -78,9 +86,12 @@ def report_scraping_settings(tmpdir, test_pdf_storage_manager):
 
 @pytest.fixture(scope="function")
 def get_agency_scraper(tmpdir, report_scraping_settings):
-    """
-    Fixture that returns a function to create agency scrapers with their own temp directories.
+    """Fixture that returns a function to create agency scrapers with their own temp directories.
+
     Each scraper gets its own temporary directory for file operations.
+
+    Returns:
+        A function that creates agency-specific scrapers.
     """
 
     def _get_agency_scraper(agency: str) -> WebsiteScraping.ReportScraper:
@@ -100,7 +111,7 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
                 shutil.copy2(original_path, tmp_path)
 
             return WebsiteScraping.TAICReportScraper(tmp_path, report_scraping_settings)
-        elif agency == "ATSB":
+        if agency == "ATSB":
             original_path = os.path.join(
                 pytest.output_config.get("folder_name"),
                 pytest.output_config.get("atsb_website_reports_table_file_name"),
@@ -120,10 +131,10 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
                 ),
                 report_scraping_settings,
             )
-        elif agency == "TSB":
+        if agency == "TSB":
             return WebsiteScraping.TSBReportScraper(report_scraping_settings)
-        else:
-            raise ValueError(f"Unknown agency: {agency}")
+        msg = f"Unknown agency: {agency}"
+        raise ValueError(msg)
 
     return _get_agency_scraper
 
@@ -176,6 +187,7 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
     ],
 )
 def test_report_collection(get_agency_scraper, agency, url, report_id, expected):
+    """Test collecting a single report from each agency."""
     scraper = get_agency_scraper(agency)
 
     # Mock PDF storage interactions so tests don't perform real Azure uploads.
@@ -204,6 +216,7 @@ def test_report_collection(get_agency_scraper, agency, url, report_id, expected)
     ],
 )
 def test_agency_website_scraper(get_agency_scraper, agency, expected_urls):
+    """Test the agency website scraper for correct URL generation."""
     scraper = get_agency_scraper(agency)
     scraper.settings.start_year = 2004
     scraper.settings.end_year = 2021
@@ -220,6 +233,7 @@ def test_agency_website_scraper(get_agency_scraper, agency, expected_urls):
             [Modes.Mode.a, Modes.Mode.r, Modes.Mode.m], [2005, 2013, 2020]
         ),
         expected_urls,
+        strict=False,
     ):
         urls = scraper.get_report_urls(mode, year)
 
@@ -243,6 +257,7 @@ def test_agency_website_scraper(get_agency_scraper, agency, expected_urls):
 def test_agency_website_scraper_collecting_all_reports(
     get_agency_scraper, agency, expected_count
 ):
+    """Test collecting all reports for an agency."""
     scraper = get_agency_scraper(agency)
     scraper.settings.refresh = True
     scraper.settings.start_year = 2008
@@ -257,7 +272,6 @@ def test_agency_website_scraper_collecting_all_reports(
 
         def mock_download_side_effect(report_id, url, agency_id=None):
             # Simulate successful PDF upload
-            print(f"Mock collecting report {report_id} from {url} for {agency_id}")
             uploaded_pdfs.append(report_id)
             return True
 
@@ -270,7 +284,8 @@ def test_agency_website_scraper_collecting_all_reports(
     assert pdf_count == expected_count
 
 
-def test_ATSB_safety_issue_scrape(tmpdir):
+def test_atsb_safety_issue_scrape(tmpdir):
+    """Test scraping ATSB safety issues from the website."""
     # Copy existing files to temporary directory for automatic cleanup
     original_output_path = os.path.join(
         pytest.output_config["folder_name"],
@@ -301,14 +316,14 @@ def test_ATSB_safety_issue_scrape(tmpdir):
 
     output = pd.read_pickle(temp_output_path)
 
-    assert len(output) >= 388
+    assert len(output) >= MINIMUM_SAFETY_ISSUES_COUNT
 
     required_ids = ["MO-2008-013-SI-04", "AO-2023-008-SI-01"]
 
     output_long = pd.concat(output["safety_issues"].dropna().tolist(), axis=0)
 
-    for id in required_ids:
-        assert id in output_long["safety_issue_id"].unique()
+    for item_id in required_ids:
+        assert item_id in output_long["safety_issue_id"].unique()
 
 
 @pytest.mark.parametrize(
@@ -331,7 +346,7 @@ def test_ATSB_safety_issue_scrape(tmpdir):
     ],
 )
 @pytest.mark.integration
-def test_recommendation_listing(
+def test_recommendation_listing(  # noqa: PLR0913, PLR0917
     tmpdir,
     request,
     site,
@@ -362,11 +377,10 @@ def test_recommendation_listing(
 
     table = scraper.get_table(table_arg)
     assert not table.empty
-    print(table)
     table = scraper.process_new_table(table)
     assert len(table) >= expected_min_rows
 
-    assert set(["url", "recommendation_id"]).issubset(table.columns)
+    assert {"url", "recommendation_id"}.issubset(table.columns)
 
     sample_url = table["url"].dropna().iloc[0]
     assert isinstance(sample_url, str)
@@ -407,7 +421,9 @@ def test_recommendation_listing(
     ],
 )
 @pytest.mark.integration
-def test_recommendation_page(tmpdir, request, site, scraper_cls, url, assert_fn):
+def test_recommendation_page(  # noqa: PLR0913, PLR0917
+    tmpdir, request, site, scraper_cls, url, assert_fn
+):
     """Smoke test: extract fields from one recommendation page.
 
     Uses the real websites but is designed to be quick (one HTTP request per case).

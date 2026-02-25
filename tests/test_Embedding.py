@@ -1,3 +1,5 @@
+"""Tests for Embedding module."""
+
 import hashlib
 import os
 from unittest.mock import patch
@@ -5,10 +7,11 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-import engine.analyze.Embedding as Embedding
+from engine.analyze import Embedding
 
 
 def test_basic_embedding(tmpdir):
+    """Test basic embedding functionality with vector DB."""
     vector_db = None
     generated_embeddings = []
 
@@ -16,9 +19,8 @@ def test_basic_embedding(tmpdir):
         # normalize input
         if isinstance(texts, np.ndarray):
             if texts.dtype != object:
-                raise ValueError(
-                    "AzureAIEmbeddingFunction only supports input of strings for numpy arrays."
-                )
+                msg = "AzureAIEmbeddingFunction only supports input of strings for numpy arrays."
+                raise ValueError(msg)
             texts = texts.tolist()
 
         result = []

@@ -1,3 +1,9 @@
+"""OpenAI API caller with cost tracking and model management.
+
+This module provides an interface to interact with OpenAI and Azure OpenAI APIs,
+including cost tracking, token management, and support for structured outputs.
+"""
+
 import os
 import warnings
 from threading import Lock
@@ -10,6 +16,73 @@ from rich.console import Console
 from rich.table import Table
 
 load_dotenv()
+
+
+# Custom Exceptions
+class ClientNotAvailableError(Exception):
+    """Raised when OpenAI/Azure client is not configured."""
+
+    def __init__(self):
+        """Initialize ClientNotAvailableError."""
+        super().__init__(
+            "OpenAI client is not available. Please set either OPENAI_API_KEY or both "
+            "AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT environment variables."
+        )
+
+
+class ModelPricingNotDefinedError(Exception):
+    """Raised when pricing for a model is not defined."""
+
+    def __init__(self, model: str):
+        """Initialize ModelPricingNotDefinedError.
+
+        Args:
+            model: The model name for which pricing is not defined.
+        """
+        super().__init__(f"Pricing for model {model} is not defined.")
+
+
+class ModelNotFoundError(Exception):
+    """Raised when a specified model is not available."""
+
+    def __init__(self, model: str, available_models: list[str]):
+        """Initialize ModelNotFoundError.
+
+        Args:
+            model: The model name that was not found.
+            available_models: List of available model names.
+        """
+        super().__init__(
+            f"Model {model} not found. Available models: {available_models}"
+        )
+
+
+class AICallerFailedError(Exception):
+    """Raised when an AI call fails due to an API error."""
+
+    def __init__(self, message: str):
+        """Initialize AICallerFailedError.
+
+        Args:
+            message: The error message describing the failure.
+        """
+        super().__init__(f"AI call failed: {message}")
+
+
+class QueryTooLongError(Exception):
+    """Raised when a query exceeds the token limit."""
+
+    def __init__(self, length: int, limit: int):
+        """Initialize QueryTooLongError.
+
+        Args:
+            length: The actual length of the query in tokens.
+            limit: The maximum allowed token limit.
+        """
+        super().__init__(
+            f"The combined system and user query exceeds the token limit. Length: {length}, Limit: {limit}."
+        )
+
 
 # Initialize clients only if API keys are available
 openai_client = None
@@ -50,11 +123,19 @@ elif openai_api_key:
 def track_api_cost(
     model: str, input_tokens: int, output_tokens: int, cached_tokens: int = 0
 ):
-    """Track API costs for monitoring purposes."""
-    global _api_costs
+    """Track API costs for monitoring purposes.
 
+    Args:
+        model: The model name for which to track costs.
+        input_tokens: Number of input tokens used.
+        output_tokens: Number of output tokens generated.
+        cached_tokens: Number of cached input tokens, defaults to 0.
+
+    Raises:
+        ModelPricingNotDefinedError: If pricing for the model is not defined.
+    """
     if model not in _PRICING:
-        raise ValueError(f"Pricing for model {model} is not defined.")
+        raise ModelPricingNotDefinedError(model)
 
     pricing = _PRICING[model]
     regular_input_tokens = input_tokens - cached_tokens
@@ -96,7 +177,11 @@ def track_api_cost(
 
 
 def get_api_costs():
-    """Get current API cost tracking data."""
+    """Get current API cost tracking data.
+
+    Returns:
+        dict: Dictionary containing cost breakdown by model and totals.
+    """
     with _cost_lock:
         return {
             "total_cost": round(_api_costs["total_cost"], 4),
@@ -175,8 +260,10 @@ def print_api_cost_summary(costs_data=None):
 
 
 def reset_api_costs():
-    """Reset cost tracking (useful for test isolation)."""
-    global _api_costs
+    """Reset cost tracking (useful for test isolation).
+
+    This function resets all accumulated API cost data to zero.
+    """
     with _cost_lock:
         _api_costs = {
             "total_cost": 0.0,
@@ -192,25 +279,70 @@ def reset_api_costs():
 
 
 class BaseAICaller:
+    """Base class for AI API callers.
+
+    This class provides common functionality for interacting with AI models,
+    including token counting and query validation.
+    """
+
     def __init__(self, client, model, limit):
+        """Initialize the BaseAICaller.
+
+        Args:
+            client: The OpenAI/Azure client instance.
+            model: The model name/identifier.
+            limit: Maximum token limit for queries.
+        """
         self.client = client
         self.model = model
         self.limit = limit
 
-    def get_tokens(self, texts):
+    @staticmethod
+    def get_tokens(texts):
+        """Count tokens in the given texts.
+
+        Args:
+            texts: List of text strings to count tokens for.
+
+        Returns:
+            list: List of token counts corresponding to each text.
+        """
         # No need to check for model as all models have the same or broadly similar tokenization
         enc = tiktoken.encoding_for_model("gpt-5")
         return [len(enc.encode(text)) for text in texts]
 
     def check_query_above_limit(self, query):
-        return sum(self.get_tokens([query])) > self.limit
+        """Check if a query exceeds the token limit.
+
+        Args:
+            query: The query string to check.
+
+        Raises:
+            QueryTooLongError: If the query exceeds the token limit.
+        """
+        length = sum(self.get_tokens([query]))
+        if length > self.limit:
+            raise QueryTooLongError(length, self.limit)
 
 
 class OpenAICaller(BaseAICaller):
+    """OpenAI/Azure OpenAI API caller.
+
+    Handles queries to OpenAI or Azure OpenAI models with support for structured
+    outputs, reasoning, and cost tracking.
+    """
+
     def __init__(self, client, model, limit):
+        """Initialize the OpenAICaller.
+
+        Args:
+            client: The OpenAI/Azure client instance.
+            model: The model name/identifier.
+            limit: Maximum token limit for queries.
+        """
         super().__init__(client, model, limit)
 
-    def query(
+    def query(  # noqa: PLR0913, PLR0917
         self,
         system,
         user,
@@ -220,15 +352,29 @@ class OpenAICaller(BaseAICaller):
         reasoning=None,
         raw_output=False,
     ):
-        if self.client is None:
-            raise ValueError(
-                "OpenAI client is not available. Please set either OPENAI_API_KEY or both "
-                "AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT environment variables."
-            )
+        """Query the OpenAI/Azure OpenAI model.
 
-        if self.check_query_above_limit(system + user):
-            print("Too many tokens, not sending to OpenAI")
-            return None
+        Args:
+            system: System prompt/instructions for the model.
+            user: User message/query.
+            temp: Temperature parameter for response generation.
+            max_tokens: Maximum tokens in the response (default: 32000).
+            output_structure: Optional structured output format.
+            reasoning: Reasoning effort level if applicable.
+            raw_output: If True, return raw response object, else formatted output.
+
+        Returns:
+            The model's response (formatted or raw based on raw_output parameter),
+            or None if an error occurs or query exceeds limits.
+
+        Raises:
+            ClientNotAvailableError: If OpenAI/Azure client is not configured.
+            AICallerFailedError: If the API call fails due to an error.
+        """
+        if self.client is None:
+            raise ClientNotAvailableError()
+
+        self.check_query_above_limit(system + user)
 
         if (
             reasoning != "none"
@@ -239,6 +385,7 @@ class OpenAICaller(BaseAICaller):
                 "Temperature is ignored when reasoning is enabled. "
                 "Set temperature to None to avoid this warning.",
                 UserWarning,
+                stacklevel=2,
             )
             temp = None
 
@@ -267,8 +414,7 @@ class OpenAICaller(BaseAICaller):
                 )
 
         except openai.BadRequestError as e:
-            print(f"OpenAI declined:\n {e}")
-            return None
+            raise AICallerFailedError(message=str(e)) from e
 
         # Track API costs
         if hasattr(response, "usage"):
@@ -295,7 +441,13 @@ class OpenAICaller(BaseAICaller):
 
 
 class AICaller:
+    """High-level interface for querying AI models.
+
+    Manages multiple model instances and routes queries to the appropriate model.
+    """
+
     def __init__(self):
+        """Initialize the AICaller with available models."""
         self.models = {
             "gpt-4": OpenAICaller(openai_client, "gpt-4o", 128_000),
             "gpt-5-mini": OpenAICaller(openai_client, "gpt-5-mini", 400_000),
@@ -304,10 +456,24 @@ class AICaller:
     def query(
         self, system, user, temp=None, model="gpt-4", max_tokens=16_000, **kwargs
     ):
+        """Query an AI model.
+
+        Args:
+            system: System prompt/instructions for the model.
+            user: User message/query.
+            temp: Temperature parameter (default: None).
+            model: Model to use (default: "gpt-4").
+            max_tokens: Maximum tokens in response (default: 16000).
+            **kwargs: Additional arguments passed to the model's query method.
+
+        Returns:
+            The model's response.
+
+        Raises:
+            ModelNotFoundError: If the specified model is not available.
+        """
         if model not in self.models:
-            raise ValueError(
-                f"Model {model} not found. Available models: {list(self.models.keys())}"
-            )
+            raise ModelNotFoundError(model, list(self.models.keys()))
 
         selected_model = self.models[model]
 

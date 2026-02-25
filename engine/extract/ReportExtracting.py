@@ -4,6 +4,7 @@ This includes extracting safety issues, recommendations, and chunking the report
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from typing import Literal
 
 import pandas as pd
@@ -13,6 +14,19 @@ from pydantic import BaseModel, Field, create_model
 from tqdm import tqdm
 
 from engine.utils.AICaller import ai_caller
+from engine.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
+class InvalidExtractionConfigError(ValueError):
+    """Raised when neither safety_issues nor recommendations is True."""
+
+    def __init__(self):
+        """Initialize the exception with an appropriate error message."""
+        super().__init__(
+            "At least one of safety_issues or recommendations must be True"
+        )
 
 
 class SafetyIssueItem(BaseModel):
@@ -72,16 +86,15 @@ def ai_read_report(
         A BaseModel containing the extracted safety issues and/or recommendations, depending on the input flags.
 
     Raises:
-        ValueError: If neither safety_issues nor recommendations is True, or if the AI response is None.
+        InvalidExtractionConfigError: If neither safety_issues nor recommendations is True.
+        RuntimeError: If the AI query fails.
 
     """
     if not any([safety_issues, recommendations]):
-        raise ValueError(
-            "At least one of safety_issues or recommendations must be True"
-        )
+        raise InvalidExtractionConfigError()
 
     system_prompt = """
-You are a highly skilled AI specialized in extracting structured information from safety investigation reports. Your task is to read the provided report text and extract specific information based on the given instructions.    
+You are a highly skilled AI specialized in extracting structured information from safety investigation reports. Your task is to read the provided report text and extract specific information based on the given instructions.
 
 There are techincal definitions you should understand:
 Safety factor - Any (non-trivial) events or conditions, which increases safety risk. If they occurred in the future, these would increase the likelihood of an occurrence, and/or the severity of any adverse consequences associated with the occurrence.
@@ -152,18 +165,18 @@ Based on the provided report text, please extract the following information:
             ),
         )
 
-    ExtractedReport = create_model("ExtractedReport", **fields)
+    extracted_report = create_model("ExtractedReport", **fields)
 
-    response = ai_caller.query(
-        model="gpt-5-mini",
-        reasoning="high",
-        system=system_prompt,
-        user=prompt,
-        output_structure=ExtractedReport,
-    )
-
-    if response is None:
-        raise ValueError("AI extract response is None")
+    try:
+        response = ai_caller.query(
+            model="gpt-5-mini",
+            reasoning="high",
+            system=system_prompt,
+            user=prompt,
+            output_structure=extracted_report,
+        )
+    except Exception as e:
+        raise RuntimeError() from e
 
     return response
 
@@ -229,10 +242,7 @@ def chunk_report_into_sections(report_text: str) -> dict[str, str]:
     for page, section in page_for_sections:
         page_counts[page] = page_counts.get(page, 0) + 1
         suffix = page_counts[page]
-        if page_totals[page] > 1:
-            page_key = f"page_{page}.{suffix}"
-        else:
-            page_key = f"page_{page}"
+        page_key = f"page_{page}.{suffix}" if page_totals[page] > 1 else f"page_{page}"
         chunks_with_pages[page_key] = section
 
     return chunks_with_pages
@@ -240,20 +250,7 @@ def chunk_report_into_sections(report_text: str) -> dict[str, str]:
 
 def extract_report(
     report_row: pd.Series | dict,
-    ai_extraction_config: dict = {
-        "ATSB": {
-            "safety_issues": False,
-            "recommendations": True,
-        },
-        "TSB": {
-            "safety_issues": True,
-            "recommendations": False,
-        },
-        "TAIC": {
-            "safety_issues": True,
-            "recommendations": False,
-        },
-    },
+    ai_extraction_config: dict | None = None,
 ) -> dict:
     """Extract safety issues, recommendations, and sections from a report row.
 
@@ -266,16 +263,33 @@ def extract_report(
               'recommendations', and 'sections'.
 
     """
+    if ai_extraction_config is None:
+        ai_extraction_config = {
+            "ATSB": {
+                "safety_issues": False,
+                "recommendations": True,
+            },
+            "TSB": {
+                "safety_issues": True,
+                "recommendations": False,
+            },
+            "TAIC": {
+                "safety_issues": True,
+                "recommendations": False,
+            },
+        }
     report_id = report_row["report_id"]
     report_text = report_row["text"]
     agency = report_id.split("_")[0]
 
     extraction_config = ai_extraction_config[agency].copy()
 
-    # Add ATSB reports that are older than 2008
+    # Add ATSB reports that are older than 2008. This is because the website only tracks safety issues back to 2008
+    add_atsb_safety_issues = 2008
+
     if agency == "ATSB":
         report_year = int(report_id.split("_")[2])
-        if report_year < 2008:
+        if report_year < add_atsb_safety_issues:
             extraction_config["safety_issues"] = True
 
     # Read report using AI to extract safety issues and/or recommendations
@@ -304,56 +318,67 @@ def extract_report(
 
 
 def process_reports_parallel(
-    reports_df: pd.DataFrame,
-    current_extracted_df: pd.DataFrame | None,
+    reports_df_path: Path,
+    extracted_reports_df_path: Path,
     max_workers: int = 4,
 ) -> pd.DataFrame:
     """Process reports in parallel, skipping those already extracted.
 
-    This function identifies which reports need to be processed by comparing the input
-    reports_df with current_extracted_df. It then processes new reports in parallel
-    using ThreadPoolExecutor for improved performance.
+    This function loads input data from disk, identifies reports that need
+    processing, processes new reports in parallel using ThreadPoolExecutor,
+    and writes the updated extraction results back to disk.
 
     Args:
-        reports_df: DataFrame with columns ['report_id', 'report_text'] containing the reports to process.
-        current_extracted_df: DataFrame with columns ['report_id', 'safety_issues', 'recommendations', 'sections'] containing already processed reports. Pass an empty DataFrame to process all reports.
-        max_workers: Maximum number of parallel workers (default: 4). Adjust based on your API rate limits and system resources.
+        reports_df_path: Path to a pickled DataFrame with columns
+            ['report_id', 'text'] containing the reports to process.
+        extracted_reports_df_path: Path to a pickled DataFrame with columns
+            ['report_id', 'safety_issues', 'recommendations', 'sections'] containing
+            already processed reports. If the path does not exist, all reports
+            will be processed.
+        max_workers: Maximum number of parallel workers (default: 4). Adjust
+            based on your API rate limits and system resources.
 
     Returns:
-        pd.DataFrame: Updated DataFrame containing both the input current_extracted_df reports and newly extracted reports. Columns include:
-                     - report_id: Unique identifier for the report
-                     - safety_issues: List of extracted safety issues
-                     - recommendations: List of extracted recommendations
-                     - sections: Dictionary of report sections
+        pd.DataFrame: Updated DataFrame containing both previously extracted
+        and newly extracted reports. Columns include:
+            - report_id: Unique identifier for the report
+            - safety_issues: List of extracted safety issues
+            - recommendations: List of extracted recommendations
+            - sections: Dictionary of report sections
+
+    Raises:
+        FileNotFoundError: If the reports DataFrame path does not exist.
 
     Example:
-        >>> reports = pd.DataFrame({
-        ...     'report_id': ['TAIC_001', 'TAIC_002'],
-        ...     'report_text': ['...', '...']
-        ... })
-        >>> current = pd.DataFrame({
-        ...     'report_id': ['TAIC_001'],
-        ...     'safety_issues': [[...]],
-        ...     'recommendations': [[...]],
-        ...     'sections': [{...}]
-        ... })
-        >>> result = process_reports_parallel(reports, current, max_workers=8)
-        >>> # Only TAIC_002 will be processed, TAIC_001 data preserved
+        >>> result = process_reports_parallel(
+        ...     Path("parsed_reports.pkl"),
+        ...     Path("extracted_reports.pkl"),
+        ...     max_workers=8,
+        ... )
+        >>> # Only new reports are processed, existing data preserved
 
     """
+    if not reports_df_path.exists():
+        raise FileNotFoundError(f"Reports DataFrame not found at {reports_df_path}")  # noqa: TRY003
+    reports_df = pd.read_pickle(reports_df_path)
+
+    if extracted_reports_df_path.exists():
+        current_extracted_df = pd.read_pickle(extracted_reports_df_path)
+    else:
+        current_extracted_df = pd.DataFrame(
+            columns=["report_id", "safety_issues", "recommendations", "sections"]
+        )
+
     # Identify reports that need processing
-    if current_extracted_df is not None and len(current_extracted_df) > 0:
+    if len(current_extracted_df) > 0:
         already_processed = set(current_extracted_df["report_id"])
         reports_to_process = reports_df[
             ~reports_df["report_id"].isin(already_processed)
         ]
     else:
-        current_extracted_df = pd.DataFrame(
-            columns=["report_id", "safety_issues", "recommendations", "sections"]
-        )
         reports_to_process = reports_df
 
-    print(
+    logger.info(
         f"Processing {len(reports_to_process)} reports "
         f"(skipping {len(reports_df) - len(reports_to_process)} already processed)"
     )
@@ -382,7 +407,7 @@ def process_reports_parallel(
             try:
                 result = future.result()
             except Exception as exc:
-                print(f"Error processing {report_id}: {exc}")
+                logger.warning(f"Error processing {report_id}: {exc}", exc_info=True)
                 continue
             if result is not None:
                 results.append(result)
@@ -397,5 +422,7 @@ def process_reports_parallel(
         )
     else:
         completed_df = new_extracted_df
+
+    completed_df.to_pickle(extracted_reports_df_path)
 
     return completed_df

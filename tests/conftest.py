@@ -4,6 +4,7 @@ import contextlib
 import json
 import logging
 import os
+from pathlib import Path
 
 import dotenv
 import pytest
@@ -37,7 +38,7 @@ def load_test_config():
         logging.WARNING
     )
 
-    config = Config.ConfigReader(os.path.join("tests", "test_config.yaml")).get_config()
+    config = Config.ConfigReader(Path("tests") / "test_config.yaml").get_config()
     pytest.config = config
 
     pytest.output_config = config["engine"]["output"]

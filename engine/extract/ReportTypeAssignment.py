@@ -1,58 +1,88 @@
+"""Report type assignment module for extracting event types from report titles.
+
+This module provides functionality to assign event types to reports using AI,
+based on the report title and available event type options.
+"""
+
 import concurrent.futures
-import os
-from typing import Literal, Tuple
+from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 from pydantic import Field, create_model
 from tqdm import tqdm
 
-import engine.utils.Modes as Modes
+from engine.utils import Modes
 from engine.utils.AICaller import ai_caller
+from engine.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 tqdm.pandas()
 
 
 class ReportTypeAssigner:
+    """Assigns event types to reports using AI analysis of report titles.
+
+    This class manages event type assignment by reading available event types,
+    processing unassigned reports in parallel, and using AI to classify reports.
+    """
+
     def __init__(
         self,
-        report_event_type_df_path,
-        report_titles_df_path,
-        parsed_reports_df_path,
-        report_types_df_path,
+        report_event_type_df_path: Path,
+        report_titles_df_path: Path,
+        parsed_reports_df_path: Path,
+        report_types_df_path: Path,
     ):
+        """Initialize the ReportTypeAssigner with required dataframes and paths.
+
+        Args:
+            report_event_type_df_path: Path to pickled DataFrame with event types.
+            report_titles_df_path: Path to pickled DataFrame with report titles.
+            parsed_reports_df_path: Path to pickled DataFrame with parsed reports.
+            report_types_df_path: Path where to save/load assigned report types.
+
+        Raises:
+            ValueError: If any required DataFrame file does not exist.
+        """
         self.report_types_df_path = report_types_df_path
 
-        if os.path.exists(report_titles_df_path):
+        if report_titles_df_path.exists():
             self.report_titles_df = pd.read_pickle(report_titles_df_path)
         else:
-            raise ValueError(f"{report_titles_df_path} does not exist")
+            msg = f"{report_titles_df_path} does not exist"
+            raise ValueError(msg)
 
-        if os.path.exists(parsed_reports_df_path):
+        if parsed_reports_df_path.exists():
             self.parsed_reports_df = pd.read_pickle(parsed_reports_df_path)
         else:
-            raise ValueError(f"{parsed_reports_df_path} does not exist")
+            msg = f"{parsed_reports_df_path} does not exist"
+            raise ValueError(msg)
 
-        if os.path.exists(report_event_type_df_path):
+        if report_event_type_df_path.exists():
             self.all_event_types = pd.read_pickle(report_event_type_df_path)
             self.all_event_types["mode"] = self.all_event_types["mode"].map(
                 lambda x: Modes.Mode[x[0]]
             )
-            self.all_event_types.set_index("mode", inplace=True, drop=True)
+            self.all_event_types = self.all_event_types.set_index("mode", drop=True)
         else:
-            raise ValueError(f"{report_event_type_df_path} does not exist")
+            msg = f"{report_event_type_df_path} does not exist"
+            raise ValueError(msg)
 
         # Build the structured output models per mode
-        self._event_type_output_model_by_mode: dict[Modes.Mode, Tuple[type, str]] = {}
+        self._event_type_output_model_by_mode: dict[Modes.Mode, tuple[type, str]] = {}
         for mode in self.all_event_types.index.unique():
             allowed_event_types = self.all_event_types.loc[mode]["Value"].to_list()
             if not allowed_event_types:
-                raise ValueError(f"No allowed event types for mode {mode}")
+                msg = f"No allowed event types for mode {mode}"
+                raise ValueError(msg)
 
-            AllowedType = Literal[tuple(allowed_event_types)]
-            AllowedTypesModel = create_model(
+            allowed_type = Literal[tuple(allowed_event_types)]
+            allowed_types_model = create_model(
                 f"EventTypeResponse_{mode.name}",
                 type=(
-                    AllowedType,
+                    allowed_type,
                     Field(
                         description=(
                             "The event type extracted from the report title. "
@@ -66,16 +96,21 @@ class ReportTypeAssigner:
             )
 
             self._event_type_output_model_by_mode[mode] = (
-                AllowedTypesModel,
+                allowed_types_model,
                 allowed_event_types_str,
             )
 
     def assign_report_types(self):
-        print("==================================================" * 2)
-        print("       Assigning report event types")
-        print(f"       There are {len(self.all_event_types)} possible event types")
-        print(f"        output: {self.report_types_df_path}")
-        if os.path.exists(self.report_types_df_path):
+        """Assign event types to all unassigned reports using AI analysis.
+
+        This method processes unassigned reports in parallel, using AI to
+        determine the correct event type based on report titles. Results are
+        saved to disk.
+        """
+        logger.info("Assigning report event types")
+        logger.info(f"There are {len(self.all_event_types)} possible event types")
+        logger.info(f"Output: {self.report_types_df_path}")
+        if self.report_types_df_path.exists():
             report_types_df = pd.read_pickle(self.report_types_df_path)
         else:
             report_types_df = pd.DataFrame(columns=["report_id", "type", "title"])
@@ -93,10 +128,9 @@ class ReportTypeAssigner:
         unassigned_df = merged_df[merged_df["type"].isna()]
         assigned_df = merged_df[~merged_df["type"].isna()]
 
-        print(
-            f"  There are {len(unassigned_df)} reports that need to be assigned types out of {len(merged_df)} total reports"
+        logger.info(
+            f"There are {len(unassigned_df)} reports that need to be assigned types out of {len(merged_df)} total reports"
         )
-        print("==================================================" * 2)
         if len(unassigned_df) == 0:
             return
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -114,12 +148,24 @@ class ReportTypeAssigner:
                 desc="Processing Reports",
             ):
                 index, assigned_event_type = future.result()
-                unassigned_df.at[index, "type"] = assigned_event_type
+                unassigned_df.loc[index, "type"] = assigned_event_type
 
         combined_df = pd.concat([assigned_df, unassigned_df], ignore_index=True)
         combined_df[["report_id", "type", "title"]].to_pickle(self.report_types_df_path)
 
     def process_report(self, index, report_id, report_title, event_type):
+        """Process a single report and assign an event type.
+
+        Args:
+            index: Row index of the report in the dataframe.
+            report_id: Unique identifier for the report.
+            report_title: Title of the report.
+            event_type: Suggested event type for the report.
+
+        Returns:
+            tuple: (index, assigned_event_type) where assigned_event_type
+                is the determined event type or None if assignment failed.
+        """
         report_mode = Modes.get_report_mode_from_id(report_id)
         if report_mode is None:
             # If we can't infer mode, fall back to the suggested event_type (or None)
@@ -134,7 +180,17 @@ class ReportTypeAssigner:
     def assign_report_type(
         self, report_title: str, mode: Modes.Mode, suggested_event_type: str
     ):
-        EventTypeResponse, allowed_event_types_str = (
+        """Assign an event type to a report using AI.
+
+        Args:
+            report_title: The title of the report.
+            mode: The mode/agency of the report.
+            suggested_event_type: A suggested event type to aid classification.
+
+        Returns:
+            str or None: The assigned event type, or None if assignment failed.
+        """
+        event_type_response, allowed_event_types_str = (
             self._event_type_output_model_by_mode.get(mode)
         )  # type: ignore
 
@@ -177,7 +233,7 @@ Extract event category from "{f"{suggested_event_type} - " if suggested_event_ty
             user=user_message,
             model="gpt-4",
             temp=0,
-            output_structure=EventTypeResponse,
+            output_structure=event_type_response,
         )
 
         if result is None:

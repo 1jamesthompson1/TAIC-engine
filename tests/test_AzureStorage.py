@@ -1,3 +1,5 @@
+"""Tests for Azure Storage module."""
+
 import os
 import uuid
 from datetime import datetime
@@ -10,8 +12,11 @@ from engine.utils.AzureStorage import (
     EngineOutputUploader,
 )
 
+EXPECTED_FILE_COUNT = 40
+
 
 def test_upload_outputs():
+    """Test uploading outputs to Azure storage."""
     uploader = EngineOutputUploader(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
         os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
@@ -31,6 +36,7 @@ def test_upload_outputs():
 
 
 def test_download_outputs(tmpdir):
+    """Test downloading outputs from Azure storage."""
     downloader = EngineOutputDownloader(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
         os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
@@ -41,7 +47,7 @@ def test_download_outputs(tmpdir):
     downloader.download_latest_output()
 
     downloaded_files = [len(f[2]) for f in os.walk(tmpdir.strpath)]
-    assert sum(downloaded_files) == 40
+    assert sum(downloaded_files) == EXPECTED_FILE_COUNT
 
 
 def test_upload_pdf_to_pdf_container(test_pdf_storage_manager):
@@ -49,9 +55,7 @@ def test_upload_pdf_to_pdf_container(test_pdf_storage_manager):
     report_id = f"TEST_UPLOAD_{uuid.uuid4().hex[:8]}"
     pdf_bytes = b"%PDF-1.4\n%Fake PDF for tests\n%%EOF"
 
-    uploaded = test_pdf_storage_manager.upload_pdf(
-        report_id, pdf_bytes, overwrite=True
-    )
+    uploaded = test_pdf_storage_manager.upload_pdf(report_id, pdf_bytes, overwrite=True)
     assert uploaded is True
 
     pdfs = test_pdf_storage_manager.list_pdfs()
