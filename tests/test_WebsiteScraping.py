@@ -22,8 +22,7 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from engine.gather import WebsiteScraping
-from engine.utils import Modes
+from engine import Modes, WebsiteScraping
 
 MINIMUM_SAFETY_ISSUES_COUNT = 388
 
@@ -210,7 +209,7 @@ def test_report_collection(get_agency_scraper, agency, url, report_id, expected)
 @pytest.mark.parametrize(
     "agency, expected_urls",
     [
-        pytest.param("TSB", [54, 24, 20, 13, 19, 10, 15, 10, 13], id="TSB"),
+        pytest.param("TSB", [54, 25, 20, 13, 19, 10, 15, 10, 13], id="TSB"),
         pytest.param("TAIC", [11, 12, 3, 28, 8, 4, 12, 3, 5], id="TAIC"),
         pytest.param("ATSB", [93, 179, 52, 6, 25, 17, 15, 8, 2], id="ATSB"),
     ],

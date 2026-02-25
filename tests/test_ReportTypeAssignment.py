@@ -5,8 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from engine.extract import ReportTypeAssignment
-from engine.utils import Modes
+from engine import Modes, ReportTypeAssignment
 
 
 def test_report_type_assignment(tmp_path):

@@ -13,8 +13,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel, Field, create_model
 from tqdm import tqdm
 
-from engine.utils.AICaller import ai_caller
-from engine.utils.logging_config import get_logger
+from engine.AICaller import ai_caller
+from engine.Logging import get_logger
 
 logger = get_logger(__name__)
 

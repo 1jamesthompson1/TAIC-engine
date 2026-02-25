@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from engine.gather import DataGetting
+from engine import DataGetting
 
 
 @pytest.mark.parametrize(

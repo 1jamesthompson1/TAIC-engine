@@ -8,12 +8,16 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..analyze import (
+from . import (
+    Config,
+    DataGetting,
     Embedding,
+    Modes,
+    PDFParsing,
+    ReportExtracting,
+    ReportTypeAssignment,
+    WebsiteScraping,
 )
-from ..extract import ReportExtracting, ReportTypeAssignment
-from ..gather import DataGetting, PDFParsing, WebsiteScraping
-from . import Config, Modes
 from .AzureStorage import (
     EngineOutputDownloader,
     EngineOutputUploader,

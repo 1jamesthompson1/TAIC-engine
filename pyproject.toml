@@ -57,7 +57,7 @@ dev = [
 "Bug Tracker" = "https://github.com/1jamesthompson1/TAIC-engine/issues"
 
 [project.scripts]
-engine = "engine.utils.cli:cli"
+engine = "engine.cli:cli"
 azure = "notebooks.admin.easy_azure:main"
 
 [tool.coverage.report]

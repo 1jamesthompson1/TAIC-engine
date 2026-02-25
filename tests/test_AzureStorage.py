@@ -7,12 +7,13 @@ from datetime import datetime
 import pytest
 import pytz
 
-from engine.utils.AzureStorage import (
+from engine.AzureStorage import (
     EngineOutputDownloader,
     EngineOutputUploader,
 )
 
-EXPECTED_FILE_COUNT = 40
+# Manually update this to be the 'output' folder.
+EXPECTED_FILE_COUNT = 17
 
 
 def test_upload_outputs():

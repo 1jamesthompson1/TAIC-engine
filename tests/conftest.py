@@ -9,9 +9,9 @@ from pathlib import Path
 import dotenv
 import pytest
 
-from engine.utils import Config
-from engine.utils.AICaller import get_api_costs, print_api_cost_summary
-from engine.utils.AzureStorage import PDFStorageManager
+from engine import Config
+from engine.AICaller import get_api_costs, print_api_cost_summary
+from engine.AzureStorage import PDFStorageManager
 
 
 @pytest.fixture(scope="session", autouse=True)

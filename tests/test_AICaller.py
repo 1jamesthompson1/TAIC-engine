@@ -3,7 +3,7 @@
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from engine.utils.AICaller import ai_caller
+from engine.AICaller import QueryTooLongError, ai_caller
 
 REASONING_LEVELS_COUNT = 3
 
@@ -12,12 +12,6 @@ REASONING_LEVELS_COUNT = 3
     "model, user, expected_response",
     [
         pytest.param("gpt-4", "Hello this is a test", True, id="gpt-4"),
-        pytest.param(
-            "gpt-4",
-            "Hello this is a test" * (10**6),
-            False,
-            id="gpt-4 over limit",
-        ),
         pytest.param("gpt-5-mini", "Hello can you respond?", True, id="gpt-5-mini"),
     ],
 )
@@ -26,6 +20,17 @@ def test_ai_caller(model, user, expected_response):
     response = ai_caller.query(model=model, system="", user=user, max_tokens=100)
 
     assert isinstance(response, str) == expected_response
+
+
+def test_ai_over_token_limit():
+    """Test that exceeding token limit raises an exception."""
+    with pytest.raises(QueryTooLongError):
+        ai_caller.query(
+            model="gpt-4",
+            system="",
+            user="Hello this is a test" * (10**6),
+            max_tokens=100,
+        )
 
 
 def test_structured_output():

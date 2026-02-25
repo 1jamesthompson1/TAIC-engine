@@ -12,7 +12,7 @@ import pandas as pd
 import pymupdf4llm
 from tqdm import tqdm
 
-from ..utils.AzureStorage import PDFStorageManager
+from engine.AzureStorage import PDFStorageManager
 
 # Configure logger
 logger = logging.getLogger(__name__)

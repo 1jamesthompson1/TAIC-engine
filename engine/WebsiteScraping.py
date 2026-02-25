@@ -29,9 +29,9 @@ from tenacity import (
 )
 from tqdm import tqdm
 
-from ..utils import Modes
-from ..utils.AzureStorage import PDFStorageManager
-from ..utils.logging_config import get_logger
+from engine import Modes
+from engine.AzureStorage import PDFStorageManager
+from engine.Logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -778,7 +778,8 @@ class TAICReportScraper(ReportScraper):
             page_num += 1
 
         investigations_with_mode = investigations.copy()
-        investigations_with_mode.set_index(
+
+        investigations_with_mode = investigations_with_mode.set_index(
             investigations_with_mode["id"].map(lambda x: Modes.Mode[x[0].lower()]),
             inplace=False,
         )

@@ -7,7 +7,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from engine.analyze import Embedding
+from engine import Embedding
 
 
 def test_basic_embedding(tmpdir):

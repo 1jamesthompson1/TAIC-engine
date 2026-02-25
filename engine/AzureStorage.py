@@ -18,7 +18,7 @@ from azure.storage.blob import BlobServiceClient
 from tenacity import retry, stop_after_attempt, wait_exponential
 from tqdm import tqdm
 
-from engine.utils.logging_config import get_logger
+from engine.Logging import get_logger
 
 logger = get_logger(__name__)
 

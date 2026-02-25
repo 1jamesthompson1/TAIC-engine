@@ -16,7 +16,7 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from engine.extract.ReportExtracting import (
+from engine.ReportExtracting import (
     RecommendationItem,
     SafetyIssueItem,
     ai_read_report,
@@ -376,7 +376,7 @@ def test_process_handle_already_processed(tmp_path):
     current_extracted_df.to_pickle(extracted_df_path)
 
     # Mock the extract_report function to track calls
-    with patch("engine.extract.ReportExtracting.extract_report") as mock_extract:
+    with patch("engine.ReportExtracting.extract_report") as mock_extract:
         # Configure mock to return a dict with expected structure
         mock_extract.side_effect = lambda row: {
             "report_id": row["report_id"],

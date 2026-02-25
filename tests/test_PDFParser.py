@@ -49,7 +49,7 @@ import logging
 import pandas as pd
 import pytest
 
-from engine.gather import PDFParsing
+from engine import PDFParsing
 
 logger = logging.getLogger(__name__)
 

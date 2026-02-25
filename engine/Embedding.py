@@ -24,7 +24,7 @@ from lancedb.embeddings.utils import TEXT
 from lancedb.pydantic import LanceModel, Vector
 from tqdm import tqdm
 
-from engine.utils.logging_config import get_logger
+from engine.Logging import get_logger
 
 logger = get_logger(__name__)
 

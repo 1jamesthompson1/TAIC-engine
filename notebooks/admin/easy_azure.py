@@ -39,7 +39,7 @@ from pathlib import Path
 
 import dotenv
 
-from engine.utils.AzureStorage import EngineOutputManager
+from engine.AzureStorage import EngineOutputManager
 
 
 def _repo_root() -> Path:
