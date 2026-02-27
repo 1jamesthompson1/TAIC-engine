@@ -250,34 +250,19 @@ def chunk_report_into_sections(report_text: str) -> dict[str, str]:
 
 def extract_report(
     report_row: pd.Series | dict,
-    ai_extraction_config: dict | None = None,
+    ai_extraction_config: dict,
 ) -> dict:
     """Extract safety issues, recommendations, and sections from a report row.
 
     Args:
         report_row: Row containing 'report_id' and 'report_text'.
-        ai_extraction_config: Configuration dictionary specifying which extraction tasks (safety_issues, recommendations) to perform for each agency. Defaults to extracting safety issues for TAIC and TSB, and recommendations for ATSB.
+        ai_extraction_config: Configuration dictionary specifying which extraction tasks (safety_issues, recommendations) to perform for each agency.
 
     Returns:
         dict: Extracted fields with keys 'report_id', 'safety_issues',
               'recommendations', and 'sections'.
 
     """
-    if ai_extraction_config is None:
-        ai_extraction_config = {
-            "ATSB": {
-                "safety_issues": False,
-                "recommendations": True,
-            },
-            "TSB": {
-                "safety_issues": True,
-                "recommendations": False,
-            },
-            "TAIC": {
-                "safety_issues": True,
-                "recommendations": False,
-            },
-        }
     report_id = report_row["report_id"]
     report_text = report_row["text"]
     agency = report_id.split("_")[0]
@@ -320,7 +305,8 @@ def extract_report(
 def process_reports_parallel(
     reports_df_path: Path,
     extracted_reports_df_path: Path,
-    max_workers: int = 4,
+    ai_extraction_config: dict,
+    max_workers: int | None = None,
 ) -> pd.DataFrame:
     """Process reports in parallel, skipping those already extracted.
 
@@ -335,8 +321,10 @@ def process_reports_parallel(
             ['report_id', 'safety_issues', 'recommendations', 'sections'] containing
             already processed reports. If the path does not exist, all reports
             will be processed.
-        max_workers: Maximum number of parallel workers (default: 4). Adjust
+        max_workers: Maximum number of parallel workers. Adjust
             based on your API rate limits and system resources.
+        ai_extraction_config: Configuration dictionary specifying which extraction tasks
+            (safety_issues, recommendations) to perform for each agency.
 
     Returns:
         pd.DataFrame: Updated DataFrame containing both previously extracted
@@ -393,7 +381,7 @@ def process_reports_parallel(
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all tasks
         future_to_report = {
-            executor.submit(extract_report, row): row["report_id"]
+            executor.submit(extract_report, row, ai_extraction_config): row["report_id"]
             for _, row in reports_to_process.iterrows()
         }
 

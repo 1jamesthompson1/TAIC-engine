@@ -293,10 +293,11 @@ def extract(output_dir: Path, config: dict, refresh: bool):
     )
 
     # Extract reports into structured data
-
+    extraction_config = config.get("extraction").get("ai_extraction_config")
     ReportExtracting.process_reports_parallel(
         output_dir / output_config.get("parsed_reports_df_file_name"),
         output_dir / output_config.get("extracted_reports_df_file_name"),
+        ai_extraction_config=extraction_config,
     )
 
 
@@ -383,6 +384,12 @@ def cli():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
+    # Silence noisy Azure HTTP logging
+    logging.getLogger("azure").setLevel(logging.WARNING)
+    logging.getLogger("azure.core.pipeline").setLevel(logging.WARNING)
+    logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(
+        logging.WARNING
     )
     parser = argparse.ArgumentParser(
         description="A engine that will download, extract, and summarize PDFs from the marine accident investigation reports. More information can be found here: https://github.com/1jamesthompson1/TAIC-engine/"

@@ -116,6 +116,7 @@ def test_process_all_pdfs_into_text(tmp_path, stable_pdf_storage_manager):
         parsed_reports_df_file_name,
         refresh=True,
         pdf_storage_manager=stable_pdf_storage_manager,
+        max_workers=1,  # Sequential for testing
     )
 
     assert parsed_reports_df_file_name.exists()

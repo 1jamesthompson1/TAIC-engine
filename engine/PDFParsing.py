@@ -6,6 +6,7 @@ Uses pymupdf4llm for better structure preservation and markdown output.
 
 import logging
 import re
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
@@ -18,7 +19,10 @@ from engine.AzureStorage import PDFStorageManager
 logger = logging.getLogger(__name__)
 
 # Batch size for saving parsed reports to disk
-BATCH_SAVE_SIZE = 50
+SAVE_BATCH_SIZE = 50
+
+# Minimum length of extracted text to consider it valid (to filter out failed extractions)
+MIN_EXTRACTED_TEXT_LENGTH = 1000
 
 PDF_PAGE_MARKER_REGEX = re.compile(r"<< PDF Page (\d+) start >>")
 
@@ -27,6 +31,7 @@ def process_all_pdfs_into_text(
     parsed_reports_df_file_name: Path,
     refresh: bool,
     pdf_storage_manager: PDFStorageManager,
+    max_workers: int | None = None,
 ):
     """Convert PDFs to text and save as dataframe.
 
@@ -34,16 +39,19 @@ def process_all_pdfs_into_text(
         parsed_reports_df_file_name: Path to save/load the pickle dataframe
         refresh: Whether to reprocess all PDFs
         pdf_storage_manager: Azure storage manager for accessing PDFs
+        max_workers: Maximum number of parallel workers for PDF processing
     """
     logger.info(
-        "=" * 150
+        "\n"
+        + "=" * 80
         + "\n"
-        + "|" * 150
+        + "|" * 80
         + "\n"
-        + "Converting PDFs to text"
-        + "|" * 150
+        + " " * 30
+        + "Converting PDFs to text\n"
+        + "|" * 80
         + "\n"
-        + "=" * 150
+        + "=" * 80
     )
 
     logger.debug("Using PDF storage manager (streaming from cloud)")
@@ -62,52 +70,91 @@ def process_all_pdfs_into_text(
     else:
         parsed_reports_df = pd.DataFrame(columns=["report_id", "text"])
 
-    new_parsed_reports = []
-
     logger.info(
         f"Parsing {len(report_ids)} reports, there are currently {len(parsed_reports_df)} reports in the parsed reports dataframe"
     )
 
-    for report_id in (pbar := tqdm(report_ids)):
-        pbar.set_description(
-            f"Extracting text from report PDFs, currently processing {report_id}"
+    # Filter out already processed reports
+    reports_to_process = [
+        rid
+        for rid in report_ids
+        if rid not in parsed_reports_df["report_id"].to_numpy()
+    ]
+    logger.info(f"Need to process {len(reports_to_process)} new reports")
+
+    if not reports_to_process:
+        logger.info(f"Completed: {len(parsed_reports_df)} total reports in dataframe")
+        return
+
+    batch_reports = []
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_report = {
+            executor.submit(pdf_to_text, pdf_storage_manager, report_id): report_id
+            for report_id in reports_to_process
+        }
+
+        # Process completed tasks with progress bar
+        for future in tqdm(
+            as_completed(future_to_report),
+            total=len(reports_to_process),
+            desc="Processing PDFs",
+        ):
+            report_id = future_to_report[future]
+            parsed_reports_df = _process_future_result(
+                future,
+                report_id,
+                batch_reports,
+                parsed_reports_df,
+                parsed_reports_df_file_name,
+            )
+
+    # Save any remaining reports
+    if batch_reports:
+        parsed_reports_df = pd.concat(
+            [parsed_reports_df, pd.DataFrame(batch_reports)],
+            ignore_index=True,
         )
+        parsed_reports_df.to_pickle(parsed_reports_df_file_name)
+        logger.debug(f"Saved final batch of {len(batch_reports)} reports")
 
-        # Skip if already processed
-        if report_id in parsed_reports_df["report_id"].to_numpy():
-            continue
+    logger.info(f"Completed: {len(parsed_reports_df)} total reports in dataframe")
 
-        report_text = pdf_to_text(pdf_storage_manager, report_id)
 
+def _process_future_result(
+    future, report_id, batch_reports, parsed_reports_df, parsed_reports_df_file_name
+) -> pd.DataFrame:
+    """Process the result of a single PDF processing future.
+
+    Returns:
+        Updated dataframe with the processed report added.
+    """
+    try:
+        report_text = future.result()
         if report_text is None:
-            logger.error(f"Failed to extract text from {report_id}, skipping")
-            continue
+            return parsed_reports_df
 
-        new_parsed_reports.append(
+        batch_reports.append(
             {
                 "report_id": report_id,
                 "text": report_text,
             }
         )
 
-        if len(new_parsed_reports) > BATCH_SAVE_SIZE:
+        # Save in batches
+        if len(batch_reports) >= SAVE_BATCH_SIZE:
             parsed_reports_df = pd.concat(
-                [parsed_reports_df, pd.DataFrame(new_parsed_reports)],
+                [parsed_reports_df, pd.DataFrame(batch_reports)],
                 ignore_index=True,
             )
             parsed_reports_df.to_pickle(parsed_reports_df_file_name)
-            logger.debug(
-                f"Saving {len(new_parsed_reports)} reports to {parsed_reports_df_file_name}. There are now {len(parsed_reports_df)} reports in the parsed dataframe."
-            )
-            new_parsed_reports = []
+            logger.debug(f"Saved batch of {len(batch_reports)} reports")
+            batch_reports.clear()
 
-    if len(new_parsed_reports) > 0:
-        parsed_reports_df = pd.concat(
-            [parsed_reports_df, pd.DataFrame(new_parsed_reports)], ignore_index=True
-        )
-        parsed_reports_df.to_pickle(parsed_reports_df_file_name)
+    except Exception:
+        logger.exception(f"Error processing {report_id}")
 
-    logger.info(f"Completed: {len(parsed_reports_df)} total reports in dataframe")
+    return parsed_reports_df
 
 
 def pdf_to_text(pdf_manager: PDFStorageManager, report_id: str) -> str | None:
@@ -130,7 +177,18 @@ def pdf_to_text(pdf_manager: PDFStorageManager, report_id: str) -> str | None:
             logger.error(f"Failed to download {report_id} from storage")
             return None
 
+        # check pdf is not empty
+        if Path(temp_pdf_path).stat().st_size == 0:
+            logger.error(f"Downloaded PDF {report_id} is empty")
+            return None
+
         text = extract_text_from_pdf(temp_pdf_path)
+
+        if len(text) < MIN_EXTRACTED_TEXT_LENGTH:
+            logger.warning(
+                f"Extracted text from {report_id} is unusually short ({len(text)} characters) and is being ignored"
+            )
+            return None
         return clean_extracted_text(text)
     except Exception:
         logger.exception(f"Error processing {report_id}")
@@ -165,7 +223,7 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 
         # Add a start of page marker at the very beginning of the document
         text_with_complete_start_of_page_markers = (
-            "--- Page 0 start ---\n" + text_with_start_of_page_markers
+            "<< PDF Page 0 start >>\n" + text_with_start_of_page_markers
         )
 
         # Remove the last page marker as it is not a start of page marker anyomre.
