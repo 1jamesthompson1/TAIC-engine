@@ -16,6 +16,7 @@ from . import (
     PDFParsing,
     ReportExtracting,
     ReportTypeAssignment,
+    SavedDataFrames,
     WebsiteScraping,
 )
 from .AzureStorage import (
@@ -131,7 +132,7 @@ def scrape(output_dir: Path, config: dict, refresh: bool):
 
     # Download the PDFs
     report_scraping_settings = WebsiteScraping.ReportScraperSettings(
-        output_dir / output_config.get("report_titles_df_file_name"),
+        SavedDataFrames.ReportTitles(output_dir),
         download_config.get("start_year"),
         download_config.get("end_year"),
         download_config.get("max_per_year"),
@@ -147,37 +148,36 @@ def scrape(output_dir: Path, config: dict, refresh: bool):
                 WebsiteScraping.TSBReportScraper(report_scraping_settings).collect_all()
             case "TAIC":
                 WebsiteScraping.TAICReportScraper(
-                    output_dir
-                    / output_config.get("taic_website_reports_table_file_name"),
+                    SavedDataFrames.TAICWebsiteReportsTable(output_dir),
                     report_scraping_settings,
                 ).collect_all()
             case "ATSB":
                 WebsiteScraping.ATSBReportScraper(
-                    output_dir
-                    / output_config.get("atsb_website_reports_table_file_name"),
+                    SavedDataFrames.ATSBWebsiteReportsTable(output_dir),
                     report_scraping_settings,
                 ).collect_all()
             case _:
                 logger.warning("Unknown agency '%s', skipping", agency)
 
+    atsb_safety_issues_df = SavedDataFrames.ATSBWebsiteSafetyIssues(output_dir)
     atsb_si_scraper = WebsiteScraping.ATSBSafetyIssueScraper(
-        output_dir / output_config.get("atsb_website_safety_issues_file_name"),
-        output_dir / output_config.get("report_titles_df_file_name"),
+        atsb_safety_issues_df,
+        SavedDataFrames.ReportTitles(output_dir),
         refresh,
     )
 
     atsb_si_scraper.extract_safety_issues_from_website()
 
     tsb_recs_scraper = WebsiteScraping.TSBRecommendationsScraper(
-        output_dir / output_config.get("tsb_website_recommendations_file_name"),
-        output_dir / output_config.get("report_titles_df_file_name"),
+        SavedDataFrames.TSBWebsiteRecommendations(output_dir),
+        SavedDataFrames.ReportTitles(output_dir),
         refresh,
     )
     tsb_recs_scraper.extract_recommendations_from_website()
 
     taic_recs_scraper = WebsiteScraping.TAICRecommendationsScraper(
-        output_dir / output_config.get("taic_website_recommendations_file_name"),
-        output_dir / output_config.get("report_titles_df_file_name"),
+        SavedDataFrames.TAICWebsiteRecommendations(output_dir),
+        SavedDataFrames.ReportTitles(output_dir),
         refresh,
     )
     taic_recs_scraper.extract_recommendations_from_website()
@@ -287,7 +287,7 @@ def extract(output_dir: Path, config: dict, refresh: bool):
 
     # Parse PDFs into text
     PDFParsing.process_all_pdfs_into_text(
-        output_dir / output_config.get("parsed_reports_df_file_name"),
+        SavedDataFrames.ParsedReports(output_dir),
         refresh,
         pdf_storage_manager,
     )

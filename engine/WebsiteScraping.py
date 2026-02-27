@@ -5,7 +5,6 @@ from various transportation safety agencies (TAIC, ATSB, TSB). It handles HTTP r
 It does the crawling of websitess and extracts report metadata and PDFs which is then uploaded to cloud storage.
 """
 
-import os
 import random
 import re
 from abc import ABC, abstractmethod
@@ -32,6 +31,14 @@ from tqdm import tqdm
 from engine import Modes
 from engine.AzureStorage import PDFStorageManager
 from engine.Logging import get_logger
+from engine.SavedDataFrames import (
+    ATSBWebsiteReportsTable,
+    ATSBWebsiteSafetyIssues,
+    ReportTitles,
+    TAICWebsiteRecommendations,
+    TAICWebsiteReportsTable,
+    TSBWebsiteRecommendations,
+)
 
 logger = get_logger(__name__)
 
@@ -39,18 +46,6 @@ logger = get_logger(__name__)
 @dataclass
 class ReportMetadata:
     """Small data class to hold the metadata so that it can be passed around easily between the functions."""
-
-    # Define the column order based on property names
-    COLUMN_ORDER: ClassVar[list[str]] = [
-        "report_id",
-        "title",
-        "event_type",
-        "investigation_type",
-        "summary",
-        "misc",
-        "url",
-        "agency_id",
-    ]
 
     report_id: str
     title: str
@@ -70,21 +65,14 @@ class ReportMetadata:
         return f"ReportMetadata({self.report_id}, {self.title})"
 
     def as_report_row(self):
-        """Return values in the order defined by COLUMN_ORDER.
+        """Return values in the order defined by ReportTitles.Row.
 
         Returns:
             List of attribute values in column order.
         """
-        return [getattr(self, col) for col in self.COLUMN_ORDER]
-
-    @classmethod
-    def get_column_names(cls):
-        """Return the column names in the correct order.
-
-        Returns:
-            Copy of the COLUMN_ORDER list.
-        """
-        return cls.COLUMN_ORDER.copy()
+        return [
+            getattr(self, field_name) for field_name in ReportTitles.Row.model_fields
+        ]
 
 
 @dataclass
@@ -95,7 +83,7 @@ class ReportScraperSettings:
     transportation safety agency websites.
     """
 
-    report_titles_file_path: str
+    report_titles_dc: ReportTitles
     start_year: int
     end_year: int
     max_per_year: int
@@ -118,14 +106,14 @@ class WebsiteScraper:
     Subclasses handle agency-specific website structures.
     """
 
-    def __init__(self, report_titles_file_path):
+    def __init__(self, report_titles_dc: ReportTitles):
         """Initialize WebsiteScraper.
 
         Args:
-            report_titles_file_path: Path to the pickle file containing report metadata.
+            report_titles_dc: The data container for report titles.
 
         Raises:
-            ValueError: If the report titles file does not exist.
+            ValueError: If the report titles data container is empty.
         """
         # Keep the original headers as a fallback, but we'll use get_randomized_headers() instead
         self.headers = {
@@ -136,11 +124,15 @@ class WebsiteScraper:
             "Connection": "keep-alive",
         }
 
-        if os.path.exists(report_titles_file_path):
-            report_titles_df = pd.read_pickle(report_titles_file_path)
-        else:
-            error_msg = f"{report_titles_file_path} does not exist"
-            raise ValueError(error_msg)
+        try:
+            report_titles_df = report_titles_dc.read()
+            if report_titles_df.empty:
+                msg = "Report titles exists yet is empty"
+                raise ValueError(msg)  # noqa: TRY301
+        except (FileNotFoundError, ValueError) as e:
+            error_msg = f"Report titles df {report_titles_dc.path} does not exist"
+            raise ValueError(error_msg) from e
+
         self.id_dict = {
             agency: {
                 agency_id: report_id
@@ -311,24 +303,19 @@ class ReportScraper(WebsiteScraper, ABC):
         """
         self.settings = settings
         self._metadata_file_lock = Lock()
-        if os.path.exists(self.settings.report_titles_file_path):
-            self.report_titles_df = pd.read_pickle(
-                self.settings.report_titles_file_path
-            )
-            # Make sure index is from 0 to n-1
-            self.report_titles_df = self.report_titles_df.reset_index(drop=True)
-        else:
-            self.report_titles_df = pd.DataFrame(
-                columns=ReportMetadata.get_column_names()
-            )
-            self.report_titles_df.to_pickle(self.settings.report_titles_file_path)
+
+        self.report_titles_df = self.settings.report_titles_dc.read_or_create()
+
+        if self.report_titles_df.empty:
+            self.settings.report_titles_dc.save(self.report_titles_df)
+
         self.agency = agency
-        super().__init__(self.settings.report_titles_file_path)
+        super().__init__(self.settings.report_titles_dc)
         logger.info(f"Downloading report PDFs for {self.agency}")
         logger.info(
             f"PDF storage container: {self.settings.pdf_storage_manager.container_name}"
         )
-        logger.info(f"Report titles file path: {self.settings.report_titles_file_path}")
+        logger.info(f"Report titles file path: {self.settings.report_titles_dc}")
         logger.info(
             f"Start year: {self.settings.start_year}, End year: {self.settings.end_year}"
         )
@@ -667,19 +654,6 @@ class ReportScraper(WebsiteScraper, ABC):
 
     def __add_report_metadata_to_df(self, metadata: ReportMetadata):
         with self._metadata_file_lock:
-            # Ensure DataFrame has correct column order
-            expected_columns = ReportMetadata.get_column_names()
-            if list(self.report_titles_df.columns) != expected_columns:
-                # Reorder existing columns and add missing ones
-                existing_data = self.report_titles_df.copy()
-                self.report_titles_df = pd.DataFrame(columns=expected_columns)
-
-                # Copy existing data to new DataFrame with correct column order
-                for col in expected_columns:
-                    if col in existing_data.columns:
-                        self.report_titles_df[col] = existing_data[col]
-                    # Missing columns will be filled with NaN by default
-
             # Check if report_id exists
             existing_idx = self.report_titles_df.index[
                 self.report_titles_df["report_id"] == metadata.report_id
@@ -693,17 +667,21 @@ class ReportScraper(WebsiteScraper, ABC):
                     metadata.as_report_row()
                 )
 
-            self.report_titles_df.to_pickle(self.settings.report_titles_file_path)
+            self.settings.report_titles_dc.save(self.report_titles_df)
 
 
 class TAICReportScraper(ReportScraper):
     """Report scraper for the Transport Accident Investigation Commission (TAIC) of New Zealand."""
 
-    def __init__(self, reports_table_path, settings: ReportScraperSettings):
+    def __init__(
+        self,
+        website_reports_table_dc: TAICWebsiteReportsTable,
+        settings: ReportScraperSettings,
+    ):
         """Initialize TAICReportScraper.
 
         Args:
-            reports_table_path: Path to the pickle file storing TAIC investigation table.
+            website_reports_table_dc: The TAICWebsiteReportsTable dataframe class.
             settings: Configuration settings for the scraper.
         """
         super().__init__(
@@ -711,21 +689,16 @@ class TAICReportScraper(ReportScraper):
             agency="TAIC",
         )
 
-        self.agency_reports = self.__get_taic_investigations(reports_table_path)
+        self.website_reports_table_dc = website_reports_table_dc
+        self.agency_reports = self.__get_taic_investigations()
 
-    def __get_taic_investigations(self, reports_table_path):
+    def __get_taic_investigations(self):
         """TAICs websites provides an investigation table than can be easily read by pandas read_html.
-
-        Args:
-            reports_table_path: Path to store/load the investigations table.
 
         Returns:
             DataFrame of TAIC investigations indexed by mode.
         """
-        if os.path.exists(reports_table_path):
-            investigations = pd.read_pickle(reports_table_path)
-        else:
-            investigations = pd.DataFrame(columns=["id", "year"])
+        investigations = self.website_reports_table_dc.read_or_create()
         page_num = 0
         while True:
             logger.info(f"Processing page {page_num}")
@@ -785,8 +758,8 @@ class TAICReportScraper(ReportScraper):
         )
         investigations_with_mode.index.name = None
 
-        # Update the pickle file
-        investigations.to_pickle(reports_table_path)
+        # save the investigations
+        self.website_reports_table_dc.save(investigations_with_mode)
 
         return investigations_with_mode
 
@@ -863,46 +836,30 @@ class ATSBReportScraper(ReportScraper):
 
     def __init__(
         self,
-        website_reports_file_name,
+        website_report_table_dc: ATSBWebsiteReportsTable,
         settings: ReportScraperSettings,
     ):
         """Initialize ATSBReportScraper.
 
         Args:
-            website_reports_file_name: Path to pickle file storing ATSB investigations.
+            website_report_table_dc: The dataframe class for ATSB website reports.
             settings: Configuration settings for the scraper.
         """
         super().__init__(settings, agency="ATSB")
-        self.agency_reports = self.__get_atsb_investigations(website_reports_file_name)
+        self.report_table_dc = website_report_table_dc
+        self.agency_reports = self.__get_atsb_investigations()
 
-    def __get_atsb_investigations(self, website_reports_file_name=None):
+    def __get_atsb_investigations(self):
         """ATSBs websites provides an investigation table than can be easily read by pandas read_html.
 
         The only catch is that the aviation goes all the way back to 1960s and so only the first few
         pages of the aviation table is scraped. It will then be combined with a complete scrape of
         the table to find the new ids.
 
-        Args:
-            website_reports_file_name: Path to existing investigations file.
-
         Returns:
             DataFrame of ATSB investigations indexed by mode.
         """
-        if website_reports_file_name is None or not os.path.exists(
-            website_reports_file_name
-        ):
-            investigations = pd.DataFrame(
-                columns=[
-                    "Investigation title",
-                    "Investigation number",
-                    "Investigation webpage",
-                    "Occurrence date",
-                    "Report status",
-                    "Report release",
-                ]
-            )
-        else:
-            investigations = pd.read_pickle(website_reports_file_name)
+        investigations = self.report_table_dc.read_or_create()
 
         url_start_date = (
             f"field_occurence_date_value%5Bmin%5D={self.settings.start_year}-01-01"
@@ -942,39 +899,39 @@ class ATSBReportScraper(ReportScraper):
                         extract_links="body",
                     )[0]
 
-                    page_df["Investigation webpage"] = page_df[
-                        "Investigation title"
-                    ].apply(lambda x: urljoin(base_url, x[1]))
+                    page_df = page_df.rename(
+                        columns={
+                            "Investigation title": "title",
+                            "Investigation number": "agency_id",
+                            "Investigation webpage": "url",
+                            "Occurrence date Sort ascending": "occurrence_date",
+                            "Occurrence date Sort descending": "occurrence_date",
+                            "Report status": "report_status",
+                            "Report release": "report_release",
+                        }
+                    )
+
+                    page_df["url"] = page_df["title"].apply(
+                        lambda x: urljoin(base_url, x[1])
+                    )
 
                     page_df = page_df.map(lambda x: x[0] if isinstance(x, tuple) else x)
 
-                    page_df = page_df.rename(
-                        {
-                            "Occurrence date  Sort ascending": "Occurrence date",
-                            "Occurrence date  Sort descending": "Occurrence date",
-                        },
-                        axis=1,
-                    )
-
                     new_investigations = page_df[
-                        ~page_df["Investigation number"].isin(
-                            investigations["Investigation number"]
-                        )
+                        ~page_df["agency_id"].isin(investigations["agency_id"])
                     ].copy()
 
                     new_investigations.loc[:, "year"] = pd.to_datetime(
-                        new_investigations["Occurrence date"].to_list(),
+                        new_investigations["occurrence_date"].to_list(),
                         format="%d/%m/%Y",
                         errors="coerce",
-                    ).year
+                    ).year.map(int)
 
                     new_investigations = new_investigations.query(
                         f"year >= {self.settings.start_year}"
                     )
 
-                    new_investigations["id"] = new_investigations[
-                        "Investigation number"
-                    ].map(
+                    new_investigations["id"] = new_investigations["agency_id"].map(
                         lambda x: re.search(r"(\d{3})$|(?:(?:\d{5})(\d{4}))$", str(x))
                     )
 
@@ -1022,8 +979,8 @@ class ATSBReportScraper(ReportScraper):
             [investigations, new_investigations],
             axis=0,
         )
-        if website_reports_file_name is not None:
-            updated_investigations.to_pickle(website_reports_file_name)
+
+        self.report_table_dc.save(updated_investigations)
 
         return updated_investigations
 
@@ -1358,17 +1315,20 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
     """Scraper for extracting safety issues from the Australian Transport Safety Bureau (ATSB) website."""
 
     def __init__(
-        self, output_file_path: str, report_titles_file_path, refresh: bool = False
+        self,
+        safety_issues_dc: ATSBWebsiteSafetyIssues,
+        report_titles_dc: ReportTitles,
+        refresh: bool = False,
     ):
         """Initialize ATSBSafetyIssueScraper.
 
         Args:
-            output_file_path: Path to save the extracted safety issues.
-            report_titles_file_path: Path to the report titles pickle file.
+            safety_issues_dc: ATSBWebsiteSafetyIssues dataframe manager.
+            report_titles_dc: ReportTitles dataframe manager.
             refresh: Whether to refresh all safety issues from scratch.
         """
-        super().__init__(report_titles_file_path)
-        self.output_file_path = output_file_path
+        super().__init__(report_titles_dc)
+        self.safety_issues_dc = safety_issues_dc
         self.refresh = refresh
 
     def _process_safety_issues_page(self, html_content, mode, current_page, pbar):  # noqa: PLR6301
@@ -1420,7 +1380,7 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
         return table
 
     def _format_and_save_safety_issues(self, safety_issue_df):
-        """Format safety issues and save to pickle file.
+        """Format safety issues and save them to disk.
 
         Args:
             safety_issue_df: DataFrame containing all safety issues.
@@ -1447,40 +1407,29 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
         ]
 
         logger.info(f"Now there are {safety_issue_df.shape[0]} safety issues")
-
-        grouped = safety_issue_df.groupby("report_id")
-        formatted_df = pd.DataFrame(
-            {
-                "report_id": grouped.groups.keys(),
-                "safety_issues": [group.reset_index(drop=True) for _, group in grouped],
-            }
+        logger.info(
+            "Spread across %s reports",
+            safety_issue_df["report_id"].nunique(),
         )
 
-        logger.info(f"Spread across {formatted_df.shape[0]} reports")
-
-        formatted_df.to_pickle(self.output_file_path)
+        self.safety_issues_dc.save(safety_issue_df)
 
     def extract_safety_issues_from_website(self):
         """Extract all safety issues from ATSB website."""
-        if os.path.exists(self.output_file_path) and not self.refresh:
-            safety_issues_df = pd.read_pickle(self.output_file_path)
+        if self.refresh:
+            safety_issues_df = self.safety_issues_dc.create_empty()
         else:
-            safety_issues_df = pd.DataFrame(columns=["report_id", "safety_issues"])
+            safety_issues_df = self.safety_issues_dc.read_or_create()
 
         base_url = "https://www.atsb.gov.au/safety-issues-and-actions?field_issue_number_value={mode}O&page={page}"
-        if len(safety_issues_df["safety_issues"]) > 0:
-            widened_safety_issues_df = pd.concat(
-                safety_issues_df["safety_issues"].tolist()
-            )
-        else:
-            widened_safety_issues_df = pd.DataFrame(
-                columns=["safety_issue_id", "safety_issue", "quality"]
-            )
 
         logger.info("Scraping safety issues from ATSB")
-        logger.info(f"Output file: {self.output_file_path}")
-        logger.info(f"Currently have {widened_safety_issues_df.shape[0]} safety issues")
-        logger.info(f"Spread across {len(safety_issues_df)} reports")
+        logger.info(f"Output file: {self.safety_issues_dc.path}")
+        logger.info(f"Currently have {safety_issues_df.shape[0]} safety issues")
+        logger.info(
+            "Spread across %s reports",
+            safety_issues_df.get("report_id", pd.Series(dtype=str)).nunique(),
+        )
 
         for mode in (pbar := tqdm(["A", "R", "M"])):
             current_page = 0
@@ -1511,9 +1460,7 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
                     break
 
                 new_safety_issues = table[
-                    ~table["safety_issue_id"].isin(
-                        widened_safety_issues_df["safety_issue_id"]
-                    )
+                    ~table["safety_issue_id"].isin(safety_issues_df["safety_issue_id"])
                 ]
 
                 if new_safety_issues.empty:
@@ -1522,75 +1469,79 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
                     )
                     break
 
-                widened_safety_issues_df = pd.concat(
-                    [widened_safety_issues_df, new_safety_issues], ignore_index=True
+                safety_issues_df = pd.concat(
+                    [safety_issues_df, new_safety_issues], ignore_index=True
                 )
 
                 current_page += 1
 
-        self._format_and_save_safety_issues(widened_safety_issues_df)
+        self._format_and_save_safety_issues(safety_issues_df)
 
 
 class RecommendationScraper(WebsiteScraper, ABC):
     """Abstract base class for scraping recommendations from different transportation safety agencies.
 
-    Subclasses must implement abstract methods to handle agency-specific website structures.
+    Subclasses must define these class variables:
+    - BASE_URL: The base URL of the agency website
+    - LOOP_ITER: Iterator for pagination or mode iteration
+    - AGENCY: The agency name (e.g., 'TSB', 'TAIC')
+
+    Subclasses must also implement abstract methods to handle agency-specific website structures.
     """
 
-    def __init__(  # noqa: PLR0913,PLR0917
+    # Class variables to be defined by subclasses
+    BASE_URL: ClassVar[str]
+    LOOP_ITER: ClassVar[list | range]
+    AGENCY: ClassVar[str]
+
+    def __init__(
         self,
-        output_file_path: str,
-        report_titles_file_path: str,
-        columns: list[str],
-        base_url: str,
-        loop_iter: list | range,
-        agency: str,
+        recommendations_dc: TSBWebsiteRecommendations | TAICWebsiteRecommendations,
+        report_titles_dc: ReportTitles,
         refresh: bool = False,
     ):
         """Initialize RecommendationScraper.
 
         Args:
-            output_file_path: Path to save the extracted recommendations.
-            report_titles_file_path: Path to the report titles pickle file.
-            columns: List of column names for the recommendations DataFrame.
-            base_url: Base URL of the agency website.
-            loop_iter: Iterator for pagination or mode iteration.
-            agency: The agency name (e.g., 'TSB', 'TAIC').
+            recommendations_dc: The data class for recommendations.
+            report_titles_dc: The data class for report titles.
             refresh: Whether to refresh all recommendations from scratch.
         """
-        super().__init__(report_titles_file_path)
+        super().__init__(report_titles_dc)
 
-        self.output_file_path = output_file_path
+        self.recommendations_dc = recommendations_dc
         self.refresh = refresh
-        self.columns = columns
-        self.base_url = base_url
-        self.loop_iter = loop_iter
-        self.agency = agency
+        self.base_url = self.BASE_URL
+        self.loop_iter = self.LOOP_ITER
+        self.agency = self.AGENCY
 
     def extract_recommendations_from_website(self):
-        """Extract all recommendations from the agency website."""
-        if not self.refresh and os.path.exists(self.output_file_path):
-            recommendations_df = pd.read_pickle(self.output_file_path)
+        """Extract all recommendations from the agency website.
+
+        It does this through two passes. The first pass is to read through the recommendation tables. Then it will open up each recommendation page to extract the extra information.
+        """
+        if self.refresh:
+            recommendations_df = self.recommendations_dc.create_empty()
         else:
-            recommendations_df = pd.DataFrame(columns=["report_id", "recommendations"])
+            recommendations_df = self.recommendations_dc.read_or_create()
 
-        new_recommendations = pd.DataFrame(columns=self.columns)
-
-        logger.info("Scraping recommendations")
-        logger.info(f"Output directory: {self.output_file_path}")
-        logger.info(f"Scraping from base url {self.base_url}")
-        logger.info(
-            f"Currently have {recommendations_df.shape[0]} reports with recommendations"
-        )
-        logger.info(
-            f"With {recommendations_df['recommendations'].apply(len).sum()} recommendations"
+        logger.welcome(
+            f"Scraping recommendations from {self.agency} website",
+            {
+                "Output directory": self.recommendations_dc.path,
+                "Base URL": self.base_url,
+                "Number of recommendations:": recommendations_df.shape[0],
+                "Number of reports with recommendations:": recommendations_df[
+                    "report_id"
+                ].nunique(),
+            },
         )
 
         logger.info("Reading recommendation tables to get recommendations webpages")
 
-        all_recommendation_ids = pd.concat(
-            recommendations_df["recommendations"].tolist()
-        )["recommendation_id"]
+        all_recommendation_ids = recommendations_df["recommendation_id"]
+
+        new_recommendations = self.recommendations_dc.create_empty()
 
         for element in (phbar := tqdm(self.loop_iter)):
             phbar.set_description(f"Scraping recommendations for {element}")
@@ -1632,24 +1583,10 @@ class RecommendationScraper(WebsiteScraper, ABC):
         )
 
         recommendations_df = pd.concat(
-            [
-                recommendations_df,
-                pd.DataFrame(
-                    {
-                        "report_id": new_recommendations.groupby(
-                            "report_id"
-                        ).groups.keys(),
-                        "recommendations": [
-                            group.reset_index(drop=True).drop("report_id", axis=1)
-                            for _, group in new_recommendations.groupby("report_id")
-                        ],
-                    }
-                ),
-            ],
-            ignore_index=True,
+            [recommendations_df, new_recommendations], ignore_index=True
         )
 
-        recommendations_df.to_pickle(self.output_file_path)
+        self.recommendations_dc.save(recommendations_df)
 
     @abstractmethod
     def extract_recommendation_data(self, url) -> dict:
@@ -1719,38 +1656,9 @@ class RecommendationScraper(WebsiteScraper, ABC):
 class TSBRecommendationsScraper(RecommendationScraper):
     """Recommendations scraper for the Transportation Safety Board (TSB) of Canada."""
 
-    def __init__(self, output_file_path, report_titles_file_path, refresh=False):
-        """Initialize TSBRecommendationsScraper.
-
-        Args:
-            output_file_path: Path to save the extracted recommendations.
-            report_titles_file_path: Path to the report titles pickle file.
-            refresh: Whether to refresh all recommendations from scratch.
-        """
-        columns = [
-            "recommendation_id",
-            "recommendation",
-            "agency_id",
-            "current_assessment",
-            "status",
-            "watchlist",
-            "url",
-            "made",
-            "recommendation_context",
-        ]
-        base_url = "https://www.tsb.gc.ca"
-        loop_iter = ["rail", "marine", "aviation"]
-        agency = "TSB"
-
-        super().__init__(
-            output_file_path,
-            report_titles_file_path,
-            columns,
-            base_url,
-            loop_iter,
-            agency,
-            refresh,
-        )
+    BASE_URL: ClassVar[str] = "https://www.tsb.gc.ca"
+    LOOP_ITER: ClassVar[list[str]] = ["rail", "marine", "aviation"]
+    AGENCY: ClassVar[str] = "TSB"
 
     def get_url(self, element):
         """Get the URL for a recommendation element.
@@ -1902,35 +1810,9 @@ class TAICRecommendationsScraper(RecommendationScraper):
     This scraper extracts recommendations from the TAIC recommendations webpage.
     """
 
-    def __init__(self, output_file_path, report_titles_file_path, refresh=False):
-        """Initialize TAICRecommendationsScraper.
-
-        Args:
-            output_file_path: Path to save the extracted recommendations.
-            report_titles_file_path: Path to the report titles pickle file.
-            refresh: Whether to refresh all recommendations from scratch.
-        """
-        columns = [
-            "recommendation_id",
-            "made",
-            "agency_id",
-            "recipient",
-            "recommendation",
-            "reply_text",
-        ]
-        base_url = "https://www.taic.org.nz"
-        loop_iter = range(300)
-        agency = "TAIC"
-
-        super().__init__(
-            output_file_path,
-            report_titles_file_path,
-            columns,
-            base_url,
-            loop_iter,
-            agency,
-            refresh,
-        )
+    BASE_URL: ClassVar[str] = "https://www.taic.org.nz"
+    LOOP_ITER: ClassVar[range] = range(300)
+    AGENCY: ClassVar[str] = "TAIC"
 
     def get_url(self, element):
         """Get the URL for a recommendations page element.
@@ -2089,7 +1971,12 @@ class TAICRecommendationsScraper(RecommendationScraper):
             if "Related inquiries" in out
             else None
         )
-        made = out.get("Issue date")
+        made_str = out.get("Issue date")
+        made = (
+            pd.to_datetime(made_str, format="%d %b %Y", errors="coerce")
+            if made_str
+            else None
+        )
 
         return {
             "recommendation": recommendation_text,

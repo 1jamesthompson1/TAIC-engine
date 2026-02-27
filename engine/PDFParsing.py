@@ -14,6 +14,7 @@ import pymupdf4llm
 from tqdm import tqdm
 
 from engine.AzureStorage import PDFStorageManager
+from engine.SavedDataFrames import ParsedReports
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ PDF_PAGE_MARKER_REGEX = re.compile(r"<< PDF Page (\d+) start >>")
 
 
 def process_all_pdfs_into_text(
-    parsed_reports_df_file_name: Path,
+    parsed_reports_dc: ParsedReports,
     refresh: bool,
     pdf_storage_manager: PDFStorageManager,
     max_workers: int | None = None,
@@ -36,27 +37,18 @@ def process_all_pdfs_into_text(
     """Convert PDFs to text and save as dataframe.
 
     Args:
-        parsed_reports_df_file_name: Path to save/load the pickle dataframe
+        parsed_reports_dc: The ParsedReports data frame manager instance
         refresh: Whether to reprocess all PDFs
         pdf_storage_manager: Azure storage manager for accessing PDFs
         max_workers: Maximum number of parallel workers for PDF processing
     """
-    logger.info(
-        "\n"
-        + "=" * 80
-        + "\n"
-        + "|" * 80
-        + "\n"
-        + " " * 30
-        + "Converting PDFs to text\n"
-        + "|" * 80
-        + "\n"
-        + "=" * 80
+    logger.welcome(
+        "Converting PDFs to text",
+        {
+            "Output file": parsed_reports_dc.path,
+            "Refresh": refresh,
+        },
     )
-
-    logger.debug("Using PDF storage manager (streaming from cloud)")
-    logger.debug(f"Output file: {parsed_reports_df_file_name}")
-    logger.debug(f"Refresh: {refresh}")
 
     # Get PDFs from cloud storage
     report_ids = pdf_storage_manager.list_pdfs()
@@ -65,10 +57,10 @@ def process_all_pdfs_into_text(
         return
     logger.info(f"Found {len(report_ids)} PDFs in storage container")
 
-    if parsed_reports_df_file_name.exists() and not refresh:
-        parsed_reports_df = pd.read_pickle(parsed_reports_df_file_name)
+    if refresh:
+        parsed_reports_df = parsed_reports_dc.create_empty()
     else:
-        parsed_reports_df = pd.DataFrame(columns=["report_id", "text"])
+        parsed_reports_df = parsed_reports_dc.read_or_create()
 
     logger.info(
         f"Parsing {len(report_ids)} reports, there are currently {len(parsed_reports_df)} reports in the parsed reports dataframe"
@@ -106,7 +98,7 @@ def process_all_pdfs_into_text(
                 report_id,
                 batch_reports,
                 parsed_reports_df,
-                parsed_reports_df_file_name,
+                parsed_reports_dc,
             )
 
     # Save any remaining reports
@@ -115,14 +107,14 @@ def process_all_pdfs_into_text(
             [parsed_reports_df, pd.DataFrame(batch_reports)],
             ignore_index=True,
         )
-        parsed_reports_df.to_pickle(parsed_reports_df_file_name)
+        parsed_reports_dc.save(parsed_reports_df)
         logger.debug(f"Saved final batch of {len(batch_reports)} reports")
 
     logger.info(f"Completed: {len(parsed_reports_df)} total reports in dataframe")
 
 
 def _process_future_result(
-    future, report_id, batch_reports, parsed_reports_df, parsed_reports_df_file_name
+    future, report_id, batch_reports, parsed_reports_df, parsed_reports_dc
 ) -> pd.DataFrame:
     """Process the result of a single PDF processing future.
 
@@ -147,7 +139,7 @@ def _process_future_result(
                 [parsed_reports_df, pd.DataFrame(batch_reports)],
                 ignore_index=True,
             )
-            parsed_reports_df.to_pickle(parsed_reports_df_file_name)
+            parsed_reports_dc.save(parsed_reports_df)
             logger.debug(f"Saved batch of {len(batch_reports)} reports")
             batch_reports.clear()
 

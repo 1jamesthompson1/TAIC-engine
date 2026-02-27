@@ -8,6 +8,49 @@ import logging
 import sys
 
 
+class EngineLogger(logging.Logger):
+    """Custom logger with additional formatting methods for consistent output."""
+
+    def welcome(
+        self,
+        title: str,
+        details: dict[str, str] | None = None,
+        width: int = 80,
+    ) -> None:
+        """Log a formatted welcome/section header message.
+
+        Creates a visually distinguished section header with optional details.
+        All output is combined into a single logger call.
+
+        Args:
+            title: Main title for the section.
+            details: Optional dict of key-value pairs to display below title.
+            width: Width of the formatted output box (default 80).
+
+        Example:
+            >>> logger.welcome(
+            ...     "Scraping Recommendations",
+            ...     {
+            ...         "Output directory": "/path/to/output",
+            ...         "Base URL": "https://example.com",
+            ...         "Current reports": "42",
+            ...     }
+            ... )
+        """
+        message = "\n" + "=" * width + "\n"
+        message += "|" * width + "\n"
+        message += " " * ((width - len(title)) // 2) + title + "\n"
+        message += "|" * width + "\n"
+
+        if details:
+            for key, value in details.items():
+                message += f"  {key}: {value}\n"
+
+        message += "=" * width
+
+        self.info(message)
+
+
 def configure_logging(
     log_level: str = "INFO",
     log_file: str | None = None,
@@ -31,6 +74,9 @@ def configure_logging(
         >>> logger.debug("Debug message")
         >>> logger.info("Info message")
     """
+    # Set the custom logger class globally
+    logging.setLoggerClass(EngineLogger)
+
     if format_string is None:
         format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
@@ -64,14 +110,23 @@ def configure_logging(
 def get_logger(name: str) -> logging.Logger:
     """Get a logger instance for a specific module.
 
+    Returns an EngineLogger instance with custom methods for consistent
+    output formatting throughout the application.
+
     Args:
         name: The name of the logger, typically __name__ from the calling module.
 
     Returns:
-        logging.Logger: A logger instance configured with the engine's settings.
+        logging.Logger: An EngineLogger instance with additional methods like
+            welcome() for formatted output sections.
 
     Example:
         >>> logger = get_logger(__name__)
         >>> logger.info("Module starting")
+        >>> logger.welcome("Processing Reports", {"Count": "42"})
     """
+    # Ensure the custom logger class is set
+    if logging.getLoggerClass() is not EngineLogger:
+        logging.setLoggerClass(EngineLogger)
+
     return logging.getLogger(name)

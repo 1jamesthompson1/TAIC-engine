@@ -17,12 +17,13 @@ import itertools
 import os
 import shutil
 import socket
+from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
 import pytest
 
-from engine import Modes, WebsiteScraping
+from engine import Modes, SavedDataFrames, WebsiteScraping
 
 MINIMUM_SAFETY_ISSUES_COUNT = 388
 
@@ -72,7 +73,7 @@ def report_scraping_settings(tmpdir, test_pdf_storage_manager):
         ReportScraperSettings: Configured settings for scraping.
     """
     return WebsiteScraping.ReportScraperSettings(
-        os.path.join(tmpdir, "report_titles.pkl"),
+        SavedDataFrames.ReportTitles(tmpdir),
         2004,
         2021,
         1,
@@ -109,7 +110,10 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
             if os.path.exists(original_path):
                 shutil.copy2(original_path, tmp_path)
 
-            return WebsiteScraping.TAICReportScraper(tmp_path, report_scraping_settings)
+            return WebsiteScraping.TAICReportScraper(
+                SavedDataFrames.TAICWebsiteReportsTable(tmpdir),
+                report_scraping_settings,
+            )
         if agency == "ATSB":
             original_path = os.path.join(
                 pytest.output_config.get("folder_name"),
@@ -124,10 +128,7 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
                 shutil.copy2(original_path, tmp_path)
 
             return WebsiteScraping.ATSBReportScraper(
-                os.path.join(
-                    str(tmpdir),
-                    pytest.output_config.get("atsb_website_reports_table_file_name"),
-                ),
+                SavedDataFrames.ATSBWebsiteReportsTable(tmpdir),
                 report_scraping_settings,
             )
         if agency == "TSB":
@@ -296,18 +297,19 @@ def test_atsb_safety_issue_scrape(tmpdir):
     )
 
     # Create temporary paths
-    temp_output_path = os.path.join(str(tmpdir), "atsb_safety_issues.pkl")
-    temp_report_titles = os.path.join(str(tmpdir), "report_titles.pkl")
+    atsb_safety_issues_df = SavedDataFrames.ATSBWebsiteSafetyIssues(Path(str(tmpdir)))
+    temp_output_path = str(atsb_safety_issues_df.path)
+    report_titles_dc = SavedDataFrames.ReportTitles(Path(str(tmpdir)))
 
     # Copy files if they exist
     if os.path.exists(original_output_path):
         shutil.copy2(original_output_path, temp_output_path)
     if os.path.exists(original_report_titles):
-        shutil.copy2(original_report_titles, temp_report_titles)
+        shutil.copy2(original_report_titles, report_titles_dc.path)
 
     atsb_webscraper = WebsiteScraping.ATSBSafetyIssueScraper(
-        output_file_path=temp_output_path,
-        report_titles_file_path=temp_report_titles,
+        safety_issues_dc=atsb_safety_issues_df,
+        report_titles_dc=report_titles_dc,
         refresh=True,
     )
 
@@ -319,10 +321,8 @@ def test_atsb_safety_issue_scrape(tmpdir):
 
     required_ids = ["MO-2008-013-SI-04", "AO-2023-008-SI-01"]
 
-    output_long = pd.concat(output["safety_issues"].dropna().tolist(), axis=0)
-
     for item_id in required_ids:
-        assert item_id in output_long["safety_issue_id"].unique()
+        assert item_id in output["safety_issue_id"].unique()
 
 
 @pytest.mark.parametrize(
@@ -361,16 +361,16 @@ def test_recommendation_listing(  # noqa: PLR0913, PLR0917
     # check the correct host.
     request.node.add_marker(pytest.mark.integration(site=site))
 
-    report_titles_path = os.path.join(
-        pytest.output_config.get("folder_name"),
-        pytest.output_config.get("report_titles_df_file_name"),
+    report_titles_dc = SavedDataFrames.ReportTitles(
+        pytest.output_config.get("folder_name")
     )
-    assert os.path.exists(report_titles_path), "Test report titles file is missing"
+    assert report_titles_dc.exists(), "Test report titles file is missing"
 
-    out_path = os.path.join(str(tmpdir), f"{site}_recs_smoke.pkl")
     scraper = scraper_cls(
-        output_file_path=out_path,
-        report_titles_file_path=report_titles_path,
+        SavedDataFrames.TSBWebsiteRecommendations(tmpdir)
+        if scraper_cls.__name__ == "TSBRecommendationsScraper"
+        else SavedDataFrames.TAICWebsiteRecommendations(tmpdir),
+        report_titles_dc,
         refresh=True,
     )
 
@@ -431,16 +431,16 @@ def test_recommendation_page(  # noqa: PLR0913, PLR0917
     # check the correct host.
     request.node.add_marker(pytest.mark.integration(site=site))
 
-    report_titles_path = os.path.join(
-        pytest.output_config.get("folder_name"),
-        pytest.output_config.get("report_titles_df_file_name"),
+    report_titles_dc = SavedDataFrames.ReportTitles(
+        pytest.output_config.get("folder_name")
     )
-    assert os.path.exists(report_titles_path), "Test report titles file is missing"
+    assert report_titles_dc.exists(), "Test report titles file is missing"
 
-    out_path = os.path.join(str(tmpdir), f"{site}_recs_smoke.pkl")
     scraper = scraper_cls(
-        output_file_path=out_path,
-        report_titles_file_path=report_titles_path,
+        SavedDataFrames.TSBWebsiteRecommendations(tmpdir)
+        if scraper_cls.__name__ == "TSBRecommendationsScraper"
+        else SavedDataFrames.TAICWebsiteRecommendations(tmpdir),
+        report_titles_dc,
         refresh=True,
     )
 
@@ -448,7 +448,7 @@ def test_recommendation_page(  # noqa: PLR0913, PLR0917
     assert assert_fn(rec)
 
     # Check to see if it has the right keys
-    assert set(rec.keys()).issubset(scraper.columns)
+    assert set(rec.keys()).issubset(scraper.recommendations_dc._effective_columns)
     # common ones
     assert "recommendation" in rec
     assert "made" in rec
