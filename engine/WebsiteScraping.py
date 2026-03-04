@@ -126,10 +126,7 @@ class WebsiteScraper:
 
         try:
             report_titles_df = report_titles_dc.read()
-            if report_titles_df.empty:
-                msg = "Report titles exists yet is empty"
-                raise ValueError(msg)  # noqa: TRY301
-        except (FileNotFoundError, ValueError) as e:
+        except FileNotFoundError as e:
             error_msg = f"Report titles df {report_titles_dc.path} does not exist"
             raise ValueError(error_msg) from e
 
@@ -311,17 +308,17 @@ class ReportScraper(WebsiteScraper, ABC):
 
         self.agency = agency
         super().__init__(self.settings.report_titles_dc)
-        logger.info(f"Downloading report PDFs for {self.agency}")
-        logger.info(
-            f"PDF storage container: {self.settings.pdf_storage_manager.container_name}"
+        logger.welcome(
+            f"Downloading report PDFs for {self.agency}",
+            {
+                "PDF storage container": self.settings.pdf_storage_manager.container_name,
+                "Report titles file path": str(self.settings.report_titles_dc.path),
+                "Year range": f"{self.settings.start_year} - {self.settings.end_year}",
+                "Max per year": self.settings.max_per_year,
+                "Modes": ", ".join(mode.name for mode in self.settings.modes),
+                "Ignored report IDs": len(self.settings.ignored_report_ids),
+            },
         )
-        logger.info(f"Report titles file path: {self.settings.report_titles_dc}")
-        logger.info(
-            f"Start year: {self.settings.start_year}, End year: {self.settings.end_year}"
-        )
-        logger.info(f"Max reports per year: {self.settings.max_per_year}")
-        logger.info(f"Modes: {self.settings.modes}")
-        logger.info(f"Ignoring report ids: {self.settings.ignored_report_ids}")
 
     def collect_all(self):
         """Collect reports for all configured modes."""
@@ -884,13 +881,14 @@ class ATSBReportScraper(ReportScraper):
             while True:
                 pbar.set_description(f"Scraping mode: {mode}, page: {page_num}")
                 try:
+                    page_url = url.format(
+                        mode=mode,
+                        page_num=page_num,
+                        url_start_date=url_start_date,
+                        url_end_date=url_end_date,
+                    )
                     page = self.get(
-                        url.format(
-                            mode=mode,
-                            page_num=page_num,
-                            url_start_date=url_start_date,
-                            url_end_date=url_end_date,
-                        )
+                        page_url,
                     ).content
 
                     page_df = pd.read_html(
@@ -904,8 +902,9 @@ class ATSBReportScraper(ReportScraper):
                             "Investigation title": "title",
                             "Investigation number": "agency_id",
                             "Investigation webpage": "url",
-                            "Occurrence date Sort ascending": "occurrence_date",
-                            "Occurrence date Sort descending": "occurrence_date",
+                            "Occurrence date  Sort ascending": "occurrence_date",
+                            "Occurrence date  Sort descending": "occurrence_date",
+                            "Occurrence date": "occurrence_date",
                             "Report status": "report_status",
                             "Report release": "report_release",
                         }
@@ -941,6 +940,9 @@ class ATSBReportScraper(ReportScraper):
                     )
 
                     if new_investigations.empty:
+                        logger.info(
+                            f"Looking at page {page_num} for mode {mode}, found no new investigations, did find {len(page_df)} existing ones.\n{page_url}"
+                        )
                         break
 
                     pages.append(new_investigations)
@@ -997,11 +999,11 @@ class ATSBReportScraper(ReportScraper):
         return [
             (self.get_report_id(mode, year, str(atsb_id)[-3:]), url, str(atsb_id))
             for atsb_id, url in self.agency_reports.loc[mode]
-            .query(f"year == {year} & `Report status` == 'Final'")
-            .dropna(subset=["Investigation webpage"])[
+            .query(f"year == {year} & `report_status` == 'Final'")
+            .dropna(subset=["url"])[
                 [
-                    "Investigation number",
-                    "Investigation webpage",
+                    "agency_id",
+                    "url",
                 ]
             ]
             .to_records(index=False)
@@ -1800,7 +1802,15 @@ class TSBRecommendationsScraper(RecommendationScraper):
         table = table.map(lambda x: x[0] if isinstance(x, tuple) else x)
 
         # Give proper column names
-        table.columns = self.columns[:7]
+        table.columns = [
+            "recommendation_id",
+            "recommendation",
+            "agency_id",
+            "current_assessment",
+            "status",
+            "watchlist",
+            "url",
+        ]
         return table.drop("recommendation", axis=1)
 
 

@@ -408,6 +408,7 @@ class OpenAICaller(BaseAICaller):
                     **params,
                     text_format=output_structure,
                 )
+
             else:
                 response = self.client.responses.create(
                     **params,

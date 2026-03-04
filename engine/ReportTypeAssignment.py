@@ -5,7 +5,6 @@ based on the report title and available event type options.
 """
 
 import concurrent.futures
-from pathlib import Path
 from typing import Literal
 
 import pandas as pd
@@ -15,6 +14,12 @@ from tqdm import tqdm
 from engine import Modes
 from engine.AICaller import ai_caller
 from engine.Logging import get_logger
+from engine.SavedDataFrames import (
+    AllEventTypes,
+    ParsedReports,
+    ReportEventTypes,
+    ReportTitles,
+)
 
 logger = get_logger(__name__)
 
@@ -30,45 +35,33 @@ class ReportTypeAssigner:
 
     def __init__(
         self,
-        report_event_type_df_path: Path,
-        report_titles_df_path: Path,
-        parsed_reports_df_path: Path,
-        report_types_df_path: Path,
+        report_event_types_dc: ReportEventTypes,
+        report_titles_dc: ReportTitles,
+        parsed_reports_dc: ParsedReports,
+        all_event_types_dc: AllEventTypes,
     ):
-        """Initialize the ReportTypeAssigner with required dataframes and paths.
+        """Initialize the ReportTypeAssigner with required dataframes and managers.
 
         Args:
-            report_event_type_df_path: Path to pickled DataFrame with event types.
-            report_titles_df_path: Path to pickled DataFrame with report titles.
-            parsed_reports_df_path: Path to pickled DataFrame with parsed reports.
-            report_types_df_path: Path where to save/load assigned report types.
+            report_event_types_dc: ReportEventTypes instance for storing assigned types.
+            report_titles_dc: ReportTitles instance containing report metadata.
+            parsed_reports_dc: ParsedReports instance containing parsed reports.
+            all_event_types_dc: AllEventTypes instance containing allowed event types.
 
         Raises:
-            ValueError: If any required DataFrame file does not exist.
+            ValueError: If any required dataframe is missing.
         """
-        self.report_types_df_path = report_types_df_path
+        self.report_event_types_dc = report_event_types_dc
 
-        if report_titles_df_path.exists():
-            self.report_titles_df = pd.read_pickle(report_titles_df_path)
-        else:
-            msg = f"{report_titles_df_path} does not exist"
-            raise ValueError(msg)
+        self.report_titles_df = report_titles_dc.read()
 
-        if parsed_reports_df_path.exists():
-            self.parsed_reports_df = pd.read_pickle(parsed_reports_df_path)
-        else:
-            msg = f"{parsed_reports_df_path} does not exist"
-            raise ValueError(msg)
+        self.parsed_reports_df = parsed_reports_dc.read()
 
-        if report_event_type_df_path.exists():
-            self.all_event_types = pd.read_pickle(report_event_type_df_path)
-            self.all_event_types["mode"] = self.all_event_types["mode"].map(
-                lambda x: Modes.Mode[x[0]]
-            )
-            self.all_event_types = self.all_event_types.set_index("mode", drop=True)
-        else:
-            msg = f"{report_event_type_df_path} does not exist"
-            raise ValueError(msg)
+        self.all_event_types = all_event_types_dc.read()
+        self.all_event_types["mode"] = self.all_event_types["mode"].map(
+            lambda x: Modes.Mode[x[0]]
+        )
+        self.all_event_types = self.all_event_types.set_index("mode", drop=True)
 
         # Build the structured output models per mode
         self._event_type_output_model_by_mode: dict[Modes.Mode, tuple[type, str]] = {}
@@ -107,13 +100,10 @@ class ReportTypeAssigner:
         determine the correct event type based on report titles. Results are
         saved to disk.
         """
-        logger.info("Assigning report event types")
-        logger.info(f"There are {len(self.all_event_types)} possible event types")
-        logger.info(f"Output: {self.report_types_df_path}")
-        if self.report_types_df_path.exists():
-            report_types_df = pd.read_pickle(self.report_types_df_path)
+        if self.report_event_types_dc.exists():
+            report_types_df = self.report_event_types_dc.read()
         else:
-            report_types_df = pd.DataFrame(columns=["report_id", "type", "title"])
+            report_types_df = self.report_event_types_dc.create_empty()
 
         # Get all unassigned report_types
         merged_df = report_types_df.merge(
@@ -128,8 +118,14 @@ class ReportTypeAssigner:
         unassigned_df = merged_df[merged_df["type"].isna()]
         assigned_df = merged_df[~merged_df["type"].isna()]
 
-        logger.info(
-            f"There are {len(unassigned_df)} reports that need to be assigned types out of {len(merged_df)} total reports"
+        logger.welcome(
+            "Assigning Report Event Types",
+            {
+                "Output file": str(self.report_event_types_dc.path),
+                "Total event types": str(len(self.all_event_types)),
+                "Reports to assign": str(len(unassigned_df)),
+                "Already assigned": str(len(assigned_df)),
+            },
         )
         if len(unassigned_df) == 0:
             return
@@ -151,7 +147,8 @@ class ReportTypeAssigner:
                 unassigned_df.loc[index, "type"] = assigned_event_type
 
         combined_df = pd.concat([assigned_df, unassigned_df], ignore_index=True)
-        combined_df[["report_id", "type", "title"]].to_pickle(self.report_types_df_path)
+        combined_df_final = combined_df[["report_id", "type", "title"]]
+        self.report_event_types_dc.save(combined_df_final)
 
     def process_report(self, index, report_id, report_title, event_type):
         """Process a single report and assign an event type.

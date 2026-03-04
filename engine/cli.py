@@ -1,7 +1,6 @@
 """CLI entry points for downloading, extracting, analyzing, and uploading report data."""
 
 import argparse
-import logging
 import os
 import time
 from pathlib import Path
@@ -24,8 +23,9 @@ from .AzureStorage import (
     EngineOutputUploader,
     PDFStorageManager,
 )
+from .Logging import configure_logging, get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 SECONDS_IN_MINUTE = 60
@@ -274,6 +274,8 @@ def extract(output_dir: Path, config: dict, refresh: bool):
     """
     output_config = config.get("output")
 
+    logger.welcome("Extracting Report Artifacts", {"Output directory": str(output_dir)})
+
     logger.info("Setting up PDF storage manager...")
     pdf_storage_manager = PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
@@ -295,8 +297,8 @@ def extract(output_dir: Path, config: dict, refresh: bool):
     # Extract reports into structured data
     extraction_config = config.get("extraction").get("ai_extraction_config")
     ReportExtracting.process_reports_parallel(
-        output_dir / output_config.get("parsed_reports_df_file_name"),
-        output_dir / output_config.get("extracted_reports_df_file_name"),
+        SavedDataFrames.ParsedReports(output_dir),
+        SavedDataFrames.ExtractedReports(output_dir),
         ai_extraction_config=extraction_config,
     )
 
@@ -309,14 +311,14 @@ def analyze(output_dir: Path, config: dict, refresh: bool):
         config (dict): Engine configuration settings.
         refresh (bool): Whether to refresh cached data and reprocess sources.
     """
-    output_config = config.get("output")
+    logger.welcome("Analyzing Extracted Reports", {"Output directory": str(output_dir)})
 
     # Assign report types
     ReportTypeAssignment.ReportTypeAssigner(
-        output_dir / output_config.get("all_event_types_df_file_name"),
-        output_dir / output_config.get("report_titles_df_file_name"),
-        output_dir / output_config.get("parsed_reports_df_file_name"),
-        output_dir / output_config.get("report_event_types_df_file_name"),
+        SavedDataFrames.ReportEventTypes(output_dir),
+        SavedDataFrames.ReportTitles(output_dir),
+        SavedDataFrames.ParsedReports(output_dir),
+        SavedDataFrames.AllEventTypes(output_dir),
     ).assign_report_types()
 
 
@@ -328,18 +330,26 @@ def embed(output_dir: Path, config: dict, refresh: bool):
         config (dict): Engine configuration settings.
         refresh (bool): Whether to refresh cached data and reprocess sources.
     """
-    output_config = config.get("output")
     vector_config = config.get("vector")
 
+    logger.welcome(
+        "Embedding Reports",
+        {
+            "Output directory": str(output_dir),
+            "Vector DB URI": os.environ.get("VECTORDB_URI", "Not set"),
+            "Table name": vector_config["table_name"],
+        },
+    )
+
     vector_db = Embedding.VectorDB(
-        output_dir / output_config.get("vector_db_document_ids_file_name"),
+        SavedDataFrames.VectorDBDocumentIDs(output_dir),
         os.environ["VECTORDB_URI"],
         vector_config["model"]["name"],
         vector_config["model"]["context_limit"],
         vector_config["table_name"],
     )
     vector_db.process_extracted_reports(
-        output_dir / output_config.get("extracted_reports_df_file_name"),
+        SavedDataFrames.ExtractedReports(output_dir),
         [
             (
                 "safety_issues",
@@ -381,16 +391,8 @@ def upload(container_name: str, output_dir: Path, output_config: dict):
 
 def cli():
     """Main CLI entry point for the engine."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
-    )
-    # Silence noisy Azure HTTP logging
-    logging.getLogger("azure").setLevel(logging.WARNING)
-    logging.getLogger("azure.core.pipeline").setLevel(logging.WARNING)
-    logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(
-        logging.WARNING
-    )
+    configure_logging(log_level="INFO")
+
     parser = argparse.ArgumentParser(
         description="A engine that will download, extract, and summarize PDFs from the marine accident investigation reports. More information can be found here: https://github.com/1jamesthompson1/TAIC-engine/"
     )

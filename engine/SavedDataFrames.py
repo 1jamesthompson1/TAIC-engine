@@ -103,9 +103,13 @@ class SavedDataFrame(ABC):
         # Validate all row values using Row model
         for idx, row in df.iterrows():
             try:
-                row_dict = {
-                    k: None if pd.isna(v) else v for k, v in row.to_dict().items()
-                }
+                row_dict = {}
+                for key, value in row.to_dict().items():
+                    is_missing = pd.isna(value)
+                    if isinstance(is_missing, bool):
+                        row_dict[key] = None if is_missing else value
+                    else:
+                        row_dict[key] = value
                 type(self).Row.model_validate(row_dict)
             except PydanticValidationError as e:
                 # Extract the first error for a cleaner message

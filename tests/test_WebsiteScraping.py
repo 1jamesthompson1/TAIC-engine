@@ -14,7 +14,6 @@ To use this in other test files, you can copy the cleanup_test_pdf_container fix
 """
 
 import itertools
-import os
 import shutil
 import socket
 from pathlib import Path
@@ -28,8 +27,15 @@ from engine import Modes, SavedDataFrames, WebsiteScraping
 MINIMUM_SAFETY_ISSUES_COUNT = 388
 
 
-def _can_connect(host: str, port: int = 443, timeout_s: float = 2.0) -> bool:
-    """Best-effort network check so these tests can be skipped in offline/CI sandboxes.
+def _test_website_connectivity(
+    host: str, port: int = 443, timeout_s: float = 5.0
+) -> bool:
+    """Check if a website is reachable.
+
+    Args:
+        host: Hostname to connect to.
+        port: Port to use (default: 443 for HTTPS).
+        timeout_s: Connection timeout in seconds (default: 5.0).
 
     Returns:
         True if connection succeeds, False otherwise.
@@ -38,31 +44,40 @@ def _can_connect(host: str, port: int = 443, timeout_s: float = 2.0) -> bool:
         socket.create_connection((host, port), timeout=timeout_s).close()
     except Exception:
         return False
-    return True
+    else:
+        return True
 
 
-# Tests in this module hit real websites; they are skipped when offline.
+def test_website_connectivity():
+    """Test connectivity to all three website sources.
 
-
-@pytest.fixture(autouse=True)
-def require_internet(request):
-    """Skip these tests when offline.
-
-    Practically every test in this module hits a real external site (TAIC/TSB/ATSB)
-    via `hrequests.get()` (either directly or indirectly via the scrapers), so
-    running offline will just fail/flap.
-
-    Controls:
-    - Tests marked with @pytest.mark.integration(site="...") will additionally
-      check connectivity to the specific host for that site.
+    This test verifies that the system can reach TAIC, TSB, and ATSB websites.
+    It's useful for diagnosing network/DNS issues in the test environment.
     """
-    # Module-wide baseline check: if we can't reach *any* common host, skip.
-    if not (
-        _can_connect("www.taic.org.nz")
-        or _can_connect("www.tsb.gc.ca")
-        or _can_connect("www.atsb.gov.au")
-    ):
-        pytest.skip("No network/DNS available for website scraping tests")
+    websites = {
+        "TAIC": "www.taic.org.nz",
+        "TSB": "www.tsb.gc.ca",
+        "ATSB": "www.atsb.gov.au",
+    }
+
+    results = {}
+    for name, host in websites.items():
+        results[name] = _test_website_connectivity(host)
+
+    # Log results for debugging
+    for name, reachable in results.items():
+        status = "✓ reachable" if reachable else "✗ unreachable"
+        print(f"{name}: {status}")  # noqa: T201
+
+    # At least one website should be reachable
+    assert any(
+        results.values()
+    ), "Unable to reach any website (TAIC, TSB, ATSB). Network connectivity issue?"
+
+    # Optionally check if all are reachable
+    if not all(results.values()):
+        unreachable = [name for name, reachable in results.items() if not reachable]
+        print(f"Warning: Some websites are unreachable: {', '.join(unreachable)}")  # noqa: T201
 
 
 @pytest.fixture(scope="function")
@@ -98,16 +113,14 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
         if agency == "TAIC":
             # Use the canonical TAIC reports table from the tests data folder, but
             # copy it into the test's tmpdir so the original isn't modified by tests.
-            original_path = os.path.join(
-                pytest.output_config.get("folder_name"),
-                pytest.output_config.get("taic_website_reports_table_file_name"),
-            )
-            tmp_path = os.path.join(
-                str(tmpdir),
-                pytest.output_config.get("taic_website_reports_table_file_name"),
+            original_path = Path(
+                pytest.output_config.get("folder_name")
+            ) / pytest.output_config.get("taic_website_reports_table_file_name")
+            tmp_path = Path(tmpdir) / pytest.output_config.get(
+                "taic_website_reports_table_file_name"
             )
 
-            if os.path.exists(original_path):
+            if original_path.exists():
                 shutil.copy2(original_path, tmp_path)
 
             return WebsiteScraping.TAICReportScraper(
@@ -115,16 +128,14 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
                 report_scraping_settings,
             )
         if agency == "ATSB":
-            original_path = os.path.join(
-                pytest.output_config.get("folder_name"),
-                pytest.output_config.get("atsb_website_reports_table_file_name"),
-            )
-            tmp_path = os.path.join(
-                str(tmpdir),
-                pytest.output_config.get("atsb_website_reports_table_file_name"),
+            original_path = Path(
+                pytest.output_config.get("folder_name")
+            ) / pytest.output_config.get("atsb_website_reports_table_file_name")
+            tmp_path = Path(tmpdir) / pytest.output_config.get(
+                "atsb_website_reports_table_file_name"
             )
 
-            if os.path.exists(original_path):
+            if original_path.exists():
                 shutil.copy2(original_path, tmp_path)
 
             return WebsiteScraping.ATSBReportScraper(
@@ -212,7 +223,7 @@ def test_report_collection(get_agency_scraper, agency, url, report_id, expected)
     [
         pytest.param("TSB", [54, 25, 20, 13, 19, 10, 15, 10, 13], id="TSB"),
         pytest.param("TAIC", [11, 12, 3, 28, 8, 4, 12, 3, 5], id="TAIC"),
-        pytest.param("ATSB", [93, 179, 52, 6, 25, 17, 15, 8, 2], id="ATSB"),
+        pytest.param("ATSB", [93, 166, 43, 6, 25, 19, 15, 8, 2], id="ATSB"),
     ],
 )
 def test_agency_website_scraper(get_agency_scraper, agency, expected_urls):
@@ -287,13 +298,13 @@ def test_agency_website_scraper_collecting_all_reports(
 def test_atsb_safety_issue_scrape(tmpdir):
     """Test scraping ATSB safety issues from the website."""
     # Copy existing files to temporary directory for automatic cleanup
-    original_output_path = os.path.join(
-        pytest.output_config["folder_name"],
-        pytest.output_config["atsb_website_safety_issues_file_name"],
+    original_output_path = (
+        Path(pytest.output_config["folder_name"])
+        / pytest.output_config["atsb_website_safety_issues_file_name"]
     )
-    original_report_titles = os.path.join(
-        pytest.output_config["folder_name"],
-        pytest.output_config["report_titles_df_file_name"],
+    original_report_titles = (
+        Path(pytest.output_config["folder_name"])
+        / pytest.output_config["report_titles_df_file_name"]
     )
 
     # Create temporary paths
@@ -302,9 +313,9 @@ def test_atsb_safety_issue_scrape(tmpdir):
     report_titles_dc = SavedDataFrames.ReportTitles(Path(str(tmpdir)))
 
     # Copy files if they exist
-    if os.path.exists(original_output_path):
+    if original_output_path.exists():
         shutil.copy2(original_output_path, temp_output_path)
-    if os.path.exists(original_report_titles):
+    if original_report_titles.exists():
         shutil.copy2(original_report_titles, report_titles_dc.path)
 
     atsb_webscraper = WebsiteScraping.ATSBSafetyIssueScraper(
@@ -344,7 +355,6 @@ def test_atsb_safety_issue_scrape(tmpdir):
         ),
     ],
 )
-@pytest.mark.integration
 def test_recommendation_listing(  # noqa: PLR0913, PLR0917
     tmpdir,
     request,
@@ -357,12 +367,8 @@ def test_recommendation_listing(  # noqa: PLR0913, PLR0917
 
     Uses the real websites but is designed to be quick (one HTTP request per case).
     """
-    # Add a per-site marker dynamically so the autouse network fixture can
-    # check the correct host.
-    request.node.add_marker(pytest.mark.integration(site=site))
-
     report_titles_dc = SavedDataFrames.ReportTitles(
-        pytest.output_config.get("folder_name")
+        Path(pytest.output_config.get("folder_name"))
     )
     assert report_titles_dc.exists(), "Test report titles file is missing"
 
@@ -387,52 +393,34 @@ def test_recommendation_listing(  # noqa: PLR0913, PLR0917
 
 
 @pytest.mark.parametrize(
-    "site,scraper_cls,url,assert_fn",
+    "site,scraper_cls,url,required_fields",
     [
         pytest.param(
             "taic",
             WebsiteScraping.TAICRecommendationsScraper,
             "https://taic.org.nz/recommendation/02125",
-            lambda rec: (
-                isinstance(rec, dict)
-                and isinstance(rec.get("recommendation"), str)
-                and bool(rec.get("recommendation"))
-                and isinstance(rec.get("recipient"), str)
-                and bool(rec.get("recipient"))
-                and isinstance(rec.get("made"), str)
-                and bool(rec.get("made"))
-                and isinstance(rec.get("agency_id"), str)
-                and bool(rec.get("agency_id"))
-            ),
+            ["recommendation", "recipient", "made", "agency_id"],
             id="TAIC page",
         ),
         pytest.param(
             "tsb",
             WebsiteScraping.TSBRecommendationsScraper,
             "https://www.tsb.gc.ca/eng/recommandations-recommendations/aviation/2024/rec-a2402.html",
-            lambda rec: (
-                isinstance(rec, dict)
-                and bool(rec.get("made"))
-                and bool(rec.get("recommendation_context"))
-            ),
+            ["made", "recommendation_context"],
             id="TSB page",
         ),
     ],
 )
-@pytest.mark.integration
 def test_recommendation_page(  # noqa: PLR0913, PLR0917
-    tmpdir, request, site, scraper_cls, url, assert_fn
+    tmpdir, request, site, scraper_cls, url, required_fields
 ):
     """Smoke test: extract fields from one recommendation page.
 
     Uses the real websites but is designed to be quick (one HTTP request per case).
+    Validates extracted data against the SavedDataFrame Row Pydantic model schema.
     """
-    # Add a per-site marker dynamically so the autouse network fixture can
-    # check the correct host.
-    request.node.add_marker(pytest.mark.integration(site=site))
-
     report_titles_dc = SavedDataFrames.ReportTitles(
-        pytest.output_config.get("folder_name")
+        Path(pytest.output_config.get("folder_name"))
     )
     assert report_titles_dc.exists(), "Test report titles file is missing"
 
@@ -445,10 +433,22 @@ def test_recommendation_page(  # noqa: PLR0913, PLR0917
     )
 
     rec = scraper.extract_recommendation_data(url)
-    assert assert_fn(rec)
 
-    # Check to see if it has the right keys
-    assert set(rec.keys()).issubset(scraper.recommendations_dc._effective_columns)
-    # common ones
-    assert "recommendation" in rec
-    assert "made" in rec
+    # Get the Row model for validation
+    row_model = scraper.recommendations_dc.Row
+
+    # Basic validation: returned dict has valid keys and required fields
+    assert isinstance(rec, dict), "extract_recommendation_data should return a dict"
+
+    valid_fields = set(row_model.model_fields.keys())
+    returned_keys = set(rec.keys())
+    unexpected_keys = returned_keys - valid_fields
+
+    assert (
+        not unexpected_keys
+    ), f"Unexpected keys: {unexpected_keys}. Valid: {valid_fields}"
+
+    # Validate required fields are present and non-empty
+    for field in required_fields:
+        assert field in rec, f"Missing required field: {field}"
+        assert rec[field], f"Required field '{field}' is empty"

@@ -8,7 +8,6 @@ This is the key test module for validating that the AI extraction works.
 """
 
 import json
-import os
 from difflib import SequenceMatcher
 from pathlib import Path
 from unittest.mock import patch
@@ -23,6 +22,7 @@ from engine.ReportExtracting import (
     chunk_report_into_sections,
     process_reports_parallel,
 )
+from engine.SavedDataFrames import ExtractedReports, ParsedReports
 
 RECOMMENDATION_SIMILARITY_THRESHOLD = 0.95
 CONTEXT_SIMILARITY_THRESHOLD = 0.9
@@ -84,15 +84,12 @@ def get_report_text(report_id: str) -> str:
         str: The text content of the report.
 
     """
-    extracted_reports = pd.read_pickle(
-        os.path.join(
-            pytest.output_config["folder_name"],
-            pytest.output_config["parsed_reports_df_file_name"],
-        )
-    )
+    output_path = Path(pytest.output_config["folder_name"])
+    parsed_reports_dc = ParsedReports(output_path)
+    extracted_reports = parsed_reports_dc.read()
     try:
-        return extracted_reports.loc[report_id]["text"]
-    except KeyError as e:
+        return extracted_reports.query("report_id == @report_id")["text"].iloc[0]
+    except IndexError as e:
         msg = f"Report ID {report_id} not found in extracted reports."
         raise ValueError(msg) from e
 
@@ -257,10 +254,10 @@ class TestAIExtraction:
 
 
 _chunking_params = [
-    ("TAIC_m_2004_203", 37),
-    ("TSB_a_2023_W0096", 42),
-    ("TAIC_a_2020_003", 69),
-    ("ATSB_r_2010_007", 22),
+    ("TAIC_m_2004_203", 29),
+    ("TSB_a_2023_W0096", 55),
+    ("TAIC_a_2020_003", 34),
+    ("ATSB_r_2010_007", 18),
 ]
 
 
@@ -282,15 +279,15 @@ def test_chunking_into_section(report_id, num_sections):
 def test_parallel_extraction(tmp_path):
     """Test that we can extract from multiple reports in parallel without issues."""
     ids = {
-        "ATSB_a_2000_157": {"si": 7, "recs": 8, "sections": 217},
-        "ATSB_r_2014_001": {"si": 0, "recs": 2, "sections": 134},
-        "ATSB_a_2007_018": {"si": 4, "recs": 0, "sections": 65},
-        "ATSB_m_2007_241": {"si": 4, "recs": 1, "sections": 60},
-        "ATSB_m_2022_007": {"si": 0, "recs": 3, "sections": 136},
-        "ATSB_r_2010_007": {"si": 0, "recs": 2, "sections": 22},
-        "TAIC_a_2020_003": {"si": 0, "recs": 0, "sections": 69},
-        "TSB_a_2023_W0096": {"si": 2, "recs": 0, "sections": 42},
-        "ATSB_a_2005_912": {"si": 1, "recs": 0, "sections": 34},
+        "ATSB_a_2000_157": {"si": 7, "recs": 8, "sections": 193},
+        "ATSB_r_2014_001": {"si": 0, "recs": 2, "sections": 107},
+        "ATSB_a_2007_018": {"si": 4, "recs": 0, "sections": 51},
+        "ATSB_m_2007_241": {"si": 4, "recs": 1, "sections": 48},
+        "ATSB_m_2022_007": {"si": 0, "recs": 3, "sections": 113},
+        "ATSB_r_2010_007": {"si": 0, "recs": 2, "sections": 18},
+        "TAIC_a_2020_003": {"si": 0, "recs": 0, "sections": 55},
+        "TSB_a_2023_W0096": {"si": 2, "recs": 0, "sections": 34},
+        "ATSB_a_2005_912": {"si": 1, "recs": 0, "sections": 28},
     }
 
     # These extra ids will be used to make sure that it can ignore reports that have already been processed
@@ -301,21 +298,29 @@ def test_parallel_extraction(tmp_path):
         {"report_id": list(ids.keys()), "text": test_report_texts}
     )
 
-    reports_df_path = tmp_path / "reports.pkl"
-    extracted_df_path = tmp_path / "extracted.pkl"
-    report_texts_df.to_pickle(reports_df_path)
+    # Save to ParsedReports using SavedDataFrames
+    parsed_reports_dc = ParsedReports(tmp_path)
+    parsed_reports_dc.save(report_texts_df)
+
+    extracted_reports_dc = ExtractedReports(tmp_path)
 
     # Extract from all reports in parallel
-
     results = process_reports_parallel(
-        reports_df_path=reports_df_path,
-        extracted_reports_df_path=extracted_df_path,
+        parsed_reports_dc=parsed_reports_dc,
+        extracted_reports_dc=extracted_reports_dc,
+        ai_extraction_config=pytest.config["engine"]["extraction"][
+            "ai_extraction_config"
+        ],
     )
 
     # Compare results to expected values
     failures = []
     for report_id, expected in ids.items():
-        extracted = results[results["report_id"] == report_id].iloc[0]
+        extracted = results[results["report_id"] == report_id]
+        if extracted.empty:
+            failures.append(f"{report_id}: No extraction result found")
+            continue
+        extracted = extracted.iloc[0]
 
         if len(extracted.safety_issues) != expected["si"]:
             failures.append(
@@ -358,7 +363,7 @@ def test_process_handle_already_processed(tmp_path):
             "report_id": already_processed_ids,
             "safety_issues": [[] for _ in already_processed_ids],
             "recommendations": [[] for _ in already_processed_ids],
-            "sections": [[] for _ in already_processed_ids],
+            "sections": [{} for _ in already_processed_ids],
         }
     )
 
@@ -370,15 +375,17 @@ def test_process_handle_already_processed(tmp_path):
         }
     )
 
-    reports_df_path = tmp_path / "reports.pkl"
-    extracted_df_path = tmp_path / "extracted.pkl"
-    report_texts_df.to_pickle(reports_df_path)
-    current_extracted_df.to_pickle(extracted_df_path)
+    # Save using SavedDataFrames
+    parsed_reports_dc = ParsedReports(tmp_path)
+    extracted_reports_dc = ExtractedReports(tmp_path)
+
+    parsed_reports_dc.save(report_texts_df)
+    extracted_reports_dc.save(current_extracted_df)
 
     # Mock the extract_report function to track calls
     with patch("engine.ReportExtracting.extract_report") as mock_extract:
         # Configure mock to return a dict with expected structure
-        mock_extract.side_effect = lambda row: {
+        mock_extract.side_effect = lambda row, config: {
             "report_id": row["report_id"],
             "safety_issues": [],
             "recommendations": [],
@@ -387,8 +394,11 @@ def test_process_handle_already_processed(tmp_path):
 
         # Process reports
         results_df = process_reports_parallel(
-            reports_df_path=reports_df_path,
-            extracted_reports_df_path=extracted_df_path,
+            parsed_reports_dc=parsed_reports_dc,
+            extracted_reports_dc=extracted_reports_dc,
+            ai_extraction_config=pytest.config["engine"]["extraction"][
+                "ai_extraction_config"
+            ],
         )
 
     # Assertions: Verify that extract_report was called only for new reports

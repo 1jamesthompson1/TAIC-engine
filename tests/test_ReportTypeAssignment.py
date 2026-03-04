@@ -2,36 +2,27 @@
 
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
-from engine import Modes, ReportTypeAssignment
+from engine import Modes, ReportTypeAssignment, SavedDataFrames
 
 
 def test_report_type_assignment(tmp_path):
     """Test the full report type assignment process."""
     output_path = Path(pytest.output_config["folder_name"])
-    report_event_types_path = (
-        output_path / pytest.output_config["all_event_types_df_file_name"]
-    )
-    report_titles_path = (
-        output_path / pytest.output_config["report_titles_df_file_name"]
-    )
-    parsed_report_path = (
-        output_path / pytest.output_config["parsed_reports_df_file_name"]
-    )
-    report_types_path = tmp_path / "report_types.pkl"
+
     report_type_assigner = ReportTypeAssignment.ReportTypeAssigner(
-        report_event_types_path,
-        report_titles_path,
-        parsed_report_path,
-        report_types_path,
+        SavedDataFrames.ReportEventTypes(output_path),
+        SavedDataFrames.ReportTitles(output_path),
+        SavedDataFrames.ParsedReports(output_path),
+        SavedDataFrames.AllEventTypes(output_path),
     )
     report_type_assigner.assign_report_types()
 
-    assert report_types_path.exists()
+    report_event_types_dc = SavedDataFrames.ReportEventTypes(output_path)
+    assert report_event_types_dc.exists()
 
-    report_types_df = pd.read_pickle(report_types_path)
+    report_types_df = report_event_types_dc.read()
 
     assert report_types_df["type"].isna().sum() == 0
 
@@ -65,21 +56,15 @@ def test_report_type_assignment(tmp_path):
         ),
     ],
 )
-def test_single_report_type_assignment(report_title, mode, expected_type):
+def test_single_report_type_assignment(report_title, mode, expected_type, tmp_path):
     """Test report type assignment for a single report."""
     output_path = Path(pytest.output_config["folder_name"])
-    report_event_types_path = (
-        output_path / pytest.output_config["all_event_types_df_file_name"]
-    )
-    report_titles_path = (
-        output_path / pytest.output_config["report_titles_df_file_name"]
-    )
-    parsed_reports = output_path / pytest.output_config["parsed_reports_df_file_name"]
+
     report_type_assigner = ReportTypeAssignment.ReportTypeAssigner(
-        report_event_types_path,
-        report_titles_path,
-        parsed_reports,
-        Path("unused_report_types.pkl"),
+        SavedDataFrames.ReportEventTypes(tmp_path),
+        SavedDataFrames.ReportTitles(output_path),
+        SavedDataFrames.ParsedReports(output_path),
+        SavedDataFrames.AllEventTypes(output_path),
     )
 
     assert (

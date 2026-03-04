@@ -4,7 +4,6 @@ This includes extracting safety issues, recommendations, and chunking the report
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 from typing import Literal
 
 import pandas as pd
@@ -15,6 +14,7 @@ from tqdm import tqdm
 
 from engine.AICaller import ai_caller
 from engine.Logging import get_logger
+from engine.SavedDataFrames import ExtractedReports, ParsedReports
 
 logger = get_logger(__name__)
 
@@ -114,7 +114,7 @@ Recommendations - Formal suggestions made by the investigation agency to address
 An exact safety issue will start with something like 'safety issue: ...' and will generaly go until the end of the "paragraph" (i.e until it reaches a line that breaks earlier).
 """
     tsb_specific = """
-An inferred safety issue will generally be found in the "findings" section of the report. Look for phrases and issuees that imply a safety issue (a problem that could have a safety impact in the future) even if it is not explicitly stated as a safety issue. Exact Safety issues are not generally stated in TSB reports, the exception being when there is a format like "Safety issue: ...".
+An inferred safety issue will generally be found in the "findings" section of the report. You are to treat all "findings as to risk" as 'inferred' safety issues, this is due to a slight terminomology difference between TSB and other agencies. Exact Safety issues are not generally stated in TSB reports, the exception being when there is a format like "Safety issue: ...".
 """
     safety_issue_prompt = f"""
 Safety issue extraction instructions:
@@ -176,7 +176,8 @@ Based on the provided report text, please extract the following information:
             output_structure=extracted_report,
         )
     except Exception as e:
-        raise RuntimeError() from e
+        msg = f"AI extraction failed for agency '{agency_name}'"
+        raise RuntimeError(msg) from e
 
     return response
 
@@ -291,6 +292,15 @@ def extract_report(
         extracted_data.recommendations if extraction_config["recommendations"] else []
     )
 
+    safety_issues = [
+        item.model_dump() if hasattr(item, "model_dump") else item
+        for item in safety_issues
+    ]
+    recommendations = [
+        item.model_dump() if hasattr(item, "model_dump") else item
+        for item in recommendations
+    ]
+
     # Chunk the report into sections
     sections = chunk_report_into_sections(report_text)
 
@@ -303,8 +313,8 @@ def extract_report(
 
 
 def process_reports_parallel(
-    reports_df_path: Path,
-    extracted_reports_df_path: Path,
+    parsed_reports_dc: ParsedReports,
+    extracted_reports_dc: ExtractedReports,
     ai_extraction_config: dict,
     max_workers: int | None = None,
 ) -> pd.DataFrame:
@@ -315,16 +325,13 @@ def process_reports_parallel(
     and writes the updated extraction results back to disk.
 
     Args:
-        reports_df_path: Path to a pickled DataFrame with columns
-            ['report_id', 'text'] containing the reports to process.
-        extracted_reports_df_path: Path to a pickled DataFrame with columns
-            ['report_id', 'safety_issues', 'recommendations', 'sections'] containing
-            already processed reports. If the path does not exist, all reports
-            will be processed.
-        max_workers: Maximum number of parallel workers. Adjust
-            based on your API rate limits and system resources.
+        parsed_reports_dc: ParsedReports instance for reading parsed reports.
+        extracted_reports_dc: ExtractedReports instance for reading/writing
+            extracted reports.
         ai_extraction_config: Configuration dictionary specifying which extraction tasks
             (safety_issues, recommendations) to perform for each agency.
+        max_workers: Maximum number of parallel workers. Adjust
+            based on your API rate limits and system resources.
 
     Returns:
         pd.DataFrame: Updated DataFrame containing both previously extracted
@@ -334,28 +341,18 @@ def process_reports_parallel(
             - recommendations: List of extracted recommendations
             - sections: Dictionary of report sections
 
-    Raises:
-        FileNotFoundError: If the reports DataFrame path does not exist.
-
     Example:
         >>> result = process_reports_parallel(
-        ...     Path("parsed_reports.pkl"),
-        ...     Path("extracted_reports.pkl"),
+        ...     ParsedReports(Path("output")),
+        ...     ExtractedReports(Path("output")),
         ...     max_workers=8,
         ... )
         >>> # Only new reports are processed, existing data preserved
 
     """
-    if not reports_df_path.exists():
-        raise FileNotFoundError(f"Reports DataFrame not found at {reports_df_path}")  # noqa: TRY003
-    reports_df = pd.read_pickle(reports_df_path)
+    reports_df = parsed_reports_dc.read()
 
-    if extracted_reports_df_path.exists():
-        current_extracted_df = pd.read_pickle(extracted_reports_df_path)
-    else:
-        current_extracted_df = pd.DataFrame(
-            columns=["report_id", "safety_issues", "recommendations", "sections"]
-        )
+    current_extracted_df = extracted_reports_dc.read_or_create()
 
     # Identify reports that need processing
     if len(current_extracted_df) > 0:
@@ -366,9 +363,13 @@ def process_reports_parallel(
     else:
         reports_to_process = reports_df
 
-    logger.info(
-        f"Processing {len(reports_to_process)} reports "
-        f"(skipping {len(reports_df) - len(reports_to_process)} already processed)"
+    logger.welcome(
+        "Extracting Report Data",
+        {
+            "Output file": str(extracted_reports_dc.path),
+            "Reports to process": str(len(reports_to_process)),
+            "Already processed": str(len(reports_df) - len(reports_to_process)),
+        },
     )
 
     if len(reports_to_process) == 0:
@@ -411,6 +412,6 @@ def process_reports_parallel(
     else:
         completed_df = new_extracted_df
 
-    completed_df.to_pickle(extracted_reports_df_path)
+    extracted_reports_dc.save(completed_df)
 
     return completed_df

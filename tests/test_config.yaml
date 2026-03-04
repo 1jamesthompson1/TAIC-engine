@@ -3,30 +3,41 @@ engine:
     end_year: 2025
     max_per_year: 100
     start_year: 2000
-    ignored_reports: ['2022_202', '2022_203']
+    ignored_reports:
+    - TAIC_m_2022_202
+    - TAIC_m_2022_203
+    modes:
+    - a
+    - r
+    - m
+    agencies:
+    - ATSB
+    - TSB
+    - TAIC
   output:
-    folder_name: "tests/data/output"
-    pdf_container_name: "test-reportpdfs"
-    stable_pdf_container_name: "test-stable-reportpdfs"
-    report_pdf_folder_name: "report_pdfs"
-    parsed_reports_df_file_name: "parsed_reports.pkl"
-    all_event_types_df_file_name: "all_event_types.pkl"
-    report_event_types_df_file_name: "report_event_types.pkl"
-    report_titles_df_file_name: "report_titles.pkl"
-    extracted_reports_df_file_name: "extracted_reports.pkl"
-    atsb_website_safety_issues_file_name: "atsb_website_safety_issues.pkl"
-    tsb_website_recommendations_file_name: "tsb_website_recommendations.pkl"
-    taic_website_recommendations_file_name: "taic_website_recommendations.pkl"
-    atsb_website_reports_table_file_name: "atsb_website_reports_table.pkl"
-    taic_website_reports_table_file_name: "taic_website_reports_table.pkl"
+    folder_name: tests/data/output
+    container_name: engineoutput
+    pdf_container_name: test-reportpdfs
     storage:
-      container: "testengineoutput"
+      container: testengineoutput
+    stable_pdf_container_name: test-stable-reportpdfs
   data:
-    data_remote_folder_location: "https://raw.githubusercontent.com/1jamesthompson1/TAIC-engine/main/data/"
-    data_local_folder_location: "data"
-    event_types_file_name: "event_types.csv"
+    data_remote_folder_location: https://raw.githubusercontent.com/1jamesthompson1/TAIC-engine/main/data/
+    data_local_folder_location: data
+    event_types_file_name: event_types.csv
+  extraction:
+    ai_extraction_config:
+      ATSB:
+        safety_issues: false
+        recommendations: true
+      TSB:
+        safety_issues: true
+        recommendations: false
+      TAIC:
+        safety_issues: true
+        recommendations: false
   vector:
-    table_name: "all_document_types"
+    table_name: all_document_types
     model:
-      name: "text-embedding-3-large"
+      name: text-embedding-3-large
       context_limit: 8191

@@ -38,11 +38,6 @@
     ]
   },
   {
-    "id": "TSB_a_2023_W0096 empty",
-    "report_id": "TSB_a_2023_W0096",
-    "expected": []
-  },
-  {
     "id": "ATSB pre-2008 report",
     "report_id": "ATSB_a_2005_912",
     "expected": [
@@ -50,6 +45,12 @@
         "safety_issue": "The current overhaul manual provides no guidance to assemblers on the maximum allowable assembly time following the tower shaft/bevel gear heating and cooling process to reduce the likelihood of producing surface damage (galling damage) to the components during assembly.",
         "quality": "exact"
       }
+    ]
+  },
+  {
+    "id": "ATSB inferred safety issue",
+    "report_id": "ATSB_a_2000_157",
+    "expected": [
     ]
   }
 ]

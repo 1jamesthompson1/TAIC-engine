@@ -55,6 +55,7 @@ def configure_logging(
     log_level: str = "INFO",
     log_file: str | None = None,
     format_string: str | None = None,
+    suppress_azure_logging: bool = True,
 ) -> logging.Logger:
     """Configure logging for the engine.
 
@@ -65,6 +66,8 @@ def configure_logging(
             to both console and file.
         format_string: Optional custom format string. Defaults to a standard
             format with timestamp, level, and message.
+        suppress_azure_logging: If True, suppresses verbose Azure SDK logging
+            (default True).
 
     Returns:
         logging.Logger: Configured root logger instance.
@@ -103,6 +106,14 @@ def configure_logging(
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
+
+    # Suppress verbose Azure SDK logging
+    if suppress_azure_logging:
+        logging.getLogger("azure").setLevel(logging.WARNING)
+        logging.getLogger("azure.core.pipeline").setLevel(logging.WARNING)
+        logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(
+            logging.WARNING
+        )
 
     return root_logger
 
