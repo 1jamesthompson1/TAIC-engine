@@ -9,12 +9,10 @@ import pandas as pd
 
 from . import (
     Config,
-    DataGetting,
     Embedding,
     Modes,
     PDFParsing,
     ReportExtracting,
-    ReportTypeAssignment,
     SavedDataFrames,
     WebsiteScraping,
 )
@@ -91,19 +89,6 @@ def download(container: str, output_dir: Path, refresh: bool):
     )
 
     downloader.download_latest_output()
-
-    # Get generic data
-    config = Config.config_reader.get_config()["engine"]
-    data_getter = DataGetting.DataGetter(
-        Path(config.get("data").get("data_local_folder_location")),
-        config.get("data").get("data_remote_folder_location"),
-        refresh,
-    )
-    data_getter.get_generic_data(
-        config.get("data").get("event_types_file_name"),
-        output_dir / config.get("output").get("all_event_types_df_file_name"),
-    )
-    logger.info("Got event types")
 
 
 def scrape(output_dir: Path, config: dict, refresh: bool):
@@ -307,25 +292,6 @@ def extract(output_dir: Path, config: dict, refresh: bool):
     )
 
 
-def analyze(output_dir: Path, config: dict, refresh: bool):
-    """Analyze extracted reports by assigning types, linking recommendations, and classifying responses.
-
-    Args:
-        output_dir (Path): Directory where output artifacts are written.
-        config (dict): Engine configuration settings.
-        refresh (bool): Whether to refresh cached data and reprocess sources.
-    """
-    logger.welcome("Analyzing Extracted Reports", {"Output directory": str(output_dir)})
-
-    # Assign report types
-    ReportTypeAssignment.ReportTypeAssigner(
-        SavedDataFrames.ReportEventTypes(output_dir),
-        SavedDataFrames.ReportTitles(output_dir),
-        SavedDataFrames.ParsedReports(output_dir),
-        SavedDataFrames.AllEventTypes(output_dir),
-    ).assign_report_types()
-
-
 def embed(output_dir: Path, config: dict, refresh: bool):
     """Embed extracted reports into the vector database.
 
@@ -415,7 +381,7 @@ def cli():
     parser.add_argument(
         "-t",
         "--run_type",
-        choices=["download", "scrape", "extract", "analyze", "embed", "upload", "all"],
+        choices=["download", "scrape", "extract", "embed", "upload", "all"],
         required=True,
         help="This is function that you want to run.",
     )
@@ -447,7 +413,6 @@ def cli():
         ),
         "scrape": ("scrape", scrape, (output_path, engine_settings, args.refresh)),
         "extract": ("extract", extract, (output_path, engine_settings, args.refresh)),
-        "analyze": ("analyze", analyze, (output_path, engine_settings, args.refresh)),
         "embed": ("embed", embed, (output_path, engine_settings, args.refresh)),
         "upload": (
             "upload",

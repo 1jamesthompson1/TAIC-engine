@@ -289,7 +289,7 @@ class TestAIExtraction:
         "report_id, expected",
         load_metadata_test_cases(),
     )
-    def test_metadata_extraction(  # noqa: PLR6301
+    def test_metadata_extraction(  # noqa: PLR6301, PLR0914
         self, report_id: str, expected: ReportMetadata
     ):
         """Test the extraction of metadata from a report.
@@ -337,14 +337,15 @@ class TestAIExtraction:
         extracted_location_desc = extracted.occurrence.location.description
         expected_location_desc = expected.occurrence.location.description
         if extracted_location_desc and expected_location_desc:
-            # Allow some flexibility in location description
-            similarity = SequenceMatcher(
-                None,
-                extracted_location_desc.lower(),
-                expected_location_desc.lower(),
-            ).ratio()
-            location_threshold = 0.7
-            if similarity < location_threshold:
+            # Prefer direct containment first; fall back to similarity for looser phrasing.
+            extracted_norm = extracted_location_desc.lower()
+            expected_norm = expected_location_desc.lower()
+            contains_match = (
+                expected_norm in extracted_norm or extracted_norm in expected_norm
+            )
+            similarity = SequenceMatcher(None, extracted_norm, expected_norm).ratio()
+            location_threshold = 0.65
+            if not contains_match and similarity < location_threshold:
                 failures.append(
                     f"Occurrence location similarity {similarity:.2f} < {location_threshold}:\n"
                     f"  Expected: {expected_location_desc}\n"

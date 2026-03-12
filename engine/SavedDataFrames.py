@@ -258,37 +258,6 @@ class ReportTitles(SavedDataFrame):
         agency_id: str
 
 
-class ReportEventTypes(SavedDataFrame):
-    """Manages AI-assigned event type classifications for reports.
-
-    Stores event type classifications assigned to reports using AI analysis.
-    """
-
-    filename = "report_event_types.pkl"
-
-    class Row(BaseModel):
-        """Schema for a single row in the report event types dataframe."""
-
-        report_id: str
-        type: str
-        title: str
-
-
-class AllEventTypes(SavedDataFrame):
-    """Manages the master list of allowed event types.
-
-    Stores the canonical list of event types loaded from the CSV file in the data directory.
-    """
-
-    filename = "all_event_types.pkl"
-
-    class Row(BaseModel):
-        """Schema for a single row in the all event types dataframe."""
-
-        Value: str = Field(..., description="Event type value")
-        mode: str = Field(..., description="Transportation mode")
-
-
 class ATSBWebsiteSafetyIssues(SavedDataFrame):
     """Manages safety issues scraped from the ATSB website.
 
