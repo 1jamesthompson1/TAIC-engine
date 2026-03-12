@@ -1,0 +1,81 @@
+[
+  {
+    "id": "Air accident with complete aircraft and pilot metadata",
+    "report_id": "TAIC_a_2023_011",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2023-10-03T21:25:00",
+          "time_zone": "UTC+13",
+          "time_zone_source": "inferred"
+        },
+        "location": {
+          "description": "Ardmore Aerodrome",
+          "standardized_location": "-37.02972+174.97333/"
+        },
+        "occurrence_type": "Aircraft separation",
+        "total_persons_involved": 6,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "Nil"
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Fixed-wing",
+          "registration": "ZK-JED",
+          "make": "Beech",
+          "model": "76",
+          "number_of_engines": 2,
+          "type_of_engines": "piston",
+          "year_manufactured": 1981,
+          "operator": "Private",
+          "flight_type": "training",
+          "persons_on_board_total": 3,
+          "persons_on_board_crew": 2,
+          "persons_on_board_passengers": 1,
+          "damage": "nil"
+        },
+        {
+          "aircraft_type": "Fixed-wing",
+          "registration": "ZK-WFS",
+          "make": "Cessna",
+          "model": "172M",
+          "number_of_engines": 1,
+          "type_of_engines": "piston",
+          "year_manufactured": 1973,
+          "operator": "Private",
+          "flight_type": "private",
+          "persons_on_board_total": 3,
+          "persons_on_board_crew": 1,
+          "persons_on_board_passengers": 2,
+          "damage": "nil"
+        }
+      ],
+      "pilots": [
+        {
+          "role": "Pilot flying ZK-JED",
+          "licence": "Airline Transport Pilot Licence",
+          "age": 66,
+          "total_flying_experience": 21000,
+          "experience_on_type": null
+        },
+        {
+          "role": "Instructor ZK-JED",
+          "licence": "Airline Transport Pilot Licence",
+          "age": 52,
+          "total_flying_experience": 14700,
+          "experience_on_type": null
+        },
+        {
+          "role": "Pilot flying ZK-WFS",
+          "licence": "Commercial Pilot Licence",
+          "age": 20,
+          "total_flying_experience": 256,
+          "experience_on_type": null
+        }
+      ],
+      "trains": [],
+      "vessels": []
+    }
+  }
+]

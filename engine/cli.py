@@ -296,10 +296,14 @@ def extract(output_dir: Path, config: dict, refresh: bool):
 
     # Extract reports into structured data
     extraction_config = config.get("extraction").get("ai_extraction_config")
+    event_types_csv_path = Path(
+        config.get("data").get("data_local_folder_location")
+    ) / config.get("data").get("event_types_file_name")
     ReportExtracting.process_reports_parallel(
         SavedDataFrames.ParsedReports(output_dir),
         SavedDataFrames.ExtractedReports(output_dir),
         ai_extraction_config=extraction_config,
+        event_types_csv_path=event_types_csv_path,
     )
 
 

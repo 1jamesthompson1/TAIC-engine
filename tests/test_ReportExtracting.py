@@ -15,11 +15,19 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
+from engine import Modes
 from engine.ReportExtracting import (
+    AircraftMetadata,
+    OccurrenceMetadata,
+    PilotMetadata,
     RecommendationItem,
+    ReportMetadata,
     SafetyIssueItem,
+    TrainMetadata,
+    VesselMetadata,
     ai_read_report,
     chunk_report_into_sections,
+    load_event_type_taxonomy,
     process_reports_parallel,
 )
 from engine.SavedDataFrames import ExtractedReports, ParsedReports
@@ -67,6 +75,29 @@ def load_recommendation_test_cases():
     for case in test_cases:
         report_id = case["report_id"]
         expected = [RecommendationItem(**item) for item in case["expected"]]
+        params.append(pytest.param(report_id, expected, id=f"{report_id}_{case['id']}"))
+    return params
+
+
+def load_metadata_test_cases():
+    """Load metadata test cases and convert to parametrize format.
+
+    Returns:
+        list: List of pytest.param objects with proper test IDs.
+    """
+    test_cases = load_json_test_data("metadata_test_cases.json")
+    params = []
+    for case in test_cases:
+        report_id = case["report_id"]
+        expected = ReportMetadata(
+            occurrence=OccurrenceMetadata(**case["expected"]["occurrence"]),
+            aircraft=[
+                AircraftMetadata(**item) for item in case["expected"]["aircraft"]
+            ],
+            pilots=[PilotMetadata(**item) for item in case["expected"]["pilots"]],
+            trains=[TrainMetadata(**item) for item in case["expected"]["trains"]],
+            vessels=[VesselMetadata(**item) for item in case["expected"]["vessels"]],
+        )
         params.append(pytest.param(report_id, expected, id=f"{report_id}_{case['id']}"))
     return params
 
@@ -123,9 +154,10 @@ class TestAIExtraction:
             report_text=report_text,
             safety_issues=True,
             recommendations=False,
+            metadata=False,
         )
 
-        extracted = extracted_data.safety_issues
+        extracted = getattr(extracted_data, "safety_issues", [])
         failures = []
 
         # 1. Check count matches
@@ -184,9 +216,10 @@ class TestAIExtraction:
             report_text=report_text,
             safety_issues=False,
             recommendations=True,
+            metadata=False,
         )
 
-        extracted = extracted_data.recommendations
+        extracted = getattr(extracted_data, "recommendations", [])
         failures = []
 
         expected_ids = {item.recommendation_id for item in expected}
@@ -248,6 +281,111 @@ class TestAIExtraction:
                     f"  Expected: {expected_item.recommendation_context}\n"
                     f"  Got:      {extracted_item.recommendation_context}"
                 )
+
+        # Report all failures at once
+        assert not failures, "\n".join(failures)
+
+    @pytest.mark.parametrize(
+        "report_id, expected",
+        load_metadata_test_cases(),
+    )
+    def test_metadata_extraction(  # noqa: PLR6301
+        self, report_id: str, expected: ReportMetadata
+    ):
+        """Test the extraction of metadata from a report.
+
+        Tests occurrence metadata, aircraft details, pilot information,
+        train details, and vessel information as applicable.
+
+        Args:
+            report_id (str): The unique identifier for the report.
+            expected (ReportMetadata): The expected metadata structure.
+
+        """
+        report_text = get_report_text(report_id)
+        report_mode = Modes.get_report_mode_from_id(report_id)
+        event_type_taxonomy_by_mode = load_event_type_taxonomy(
+            Path("data/event_types.csv")
+        )
+
+        extracted_data = ai_read_report(
+            agency_name=report_id.split("_", maxsplit=1)[0],
+            report_text=report_text,
+            safety_issues=False,
+            recommendations=False,
+            metadata=True,
+            report_mode=report_mode,
+            event_type_taxonomy_by_mode=event_type_taxonomy_by_mode,
+        )
+
+        extracted = getattr(extracted_data, "metadata", None)
+        if extracted is None:
+            pytest.fail("Metadata extraction failed - metadata is None")
+
+        failures = []
+
+        # Check occurrence metadata
+        extracted_dt = extracted.occurrence.occurrence_datetime.local_datetime
+        expected_dt = expected.occurrence.occurrence_datetime.local_datetime
+        if extracted_dt and expected_dt and extracted_dt != expected_dt:
+            failures.append(
+                f"Occurrence date/time mismatch:\n"
+                f"  Expected: {expected_dt}\n"
+                f"  Got:      {extracted_dt}"
+            )
+
+        extracted_location_desc = extracted.occurrence.location.description
+        expected_location_desc = expected.occurrence.location.description
+        if extracted_location_desc and expected_location_desc:
+            # Allow some flexibility in location description
+            similarity = SequenceMatcher(
+                None,
+                extracted_location_desc.lower(),
+                expected_location_desc.lower(),
+            ).ratio()
+            location_threshold = 0.7
+            if similarity < location_threshold:
+                failures.append(
+                    f"Occurrence location similarity {similarity:.2f} < {location_threshold}:\n"
+                    f"  Expected: {expected_location_desc}\n"
+                    f"  Got:      {extracted_location_desc}"
+                )
+
+        # Check aircraft count
+        if len(extracted.aircraft) != len(expected.aircraft):
+            failures.append(
+                f"Aircraft count mismatch: expected {len(expected.aircraft)}, got {len(extracted.aircraft)}"
+            )
+
+        # Check pilot count
+        if len(extracted.pilots) != len(expected.pilots):
+            failures.append(
+                f"Pilot count mismatch: expected {len(expected.pilots)}, got {len(extracted.pilots)}"
+            )
+
+        # Check train count
+        if len(extracted.trains) != len(expected.trains):
+            failures.append(
+                f"Train count mismatch: expected {len(expected.trains)}, got {len(extracted.trains)}"
+            )
+
+        # Check vessel count
+        if len(extracted.vessels) != len(expected.vessels):
+            failures.append(
+                f"Vessel count mismatch: expected {len(expected.vessels)}, got {len(extracted.vessels)}"
+            )
+
+        # Verify that at least one mode-specific item is extracted for the report type
+        is_air = "a_" in report_id
+        is_rail = "r_" in report_id
+        is_marine = "m_" in report_id
+
+        if is_air and len(extracted.aircraft) == 0:
+            failures.append("Air accident should have aircraft metadata")
+        if is_rail and len(extracted.trains) == 0:
+            failures.append("Rail accident should have train metadata")
+        if is_marine and len(extracted.vessels) == 0:
+            failures.append("Marine accident should have vessel metadata")
 
         # Report all failures at once
         assert not failures, "\n".join(failures)
@@ -363,6 +501,7 @@ def test_process_handle_already_processed(tmp_path):
             "report_id": already_processed_ids,
             "safety_issues": [[] for _ in already_processed_ids],
             "recommendations": [[] for _ in already_processed_ids],
+            "metadata": [{} for _ in already_processed_ids],
             "sections": [{} for _ in already_processed_ids],
         }
     )
@@ -385,10 +524,11 @@ def test_process_handle_already_processed(tmp_path):
     # Mock the extract_report function to track calls
     with patch("engine.ReportExtracting.extract_report") as mock_extract:
         # Configure mock to return a dict with expected structure
-        mock_extract.side_effect = lambda row, config: {
+        mock_extract.side_effect = lambda row, config, *_args: {
             "report_id": row["report_id"],
             "safety_issues": [],
             "recommendations": [],
+            "metadata": {},
             "sections": {},
         }
 
@@ -428,9 +568,10 @@ def test_process_handle_already_processed(tmp_path):
             "report_id",
             "safety_issues",
             "recommendations",
+            "metadata",
             "sections",
         }
-    ), f"Results should have columns ['report_id', 'safety_issues', 'recommendations', 'sections'], but has {list(results_df.columns)}"
+    ), f"Results should have columns ['report_id', 'safety_issues', 'recommendations', 'metadata', 'sections'], but has {list(results_df.columns)}"
 
     # Assertions: No duplicate report_ids in results
     assert (

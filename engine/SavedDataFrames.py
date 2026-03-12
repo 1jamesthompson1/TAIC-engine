@@ -207,7 +207,7 @@ class ParsedReports(SavedDataFrame):
 
 
 class ExtractedReports(SavedDataFrame):
-    """Manages extracted report data (safety issues, recommendations, sections).
+    """Manages extracted report data (safety issues, recommendations, sections, metadata).
 
     Stores structured information extracted from reports using AI and text processing.
     This is the new schema for the report-extracting-rewrite branch.
@@ -226,6 +226,10 @@ class ExtractedReports(SavedDataFrame):
         recommendations: list[dict[str, Any]] = Field(
             default_factory=list,
             description="List of recommendations extracted from the report",
+        )
+        metadata: dict[str, Any] = Field(
+            default_factory=dict,
+            description="Occurrence metadata including occurrence details and vehicle/vessel/personnel information",
         )
         sections: dict[str, str] = Field(
             default_factory=dict,

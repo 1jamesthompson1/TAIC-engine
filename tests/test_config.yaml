@@ -30,12 +30,15 @@ engine:
       ATSB:
         safety_issues: false
         recommendations: true
+        metadata: true
       TSB:
         safety_issues: true
         recommendations: false
+        metadata: true
       TAIC:
         safety_issues: true
         recommendations: false
+        metadata: true
   vector:
     table_name: all_document_types
     model:
