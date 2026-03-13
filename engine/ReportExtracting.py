@@ -4,14 +4,13 @@ This includes extracting safety issues, recommendations, and chunking the report
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
 import pandas as pd
 import regex as re
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pydantic import BaseModel, Field, create_model, field_validator
+from pydantic import BaseModel, Field, create_model
 from tqdm import tqdm
 
 from engine import Modes
@@ -20,12 +19,6 @@ from engine.Logging import get_logger
 from engine.SavedDataFrames import ExtractedReports, ParsedReports
 
 logger = get_logger(__name__)
-
-
-# ISO 6709 basic coordinate representation: +DD.DDDD+DDD.DDDD[/]
-ISO6709_PATTERN = re.compile(
-    r"^[+-]\d{2}(?:\.\d+)?[+-]\d{3}(?:\.\d+)?(?:[+-]\d+(?:\.\d+)?)?/$"
-)
 
 
 class InvalidExtractionConfigError(ValueError):
@@ -83,129 +76,54 @@ class RecommendationItem(BaseModel):
 class OccurrenceDateTime(BaseModel):
     """Represents occurrence datetime with timezone as separate fields."""
 
-    local_datetime: datetime | str = Field(
-        description=(
-            "Local occurrence datetime as ISO 8601 without timezone "
-            "(YYYY-MM-DDTHH:MM:SS). Time is required. Return as string and the model will auto format it into a python datetime"
-        ),
+    local_datetime: str = Field(
+        description="Local occurrence datetime as ISO 8601 without timezone (YYYY-MM-DDTHH:MM:SS). Time is required and should come from the report text, not be invented.",
+        pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$",
     )
     time_zone: str = Field(
         description=(
-            "Timezone identifier or abbreviation for the occurrence in UTC offset (e.g 'UTC+13')"
+            "Canonical UTC offset string for the occurrence local time "
+            "in the form UTC+HH:MM or UTC-HH:MM "
+            "(e.g. 'UTC+13:00', 'UTC-06:00', 'UTC+09:30')."
         ),
+        pattern=r"^UTC[+-]\d{2}:\d{2}$",
     )
     time_zone_source: Literal["explicit_in_report", "inferred"] | None = Field(
         default=None,
-        description=(
-            "Whether the timezone is explicitly stated in the report or inferred."
-        ),
+        description="Set to 'explicit_in_report' when timezone wording appears in the report. Set to 'inferred' only when timezone is derived from context (for example location or standard local time references).",
     )
-
-    @field_validator("local_datetime", mode="before")
-    @classmethod
-    def ensure_specific_time(cls, value):
-        """Require datetime values to include a specific time and no timezone offset.
-
-        Returns:
-            datetime | None: A timezone-naive datetime value, or None if input is None.
-
-        Raises:
-            TypeError: If ``value`` is not a ``datetime`` or ISO 8601 string.
-            ValueError: If ``value`` does not include a specific time, is not valid ISO 8601,
-                or includes timezone information.
-        """
-        if value is None:
-            return None
-
-        if isinstance(value, datetime):
-            parsed = value
-        elif isinstance(value, str):
-            cleaned = value.strip()
-            if "T" not in cleaned and " " not in cleaned:
-                msg = (
-                    "local_datetime must include a specific time "
-                    "(YYYY-MM-DDTHH:MM[:SS])"
-                )
-                raise ValueError(msg)
-            if "T" not in cleaned and " " in cleaned:
-                cleaned = cleaned.replace(" ", "T", 1)
-            if len(cleaned) == 16:  # noqa: PLR2004
-                cleaned = f"{cleaned}:00"
-
-            try:
-                parsed = datetime.fromisoformat(cleaned)
-            except ValueError as e:
-                msg = (
-                    "local_datetime must be ISO 8601 with date and time "
-                    "(YYYY-MM-DDTHH:MM[:SS]) and no timezone"
-                )
-                raise ValueError(msg) from e
-        else:
-            msg = "local_datetime must be a datetime or ISO 8601 string"
-            raise TypeError(msg)
-
-        if parsed.tzinfo is not None:
-            msg = "local_datetime must not include timezone information"
-            raise ValueError(msg)
-
-        return parsed
 
 
 class OccurrenceLocation(BaseModel):
     """Represents occurrence location in both descriptive and parseable formats."""
 
-    description: str | None = Field(
-        default=None,
-        description="Human-readable location description from the report text (e.g., '2 NM north of Ardmore Aerodrome').",
+    description: str = Field(
+        description="Human-readable location description copied from the report text (e.g., '2 NM north of Ardmore Aerodrome').",
     )
     standardized_location: str | None = Field(
         default=None,
-        description="Standardized location in ISO 6709 format (e.g., '-37.02972+174.97333/').",
+        description="Standardized location in ISO 6709 format (e.g., '-37.02972+174.97333/'). Only should be None in the rare case that a location is completely unknown.",
+        pattern=r"^[+-]\d{2}(?:\.\d+)?[+-]\d{3}(?:\.\d+)?(?:[+-]\d+(?:\.\d+)?)?/$",
     )
-
-    @field_validator("standardized_location", mode="before")
-    @classmethod
-    def ensure_iso6709_standardized_location(cls, value):
-        """Validate standardized_location is ISO 6709 coordinate format.
-
-        Returns:
-            str | None: The stripped coordinate string if valid, otherwise None.
-
-        Raises:
-            TypeError: If value is not a string or None.
-            ValueError: If value is not valid ISO 6709 format.
-        """
-        if value is None:
-            return None
-
-        if not isinstance(value, str):
-            msg = "standardized_location must be a string in ISO 6709 format"
-            raise TypeError(msg)
-
-        cleaned = value.strip()
-        if ISO6709_PATTERN.fullmatch(cleaned):
-            return cleaned
-
-        msg = (
-            "standardized_location must be ISO 6709, for example '-37.02972+174.97333/'"
-        )
-        raise ValueError(msg)
 
 
 class OccurrenceMetadata(BaseModel):
     """Represents common metadata extracted from an accident occurrence report (all modes)."""
 
     occurrence_datetime: OccurrenceDateTime = Field(
-        description="Structured occurrence datetime with local datetime, timezone, and timezone source."
+        description="Structured occurrence datetime with local time, UTC offset, and timezone source as stated in the report."
     )
     location: OccurrenceLocation = Field(
         description="Structured occurrence location with descriptive and standardized values.",
     )
 
-    # Not sure if i wll move remove this in favor of the other report type extraction. Or I could remove the other report type exrtaction and get it to work from this one here. Might be better as it is reading the entire report so more likley to have it correct
     occurrence_type: str | None = Field(
         default=None,
-        description="The type or classification of the occurrence (e.g., collision, derailment, ditching, etc.). This may match existing event type classifications.",
+        description=(
+            "Type or classification of the occurrence (e.g., collision, "
+            "derailment, ditching). Use the closest explicit classification from "
+            "the report and align to taxonomy values when constrained by mode."
+        ),
     )
     total_persons_involved: int | None = Field(
         default=None,
@@ -220,10 +138,53 @@ class OccurrenceMetadata(BaseModel):
         description="The number of persons injured in the occurrence.",
     )
 
-    # Unaware of if this would be useful to have as a category or just a string. It cuold be a category of the worst damage.
     damage_description: str | None = Field(
         default=None,
-        description="Description of damage to equipment, property, or environment resulting from the occurrence. It should be a brief summary of the damage as described in the report (e.g 'the aircraft was destroyed', 'the train derailed with minor damage', 'the vessel sustained substantial damage but remained afloat', etc.).",
+        description="Brief summary of damage to equipment, property, or environment from the report text.",
+    )
+
+
+class PilotMetadata(BaseModel):
+    """Represents pilot-specific metadata from an air accident report."""
+
+    rank: (
+        Literal["Captain", "First Officer", "Second Officer", "Trainee", "Instructor"]
+        | None
+    ) = Field(
+        default=None,
+        description="Pilot rank or position (e.g., captain, first officer, second officer).",
+    )
+    role: Literal["Pilot flying", "Pilot monitoring"] | None = Field(
+        default=None,
+        description="Pilot role for the occurrence phase when reported.",
+    )
+    licence: (
+        Literal[
+            "Air Transport Pilot Licence (Aeroplane)",
+            "Air Transport Pilot Licence (Helicopter)",
+            "Commercial Pilot Licence (Aeroplane)",
+            "Commercial Pilot Licence (Helicopter)",
+            "Private Pilot Licence (Aeroplane)",
+            "Private Pilot Licence (Helicopter)",
+            "Student Pilot Licence",
+            "other",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description="Pilot licence category. Use 'other' if a licence is provided but does not match listed categories.",
+    )
+    age: int | None = Field(
+        default=None,
+        description="Pilot's age at time of occurrence.",
+    )
+    total_flying_experience: int | None = Field(
+        default=None,
+        description="Total flying experience (e.g., 10000, 15) as hours",
+    )
+    experience_on_type: int | None = Field(
+        default=None,
+        description="Flying experience on the specific aircraft type as hours",
     )
 
 
@@ -231,7 +192,8 @@ class AircraftMetadata(BaseModel):
     """Represents aircraft-specific metadata from an air accident report."""
 
     aircraft_type: (
-        Literal["Fixed-wing", "Rotary-wing", "ballon", "glider", "other"] | None
+        Literal["Aeroplane", "Helicopter", "Glider", "Balloon", "Gyroplane", "Other"]
+        | None
     ) = Field(
         default=None,
         description="Type of aircraft",
@@ -242,11 +204,11 @@ class AircraftMetadata(BaseModel):
     )
     make: str | None = Field(
         default=None,
-        description="Aircraft manufacturer/make.",
+        description="Aircraft manufacturer/make. Just the name of the manufacturer, not the model (e.g., Boeing, Airbus, Cessna).",
     )
     model: str | None = Field(
         default=None,
-        description="Aircraft model.",
+        description="Aircraft model. Just the model of the aircraft, not the manufacturer (e.g., 737-800, A320, 172).",
     )
     number_of_engines: int | None = Field(
         default=None,
@@ -277,67 +239,73 @@ class AircraftMetadata(BaseModel):
         description="Operating airline or organization.",
     )
 
-    # Is this the correct breakdown?
     flight_type: (
-        Literal["scheduled service", "charter", "private", "training"] | None
+        Literal[
+            "scheduled service",
+            "charter",
+            "cargo",
+            "private",
+            "training",
+            "aerial work",
+            "emergency services",
+            "ferry/positioning",
+            "other",
+        ]
+        | None
     ) = Field(
         default=None,
-        description="Type of flight",
+        description=(
+            "Type of flight. Map medevac/air ambulance/rescue to 'emergency "
+            "services'. Map agricultural/survey/patrol/sling-load/firefighting "
+            "to 'aerial work'."
+        ),
     )
-    persons_on_board_total: int | None = Field(
-        default=None,
+    persons_on_board_total: int = Field(
         description="Total number of persons on board the aircraft.",
     )
-    persons_on_board_crew: int | None = Field(
-        default=None,
-        description="Number of crew members on boar that is cabin crew plus flight crew (pilots)",
+    persons_on_board_crew: int = Field(
+        description="Number of crew members on board (cabin crew plus flight crew/pilots).",
     )
-    persons_on_board_passengers: int | None = Field(
-        default=None,
+    persons_on_board_passengers: int = Field(
         description="Number of passengers on board.",
     )
 
-    # What damage is the correct breakdown? Is there some official taxionomy to use.
     damage: Literal["destroyed", "substantial damage", "minor damage", "nil"] | None = (
         Field(
             default=None,
-            description="Level of damage to the aircraft as classified in the report (e.g., 'destroyed', 'substantial damage', 'minor damage').",
+            description="Damage severity classification for the aircraft from the report.",
         )
     )
 
-
-class PilotMetadata(BaseModel):
-    """Represents pilot-specific metadata from an air accident report."""
-
-    role: str | None = Field(
-        default=None,
-        description="Pilot role (e.g., captain, first officer, second officer) for multi aircraft incidents write with format 'captain of yyyyyy'.",
-    )
-    licence: str | None = Field(
-        default=None,
-        description="Pilot licence type and number if available.",
-    )
-    age: int | None = Field(
-        default=None,
-        description="Pilot's age at time of occurrence.",
-    )
-    total_flying_experience: int | None = Field(
-        default=None,
-        description="Total flying experience (e.g., 10000, 15) as hours",
-    )
-    experience_on_type: int | None = Field(
-        default=None,
-        description="Flying experience on the specific aircraft type as hours",
+    pilots: list[PilotMetadata] = Field(
+        default_factory=list,
+        description="List of pilots associated with the aircraft. Always filled out with pilot metadata even if the information is not available in the report (in which case the fields will be None).",
     )
 
 
 class TrainMetadata(BaseModel):
     """Represents train-specific metadata from a rail accident report."""
 
-    # What is the correct list of categories
-    train_type: Literal["passenger", "freight", "tanker"] | None = Field(
+    train_type: (
+        Literal[
+            "passenger",
+            "freight",
+            "work train",
+            "maintenance vehicle",
+            "shunt",
+            "locomotive only",
+            "other",
+        ]
+        | None
+    ) = Field(
         default=None,
-        description="Type of train",
+        description=(
+            "Broad type of rail movement or rail vehicle. Use 'maintenance "
+            "vehicle' for tampers/regulators/ballast cleaners and similar track "
+            "machines. Use 'shunt' for yard/depot/ferry-terminal shunting "
+            "movements. Use 'work train' for engineering/construction trains "
+            "hauling work materials or equipment."
+        ),
     )
     train_number: str | None = Field(
         default=None,
@@ -359,13 +327,17 @@ class TrainMetadata(BaseModel):
             "intercity",
             "high-speed",
             "heavy-haul",
-            "shunting",
+            "unit",
+            "yard/shunting",
+            "inspection",
+            "maintenance",
+            "test/commissioning",
             "other",
         ]
         | None
     ) = Field(
         default=None,
-        description="Train classification.",
+        description="Service or operational classification of the movement based on report wording.",
     )
     year_manufactured: int | None = Field(
         default=None,
@@ -406,16 +378,14 @@ class VesselMetadata(BaseModel):
         | None
     ) = Field(
         default=None,
-        description="Type of vessel",
+        description="Type of vessel.",
     )
 
-    # Could this be a category?
     classification: str | None = Field(
         default=None,
         description="Classification or class of the vessel.",
     )
 
-    # Is there some structure this could be
     classification_limits: str | None = Field(
         default=None,
         description="Classification limits for the vessel.",
@@ -445,7 +415,6 @@ class VesselMetadata(BaseModel):
         description="Year the vessel was built.",
     )
 
-    # Is this the correct breakdown of propulsion types?
     propulsion: (
         Literal[
             "diesel",
@@ -460,7 +429,7 @@ class VesselMetadata(BaseModel):
         | None
     ) = Field(
         default=None,
-        description="Type of propulsion",
+        description="Primary propulsion type.",
     )
     total_power: float | None = Field(
         default=None,
@@ -497,10 +466,6 @@ class ReportMetadata(BaseModel):
     aircraft: list[AircraftMetadata] = Field(
         default_factory=list,
         description="List of aircraft involved (for air accidents). May be empty for non-air reports.",
-    )
-    pilots: list[PilotMetadata] = Field(
-        default_factory=list,
-        description="List of pilots involved (for air accidents). May be empty for non-air reports.",
     )
     trains: list[TrainMetadata] = Field(
         default_factory=list,
@@ -675,29 +640,10 @@ I only want recommendations that are formally made by {agency_name} in the repor
 
     metadata_prompt = """
 Metadata extraction instructions:
-Please extract all available metadata about the occurrence and any vehicles/vessels/people involved. This may be found in a 'Data Summary', 'Factual Information', or similar section of the report. If multiple aircraft, trains, or vessels are involved, include all of them. However you are only to include the main people and vehicles involved in the occurrence, do not include minor or peripheral people/vehicles that are only mentioned in passing.
-For occurrence metadata:
-- Extract occurrence_datetime.local_datetime as ISO 8601 local datetime (YYYY-MM-DDTHH:MM:SS). Time is required and must not include timezone offset.
-- Extract occurrence_datetime.time_zone separately (e.g., Pacific/Auckland, NZDT, UTC+13) when available.
-- Set occurrence_datetime.time_zone_source to 'explicit_in_report' when the timezone appears in the report; otherwise use 'inferred' if timezone can be inferred.
-- Extract location.description as the report's plain-language geographic location.
-- Extract location.standardized_location in ISO 6709 format (e.g., '-37.02972+174.97333/').
-- Identify the occurrence type (e.g., collision, derailment, ditching)
-- Count or identify the total number of persons involved
-- Extract number of fatalities and injuries
-- Describe any damage
-
-For air accidents:
-- Extract aircraft details (type, registration, make, model, engines, manufacture year, operator, flight type, persons on board totals)
-- Extract pilot details (role, licence, age, experience, ratings) for each pilot if available
-
-For rail accidents:
-- Extract train details (type, number, length, weight, classification, year, operator, crew, persons involved)
-
-For marine accidents:
-- Extract vessel details (name, type, classification, dimensions, tonnage, builder, propulsion, speed, owner, registry port, crew, persons involved)
-
-If information is not available in the report, leave the field as None/null. Do not infer or guess values.
+Extract metadata according to the schema and each field description.
+Include only the main occurrence participants (not minor/peripheral mentions).
+If multiple aircraft, trains, or vessels are involved, include all of them.
+If a value is not stated in the report, return null.
 """
 
     allowed_event_types = []

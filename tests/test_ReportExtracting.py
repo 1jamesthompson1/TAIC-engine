@@ -8,18 +8,21 @@ This is the key test module for validating that the AI extraction works.
 """
 
 import json
+import re
 from difflib import SequenceMatcher
 from pathlib import Path
+from types import UnionType
+from typing import Literal, Union, get_args, get_origin
 from unittest.mock import patch
 
 import pandas as pd
 import pytest
+from pydantic import BaseModel
 
 from engine import Modes
 from engine.ReportExtracting import (
     AircraftMetadata,
     OccurrenceMetadata,
-    PilotMetadata,
     RecommendationItem,
     ReportMetadata,
     SafetyIssueItem,
@@ -35,6 +38,264 @@ from engine.SavedDataFrames import ExtractedReports, ParsedReports
 RECOMMENDATION_SIMILARITY_THRESHOLD = 0.95
 CONTEXT_SIMILARITY_THRESHOLD = 0.9
 EXPECTED_NEW_REPORT_COUNT = 2
+METADATA_STRING_SIMILARITY_THRESHOLD = 0.8
+LOCATION_COORDINATE_TOLERANCE_DEGREES = 0.001
+
+EXACT_MATCH_PATHS = {
+    "occurrence.occurrence_datetime.local_datetime",
+    "occurrence.occurrence_datetime.time_zone",
+}
+
+ISO6709_LAT_LON_PATTERN = re.compile(
+    r"^([+-]\d{2}(?:\.\d+)?)([+-]\d{3}(?:\.\d+)?)(?:[+-]\d+(?:\.\d+)?)?/$"
+)
+
+
+def _canonical_sort_key(value):
+    """Build a stable sort key for list item comparison.
+
+    Returns:
+        str: Canonical JSON string representation used for sorting.
+    """
+    return json.dumps(value, sort_keys=True, default=str)
+
+
+def _normalize_text(value: str) -> str:
+    """Normalize text for fair case/whitespace-insensitive comparison.
+
+    Returns:
+        str: Normalized text with single spaces and casefolding applied.
+    """
+    return " ".join(value.casefold().split())
+
+
+def _list_item_sort_key(path: str, value):
+    """Choose stable item keys so list comparison is less order-sensitive.
+
+    Returns:
+        str: A deterministic sort key.
+    """
+    if not isinstance(value, dict):
+        return _canonical_sort_key(value)
+
+    if path == "aircraft":
+        return str(value.get("registration") or value.get("model") or "")
+    if path.endswith(".pilots"):
+        return str(value.get("role") or value.get("rank") or "")
+    if path == "trains":
+        return str(value.get("train_number") or value.get("operator") or "")
+    if path == "vessels":
+        return str(value.get("vessel_name") or value.get("port_of_registry") or "")
+
+    return _canonical_sort_key(value)
+
+
+def _normalize_metadata_path(path: str) -> str:
+    """Normalize list indices in metadata paths.
+
+    Returns:
+        str: Path with list indices replaced by [].
+    """
+    return re.sub(r"\[\d+\]", "[]", path)
+
+
+def _unwrap_optional_annotation(annotation):
+    """Remove None from optional annotations when present.
+
+    Returns:
+        object: Annotation without the optional None wrapper when possible.
+    """
+    origin = get_origin(annotation)
+    if origin not in {Union, UnionType}:
+        return annotation
+
+    non_none_args = [arg for arg in get_args(annotation) if arg is not type(None)]
+    if len(non_none_args) == 1:
+        return non_none_args[0]
+    return annotation
+
+
+def _collect_literal_string_paths(
+    model_cls: type[BaseModel], prefix: str = ""
+) -> set[str]:
+    """Walk a Pydantic model and collect paths for string Literal fields.
+
+    Returns:
+        set[str]: Normalized metadata paths for string literal-backed fields.
+    """
+    literal_paths = set()
+
+    for field_name, field_info in model_cls.model_fields.items():
+        path = f"{prefix}.{field_name}" if prefix else field_name
+        annotation = _unwrap_optional_annotation(field_info.annotation)
+        origin = get_origin(annotation)
+
+        if origin is Literal:
+            literal_values = [
+                value for value in get_args(annotation) if value is not None
+            ]
+            if literal_values and all(
+                isinstance(value, str) for value in literal_values
+            ):
+                literal_paths.add(path)
+            continue
+
+        if origin is list:
+            item_annotation = _unwrap_optional_annotation(get_args(annotation)[0])
+            if isinstance(item_annotation, type) and issubclass(
+                item_annotation, BaseModel
+            ):
+                literal_paths.update(
+                    _collect_literal_string_paths(item_annotation, f"{path}[]")
+                )
+            continue
+
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            literal_paths.update(_collect_literal_string_paths(annotation, path))
+
+    return literal_paths
+
+
+LITERAL_PATH_PATTERNS = _collect_literal_string_paths(ReportMetadata)
+
+
+def _should_use_exact_string_match(path: str) -> bool:
+    """Determine whether a metadata path should use exact string comparison.
+
+    Returns:
+        bool: True when the path maps to a literal-backed or strict field.
+    """
+    normalized_path = _normalize_metadata_path(path)
+    return normalized_path in LITERAL_PATH_PATTERNS or path in EXACT_MATCH_PATHS
+
+
+def _parse_iso6709_lat_lon(iso6709_coord: str) -> tuple[float, float] | None:
+    """Parse an ISO 6709 coordinate string into (latitude, longitude).
+
+    Returns:
+        tuple[float, float] | None: Parsed latitude/longitude or None if invalid.
+    """
+    if not isinstance(iso6709_coord, str):
+        return None
+
+    match = ISO6709_LAT_LON_PATTERN.fullmatch(iso6709_coord.strip())
+    if not match:
+        return None
+
+    return float(match.group(1)), float(match.group(2))
+
+
+def _compare_standardized_location(
+    path: str, actual: str | None, expected: str | None, failures: list[str]
+):
+    """Compare ISO 6709 coordinates using a simple degree tolerance."""
+    if actual is None and expected is None:
+        return
+    if actual is None or expected is None:
+        failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
+        return
+
+    actual_lat_lon = _parse_iso6709_lat_lon(actual)
+    expected_lat_lon = _parse_iso6709_lat_lon(expected)
+
+    if actual_lat_lon is None or expected_lat_lon is None:
+        if actual != expected:
+            failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
+        return
+
+    lat_diff = abs(actual_lat_lon[0] - expected_lat_lon[0])
+    lon_diff = abs(actual_lat_lon[1] - expected_lat_lon[1])
+    if (
+        lat_diff > LOCATION_COORDINATE_TOLERANCE_DEGREES
+        or lon_diff > LOCATION_COORDINATE_TOLERANCE_DEGREES
+    ):
+        failures.append(
+            f"{path} coordinate difference exceeded {LOCATION_COORDINATE_TOLERANCE_DEGREES}deg: "
+            f"lat diff={lat_diff:.6f}, lon diff={lon_diff:.6f}; "
+            f"expected {expected!r}, got {actual!r}"
+        )
+
+
+def _compare_metadata_values(path: str, actual, expected, failures: list[str]):  # noqa: PLR0911, PLR0912
+    """Recursively compare metadata with simple string thresholds."""
+    if path == "occurrence.location.standardized_location":
+        _compare_standardized_location(path, actual, expected, failures)
+        return
+
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            failures.append(
+                f"{path} type mismatch: expected dict, got {type(actual).__name__}"
+            )
+            return
+
+        expected_keys = set(expected)
+        actual_keys = set(actual)
+        missing = sorted(expected_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+
+        for key in missing:
+            failures.append(f"{path}.{key} missing in extracted metadata")
+        for key in extra:
+            failures.append(f"{path}.{key} unexpected in extracted metadata")
+
+        for key in sorted(expected_keys & actual_keys):
+            next_path = f"{path}.{key}" if path else key
+            _compare_metadata_values(next_path, actual[key], expected[key], failures)
+        return
+
+    if isinstance(expected, list):
+        if not isinstance(actual, list):
+            failures.append(
+                f"{path} type mismatch: expected list, got {type(actual).__name__}"
+            )
+            return
+
+        if len(actual) != len(expected):
+            failures.append(
+                f"{path} length mismatch: expected {len(expected)}, got {len(actual)}"
+            )
+
+        actual_sorted = sorted(actual, key=lambda item: _list_item_sort_key(path, item))
+        expected_sorted = sorted(
+            expected, key=lambda item: _list_item_sort_key(path, item)
+        )
+        for idx, (actual_item, expected_item) in enumerate(
+            zip(actual_sorted, expected_sorted, strict=False)
+        ):
+            _compare_metadata_values(
+                f"{path}[{idx}]", actual_item, expected_item, failures
+            )
+        return
+
+    if isinstance(expected, str):
+        if not isinstance(actual, str):
+            failures.append(
+                f"{path} type mismatch: expected str, got {type(actual).__name__}"
+            )
+            return
+
+        if _should_use_exact_string_match(path):
+            if actual != expected:
+                failures.append(
+                    f"{path} mismatch: expected {expected!r}, got {actual!r}"
+                )
+            return
+
+        similarity = SequenceMatcher(
+            None,
+            _normalize_text(actual),
+            _normalize_text(expected),
+        ).ratio()
+        if similarity < METADATA_STRING_SIMILARITY_THRESHOLD:
+            failures.append(
+                f"{path} similarity {similarity:.2f} < {METADATA_STRING_SIMILARITY_THRESHOLD}: "
+                f"expected {expected!r}, got {actual!r}"
+            )
+        return
+
+    if actual != expected:
+        failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
 
 
 # Test data loading functions
@@ -94,7 +355,6 @@ def load_metadata_test_cases():
             aircraft=[
                 AircraftMetadata(**item) for item in case["expected"]["aircraft"]
             ],
-            pilots=[PilotMetadata(**item) for item in case["expected"]["pilots"]],
             trains=[TrainMetadata(**item) for item in case["expected"]["trains"]],
             vessels=[VesselMetadata(**item) for item in case["expected"]["vessels"]],
         )
@@ -289,7 +549,7 @@ class TestAIExtraction:
         "report_id, expected",
         load_metadata_test_cases(),
     )
-    def test_metadata_extraction(  # noqa: PLR6301, PLR0914
+    def test_metadata_extraction(  # noqa: PLR6301
         self, report_id: str, expected: ReportMetadata
     ):
         """Test the extraction of metadata from a report.
@@ -324,57 +584,9 @@ class TestAIExtraction:
 
         failures = []
 
-        # Check occurrence metadata
-        extracted_dt = extracted.occurrence.occurrence_datetime.local_datetime
-        expected_dt = expected.occurrence.occurrence_datetime.local_datetime
-        if extracted_dt and expected_dt and extracted_dt != expected_dt:
-            failures.append(
-                f"Occurrence date/time mismatch:\n"
-                f"  Expected: {expected_dt}\n"
-                f"  Got:      {extracted_dt}"
-            )
-
-        extracted_location_desc = extracted.occurrence.location.description
-        expected_location_desc = expected.occurrence.location.description
-        if extracted_location_desc and expected_location_desc:
-            # Prefer direct containment first; fall back to similarity for looser phrasing.
-            extracted_norm = extracted_location_desc.lower()
-            expected_norm = expected_location_desc.lower()
-            contains_match = (
-                expected_norm in extracted_norm or extracted_norm in expected_norm
-            )
-            similarity = SequenceMatcher(None, extracted_norm, expected_norm).ratio()
-            location_threshold = 0.65
-            if not contains_match and similarity < location_threshold:
-                failures.append(
-                    f"Occurrence location similarity {similarity:.2f} < {location_threshold}:\n"
-                    f"  Expected: {expected_location_desc}\n"
-                    f"  Got:      {extracted_location_desc}"
-                )
-
-        # Check aircraft count
-        if len(extracted.aircraft) != len(expected.aircraft):
-            failures.append(
-                f"Aircraft count mismatch: expected {len(expected.aircraft)}, got {len(extracted.aircraft)}"
-            )
-
-        # Check pilot count
-        if len(extracted.pilots) != len(expected.pilots):
-            failures.append(
-                f"Pilot count mismatch: expected {len(expected.pilots)}, got {len(extracted.pilots)}"
-            )
-
-        # Check train count
-        if len(extracted.trains) != len(expected.trains):
-            failures.append(
-                f"Train count mismatch: expected {len(expected.trains)}, got {len(extracted.trains)}"
-            )
-
-        # Check vessel count
-        if len(extracted.vessels) != len(expected.vessels):
-            failures.append(
-                f"Vessel count mismatch: expected {len(expected.vessels)}, got {len(extracted.vessels)}"
-            )
+        extracted_payload = extracted.model_dump(mode="json")
+        expected_payload = expected.model_dump(mode="json")
+        _compare_metadata_values("", extracted_payload, expected_payload, failures)
 
         # Verify that at least one mode-specific item is extracted for the report type
         is_air = "a_" in report_id
