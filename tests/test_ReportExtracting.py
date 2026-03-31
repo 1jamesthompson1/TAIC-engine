@@ -20,7 +20,7 @@ import pytest
 from pydantic import BaseModel
 
 from engine import Modes
-from engine.ReportExtracting import (
+from engine.ExtractionModels import (
     AircraftMetadata,
     OccurrenceMetadata,
     RecommendationItem,
@@ -28,6 +28,8 @@ from engine.ReportExtracting import (
     TrainMetadata,
     VesselMetadata,
     _build_metadata_model_for_mode,  # noqa: PLC2701
+)
+from engine.ReportExtracting import (
     ai_read_report,
     chunk_report_into_sections,
     load_event_type_taxonomy,

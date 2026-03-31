@@ -1,0 +1,604 @@
+"""Extraction models for accident investigation reports.
+
+This module contains Pydantic models for extracting structured information from
+accident investigation reports, including safety issues, recommendations, and metadata.
+"""
+
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field, create_model
+
+from engine import Modes
+
+
+class SafetyIssueItem(BaseModel):
+    """Represents a safety issue extracted from the report."""
+
+    safety_issue: str = Field(
+        ...,
+        description="The text of the actual safety issue (e.g ignore 'safety issue -').",
+    )
+    quality: Literal["exact", "inferred"] = Field(
+        ...,
+        description=(
+            "Whether the safety issue is an exact safety issue "
+            "(i.e a verbatim safety issue) or an inferred safety issue "
+            "(i.e implied in the report)."
+        ),
+    )
+
+
+class RecommendationItem(BaseModel):
+    """Represents a recommendation extracted from the report."""
+
+    recommendation: str = Field(
+        ...,
+        description="The text of the recommendation made by the agency in the report. Copy the recommendation verbatim.",
+    )
+    recommendation_id: str | None = Field(
+        default=None,
+        description="The unique identifier for the recommendation if it exists in the report (sometimes called 'id', 'number'). If none is given then return None.",
+    )
+    recipient: str | None = Field(
+        default=None,
+        description="The recipient of the recommendation. I.e who the recommendation was addressed to.",
+    )
+    recommendation_context: str | None = Field(
+        default=None,
+        description="The context or background information related to the recommendation, if available. This is not always present. It is normally a paragraph or two that states the reasoning behind the recommendation (typically can end with something along the lines of 'therefore we recommend...'). In some reports recommendation are made only if the safety actions were not sufficient. Then for these situations the context should bethe safety actions taken and why the investigation agency deemed these actions insufficient (i.e the reasoning behind the recommendation). If recommendation context is not present in the recommendaion section then it should be None (do not look for context in other sections of the report, only the section that is talking abuot safety issues/actions and recommendations).",
+    )
+    made: str | None = Field(
+        default=None,
+        description="The date when the recommendation was made, if available in ISO 8601 format. If not available, set to None.",
+    )
+
+
+class OccurrenceDateTime(BaseModel):
+    """Represents occurrence datetime with timezone as separate fields."""
+
+    local_datetime: str = Field(
+        description="Local occurrence datetime as ISO 8601 without timezone (YYYY-MM-DDTHH:MM). Time is required and should come from the report text, not be invented.",
+        pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$",
+    )
+    time_zone: str = Field(
+        description=(
+            "Canonical UTC offset string for the occurrence local time "
+            "in the form UTC+HH:MM or UTC-HH:MM "
+            "(e.g. 'UTC+13:00', 'UTC-06:00', 'UTC+09:30')."
+        ),
+        pattern=r"^UTC[+-]\d{2}:\d{2}$",
+    )
+    time_zone_source: Literal["explicit_in_report", "inferred"] | None = Field(
+        default=None,
+        description="Set to 'explicit_in_report' when timezone wording appears in the report. Set to 'inferred' only when timezone is derived from context (for example location or standard local time references).",
+    )
+
+
+class OccurrenceLocation(BaseModel):
+    """Represents occurrence location in both descriptive and parseable formats."""
+
+    description: str = Field(
+        description="Raw human-readable location extracted from the report wording (do not normalize this field). Keep it faithful to how the report describes the location.",
+    )
+    standardized_location: str | None = Field(
+        default=None,
+        description="Normalized location string in exactly 4 comma-separated items: 'location, city/town, region/state, country' (country is stored separately in the country field). Use this only when a location can be stated from report context; if a part is unknown, use 'unknown' in that part. For airports use the name of the airport and do not include the code. For aircraft accidents if a plane is mid flight then the location should be 'en route'.",
+        pattern=r"^[^,]+,\s*[^,]+,\s*[^,]+,\s*[^,]+$",
+    )
+
+
+class OccurrenceMetadata(BaseModel):
+    """Represents common metadata extracted from an accident occurrence report (all modes)."""
+
+    occurrence_datetime: OccurrenceDateTime = Field(
+        description="Structured occurrence datetime with local time, UTC offset, and timezone source as stated in the report."
+    )
+    location: OccurrenceLocation = Field(
+        description="Structured occurrence location shared across all modes: raw extracted description, normalized 4-part standardized location, and separate country code.",
+    )
+
+    occurrence_type: str | None = Field(
+        default=None,
+        description=(
+            "Type or classification of the occurrence (e.g., collision, derailment, ditching). Use the closest explicit classification from the report and align to taxonomy values when constrained by mode."
+        ),
+    )
+    total_persons_involved: int | None = Field(
+        default=None,
+        description="The total number of persons involved in the occurrence. This should be the total number of people that are involved and/or could of been harmed in the occurrence regardless of if they are on board a vehicle or not. Only use None in the situation where the report does not provide any information at all.",
+    )
+    fatalities: int = Field(
+        description="The number of fatalities resulting from the occurrence. Use 0 to indicate no fatalities",
+    )
+    injuries: int = Field(
+        description="The number of persons injured in the occurrence. Use 0 to indicate no injuries.",
+    )
+
+    damage_description: Literal["nil"] | str = Field(
+        description="Brief summary of damage to equipment, property, or environment from the report text. The summary should include a few word overview of the damage (e.g. 'destroyed', 'substantial damage') followed by a colon and then details separated by semicolons. For example, 'substantial damage: left wing damaged; engine detached'. If there are multiple items of damage, separate them with semicolons. If there is no damage, use 'nil'.",
+        pattern=r"((.+):(.+;?)\.)|(nil)",
+    )
+
+
+class PilotMetadata(BaseModel):
+    """Represents pilot-specific metadata from an air accident report."""
+
+    role: (
+        Literal[
+            "Captain",
+            "First Officer",
+            "Second Officer",
+            "Student Pilot",
+            "Instructor",
+            "Sole Pilot",
+            "Other",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description="Pilot's role or position (e.g., captain, instructor, second officer etc). Use Sole pilot for situations where there is no explicit rank yet there is only a single pilot (common in light aircraft accidents). Student pilot is for situations where there is an isntructor and student pilot. Use 'other' when the report states a role that does not fit the allowed literals.",
+    )
+    responsibility: Literal["Pilot flying", "Pilot monitoring"] | None = Field(
+        default=None,
+        description="Pilot responsibility for the occurrence phase when reported.",
+    )
+    licence: (
+        Literal[
+            "Air Transport Pilot Licence (Aeroplane)",
+            "Air Transport Pilot Licence (Helicopter)",
+            "Commercial Pilot Licence (Aeroplane)",
+            "Commercial Pilot Licence (Helicopter)",
+            "Private Pilot Licence (Aeroplane)",
+            "Private Pilot Licence (Helicopter)",
+            "Student Pilot",
+            "Balloon Pilot Licence",
+            "other",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description="Pilot licence category (if they hold multiple use the license that is the most relevant to the occurrence). Use 'other' if a licence is provided but does not match listed categories.",
+    )
+    age: int | None = Field(
+        default=None,
+        description="Pilot's age at time of occurrence.",
+    )
+    total_flying_experience: int | None = Field(
+        default=None,
+        description="Total flying experience (e.g., 10000, 15) as hours. Round to the nearest whole number (using standard rounding rules) and do not include any text (e.g. 'hours').",
+    )
+    experience_on_type: int | None = Field(
+        default=None,
+        description="Flying experience on the specific aircraft type as hours. Round to the nearest whole number (using standard rounding rules) and do not include any text (e.g. 'hours').",
+    )
+
+
+class AircraftMetadata(BaseModel):
+    """Represents aircraft-specific metadata from an air accident report."""
+
+    aircraft_type: (
+        Literal[
+            "Aeroplane",
+            "Helicopter",
+            "Glider",
+            "Balloon",
+            "Gyroplane",
+            "Drone/UAV/RPAS",
+            "Other",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description="Type of aircraft",
+    )
+    registration: str | None = Field(
+        default=None,
+        description="Aircraft registration/tail number.",
+    )
+    make: str | None = Field(
+        default=None,
+        description="Aircraft manufacturer/make. Just the name of the manufacturer, not the model (e.g., Boeing, Airbus, Cessna).",
+    )
+    model: str | None = Field(
+        default=None,
+        description="Aircraft model. Just the model of the aircraft, not the manufacturer (e.g., 737-800, A320, 172). If the model commonly includs a name (e.g 'Dash 8 Q400') then include the name as part of the model, but do not include the manufacturer (e.g. 'Q400' not 'Bombardier Q400').",
+    )
+    number_of_engines: int | None = Field(
+        default=None,
+        description="Number of engines on the aircraft.",
+    )
+    type_of_engines: (
+        Literal[
+            "piston",
+            "turboprop",
+            "turbojet",
+            "turbofan",
+            "turboshaft",
+            "electric",
+            "hybrid",
+            "other",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description="Type of engines (e.g., turbofan, piston, electric).",
+    )
+    year_manufactured: int | None = Field(
+        default=None,
+        description="Year the aircraft was manufactured.",
+    )
+    operator: str | None = Field(
+        default=None,
+        description="Operating airline or organization.",
+    )
+
+    flight_type: (
+        Literal[
+            "scheduled service",
+            "charter",
+            "cargo",
+            "private",
+            "training",
+            "aerial work",
+            "emergency services",
+            "ferry/positioning",
+            "other",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description=(
+            "Type of flight. Map medevac/air ambulance/rescue to 'emergency "
+            "services'. Map agricultural/survey/patrol/sling-load/firefighting "
+            "to 'aerial work'. Ferry/positioning used to represent situations where the flight is to move a grounded aircraft to a different location to for repairs, storage or to start a flight."
+        ),
+    )
+    persons_on_board_total: int = Field(
+        description="Total number of persons on board the aircraft.",
+    )
+    persons_on_board_crew: int = Field(
+        description="Number of crew members on board (cabin crew plus flight crew/pilots). This is only the crew members who are working for the particular flight (i.e if there are non-operating crew members on board then they should not be included in this field but should be included in the total persons on board field).",
+    )
+    persons_on_board_passengers: int = Field(
+        description="Number of passengers on board.",
+    )
+
+    damage: Literal["destroyed", "substantial damage", "minor damage", "nil"] | None = (
+        Field(
+            default=None,
+            description="Damage severity classification for the aircraft from the report.",
+        )
+    )
+
+    pilots: list[PilotMetadata] = Field(
+        default_factory=list,
+        description="List of pilots associated with the aircraft. Always filled out with pilot metadata even if the information is not available in the report (in which case the fields will be None).",
+    )
+
+
+class TrainMetadata(BaseModel):
+    """Represents train-specific metadata from a rail accident report."""
+
+    train_type: (
+        Literal[
+            "passenger",
+            "freight",
+            "work train",
+            "maintenance vehicle",
+            "hi-rail vehicle",
+            "shunt",
+            "locomotive only",
+            "other",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description=(
+            "Broad type of rail movement or rail vehicle. Use 'maintenance "
+            "vehicle' for tampers/regulators/ballast cleaners and similar track "
+            "machines. Use 'shunt' for yard/depot/ferry-terminal shunting "
+            "movements. Use 'work train' for engineering/construction trains "
+            "hauling work materials or equipment."
+        ),
+    )
+    train_number: str | None = Field(
+        default=None,
+        description="Train number or identifier. Should be a report-specific identifier for the train involved in the occurrence as stated in the report (e.g., 'Train 1234'). If both a id and a name is known then use the format 'ID - Name'. This should not be invented if not explicitly stated in the report.",
+    )
+    length: float | None = Field(
+        default=None,
+        description=(
+            "Length of the train in meters as a numeric value only "
+            "(for example, 130.0). Do not include unit text."
+        ),
+    )
+    weight: float | None = Field(
+        default=None,
+        description=(
+            "Weight of the train in tonnes as a numeric value only "
+            "(for example, 311.0). Do not include unit text."
+        ),
+    )
+    classification: (
+        Literal[
+            "commuter",
+            "metro",
+            "regional",
+            "intercity",
+            "high-speed",
+            "heavy-haul",
+            "unit",
+            "yard/shunting",
+            "inspection",
+            "maintenance",
+            "test/commissioning",
+            "other",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description=(
+            "Service/operational class for the movement. Use the closest "
+            "canonical value and avoid introducing new labels."
+        ),
+    )
+    year_manufactured: int | None = Field(
+        default=None,
+        description="Year the train was manufactured.",
+    )
+    operator: str | None = Field(
+        default=None,
+        description="Railway operator.",
+    )
+    operating_crew: int | None = Field(
+        default=None,
+        description="Number of operating crew members (all forms of crew).",
+    )
+
+
+class VesselMetadata(BaseModel):
+    """Represents vessel-specific metadata from a marine accident report."""
+
+    vessel_name: str | None = Field(
+        default=None,
+        description="Name of the vessel.",
+    )
+    vessel_type: (
+        Literal[
+            "container",
+            "bulk carrier",
+            "tanker",
+            "passenger",
+            "ferry",
+            "taxi",
+            "fishing",
+            "tug",
+            "barge",
+            "recreational",
+            "offshore support",
+            "other",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description="Type of vessel.",
+    )
+
+    classification: (
+        Literal[
+            "DNV",
+            "Lloyd's Register",
+            "ABS",
+            "Bureau Veritas",
+            "ClassNK",
+            "RINA",
+            "CCS",
+            "KR",
+            "IRS",
+            "unclassed",
+            "other",
+        ]
+        | None
+    ) = Field(
+        description=(
+            "Marine classification society. Use one of the allowed literals  or'unclassed' when explicitly not classed (i.e local vessels), or 'other' if a named society is not listed. Use None only in the situation where one would expect a class yet it is not (i.e a large internationally operating vessel that one would expect to be classed but the report does not provide any information about the class)."
+        ),
+    )
+
+    classification_limits: str | None = Field(
+        default=None,
+        description="Classification limits for the vessel. This could be a specific class (e.g. 'DNV 1A', 'Lloyd's Register 100A1') or a description of the limits (e.g. 'Class bc', 'Within 200nm of land'). ",
+    )
+    length: float | None = Field(
+        default=None,
+        description="Length of the vessel in meters",
+    )
+    breadth: float | None = Field(
+        default=None,
+        description="Breadth (beam width) of the vessel in meters",
+    )
+    gross_tonnage: float | None = Field(
+        default=None,
+        description="Gross tonnage of the vessel.",
+    )
+    manufacturer: str | None = Field(
+        default=None,
+        description="Manufacturer/shipbuilder of the vessel.",
+    )
+    year_built: int | None = Field(
+        default=None,
+        description="Year the vessel was built.",
+    )
+
+    propulsion: (
+        Literal[
+            "diesel",
+            "diesel-electric",
+            "gas turbine",
+            "steam turbine",
+            "battery-electric",
+            "wind",
+            "human",
+            "jet",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description="Primary propulsion type.",
+    )
+    total_power: float | None = Field(
+        default=None,
+        description="Total power of the vessel's propulsion system in kW",
+    )
+    service_speed: float | None = Field(
+        default=None,
+        description="Service speed of the vessel (in knots).",
+    )
+    owner_operator: str | None = Field(
+        default=None,
+        description="Owner or operator of the vessel.",
+    )
+    port_of_registry: str | None = Field(
+        default=None,
+        description="Port where the vessel is registered.",
+    )
+    minimum_crew: int | None = Field(
+        default=None,
+        description="Minimum required crew size.",
+    )
+
+
+def _build_metadata_model_for_mode(
+    report_mode: Modes.Mode,
+    event_type_taxonomy_by_mode: dict[Modes.Mode, list[dict[str, str]]],
+) -> type[BaseModel]:
+    """Build a mode-specific metadata model with mode-relevant vehicle lists and occurrence_type.
+
+    Args:
+        report_mode: The report mode (air, rail, or marine).
+        event_type_taxonomy_by_mode: Taxonomy of allowed occurrence types by mode.
+
+    Returns:
+        type[BaseModel]: A metadata model for the supplied mode, with:
+        - Constrained occurrence_type to mode-allowed values only.
+        - Only relevant vehicle lists (aircraft for air, trains for rail, vessels for marine).
+
+    Raises:
+        ValueError: When report_mode is None, unknown, or taxonomy is unavailable.
+    """
+    allowed_event_type_entries = event_type_taxonomy_by_mode.get(report_mode)
+    if not allowed_event_type_entries:
+        msg = f"Unknown report mode: {report_mode}. Allowed modes: {list(event_type_taxonomy_by_mode.keys())}"
+        raise ValueError(msg)
+
+    allowed_event_types = [
+        entry["event_type"]
+        for entry in allowed_event_type_entries
+        if entry.get("event_type")
+    ]
+    if not allowed_event_types:
+        msg = f"No event types configured for mode: {report_mode}"
+        raise ValueError(msg)
+
+    allowed_type: Any = Literal[tuple(allowed_event_types)]
+    occurrence_metadata_model = create_model(
+        f"OccurrenceMetadata_{report_mode.name}",
+        __base__=OccurrenceMetadata,
+        occurrence_type=(
+            allowed_type | None,
+            Field(
+                default=None,
+                description=(
+                    "Occurrence type constrained to the taxonomy values "
+                    "for this report mode."
+                ),
+            ),
+        ),
+    )
+
+    mode_fields: dict[str, tuple[Any, Any]] = {
+        "occurrence": (
+            occurrence_metadata_model,
+            Field(description="Common occurrence metadata (all modes)."),
+        ),
+    }
+
+    if report_mode == Modes.Mode.a:
+        mode_fields["aircraft"] = (
+            list[AircraftMetadata],
+            Field(
+                default_factory=list,
+                description="List of aircraft involved in the accident.",
+            ),
+        )
+    elif report_mode == Modes.Mode.r:
+        mode_fields["trains"] = (
+            list[TrainMetadata],
+            Field(
+                default_factory=list,
+                description="List of trains involved in the accident. Note that the comlete consist it treated as a single train, so if there are multiple carriages or locomotives involved then these should be included in the metadata for that single train entry (e.g in the description field or by including the number of carriages in the length field etc).",
+            ),
+        )
+    elif report_mode == Modes.Mode.m:
+        mode_fields["vessels"] = (
+            list[VesselMetadata],
+            Field(
+                default_factory=list,
+                description="List of vessels involved in the accident.",
+            ),
+        )
+
+    mode_fields_for_create: Any = mode_fields
+    return create_model(
+        f"ReportMetadata_{report_mode.name}",
+        **mode_fields_for_create,
+    )
+
+
+def build_extraction_output_model(
+    safety_issues_enabled: bool,
+    recommendations_enabled: bool,
+    metadata_enabled: bool,
+    report_mode: Modes.Mode | None = None,
+    event_type_taxonomy_by_mode: dict[Modes.Mode, list[dict[str, str]]] | None = None,
+) -> type[BaseModel]:
+    """Build the output Pydantic model based on enabled extractions.
+
+    Returns:
+        type[BaseModel]: The dynamically constructed Pydantic model for the extracted report.
+
+    Raises:
+        ValueError: If metadata extraction is enabled but report_mode or event_type_taxonomy_by_mode is not provided.
+    """
+    fields: dict[str, tuple[Any, Any]] = {}
+
+    if safety_issues_enabled:
+        fields["safety_issues"] = (
+            list[SafetyIssueItem],
+            Field(
+                default_factory=list,
+                description="A list of all safety issues identified in the report.",
+            ),
+        )
+
+    if recommendations_enabled:
+        fields["recommendations"] = (
+            list[RecommendationItem],
+            Field(
+                default_factory=list,
+                description="A list of all recommendations made in the report.",
+            ),
+        )
+
+    if metadata_enabled:
+        if report_mode is None or event_type_taxonomy_by_mode is None:
+            msg = "Metadata extraction requires report_mode and event_type_taxonomy_by_mode to be provided."
+            raise ValueError(msg)
+        fields["metadata"] = (
+            _build_metadata_model_for_mode(report_mode, event_type_taxonomy_by_mode),
+            Field(
+                description="Metadata extracted from the report including occurrence details and vehicle/vessel/personnel information.",
+            ),
+        )
+
+    return create_model("ExtractedReport", **fields)
