@@ -5,26 +5,26 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2023-10-03T21:25:00",
+          "local_datetime": "2023-10-03T21:25",
           "time_zone": "UTC+13:00",
-          "time_zone_source": "inferred"
+          "time_zone_source": "explicit_in_report"
         },
         "location": {
           "description": "Ardmore Aerodrome",
-          "standardized_location": "-37.02972+174.97333/"
+          "standardized_location": "Ardmore Aerodrome, Auckland, Auckland, New Zealand"
         },
         "occurrence_type": "Aircraft separation",
         "total_persons_involved": 6,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Nil"
+        "damage_description": "nil"
       },
       "aircraft": [
         {
           "aircraft_type": "Aeroplane",
           "registration": "ZK-JED",
           "make": "Beech",
-          "model": "76",
+          "model": "76 Duchess",
           "number_of_engines": 2,
           "type_of_engines": "piston",
           "year_manufactured": 1981,
@@ -36,20 +36,20 @@
           "damage": "nil",
           "pilots": [
             {
-              "rank": null,
-              "role": "Pilot flying",
+              "role": "Student Pilot",
               "licence": "Air Transport Pilot Licence (Aeroplane)",
               "age": 66,
               "total_flying_experience": 21000,
-              "experience_on_type": null
+              "experience_on_type": null,
+              "responsibility": "Pilot flying"
             },
             {
-              "rank": "Instructor",
-              "role": "Pilot monitoring",
+              "role": "Instructor",
               "licence": "Air Transport Pilot Licence (Aeroplane)",
               "age": 52,
               "total_flying_experience": 14700,
-              "experience_on_type": null
+              "experience_on_type": null,
+              "responsibility": "Pilot monitoring"
             }
           ]
         },
@@ -69,18 +69,16 @@
           "damage": "nil",
           "pilots": [
             {
-              "rank": null,
-              "role": "Pilot flying",
+              "role": "Sole Pilot",
               "licence": "Commercial Pilot Licence (Aeroplane)",
               "age": 20,
               "total_flying_experience": 256,
-              "experience_on_type": null
+              "experience_on_type": null,
+              "responsibility": "Pilot flying"
             }
           ]
         }
-      ],
-      "trains": [],
-      "vessels": []
+      ]
     }
   },
   {
@@ -89,19 +87,19 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2020-02-24T16:10:00",
+          "local_datetime": "2020-02-24T16:10",
           "time_zone": "UTC-06:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
           "description": "Dryden Regional Airport (CYHD), Ontario",
-          "standardized_location": "+49.83167-092.74444/"
+          "standardized_location": "Dryden Regional Airport (CYHD), Dryden, Ontario, Canada"
         },
         "occurrence_type": "Runway events",
         "total_persons_involved": 8,
         "fatalities": 0,
         "injuries": 1,
-        "damage_description": "The aircraft was substantially damaged."
+        "damage_description": "substantial damage: propellers both damaged; fuselage panels and skins penetrated; engine mounts fractured; nacelles distorted."
       },
       "aircraft": [
         {
@@ -120,26 +118,24 @@
           "damage": "substantial damage",
           "pilots": [
             {
-              "rank": "Captain",
-              "role": "Pilot monitoring",
+              "role": "Captain",
               "licence": "Air Transport Pilot Licence (Aeroplane)",
               "age": null,
               "total_flying_experience": 20000,
-              "experience_on_type": 19000
+              "experience_on_type": 19000,
+              "responsibility": "Pilot monitoring"
             },
             {
-              "rank": "First Officer",
-              "role": "Pilot flying",
+              "role": "First Officer",
               "licence": "Commercial Pilot Licence (Aeroplane)",
               "age": null,
               "total_flying_experience": 270,
-              "experience_on_type": 15
+              "experience_on_type": 15,
+              "responsibility": "Pilot flying"
             }
           ]
         }
-      ],
-      "trains": [],
-      "vessels": []
+      ]
     }
   },
   {
@@ -148,19 +144,19 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2021-11-01T18:51:00",
+          "local_datetime": "2021-11-01T18:51",
           "time_zone": "UTC-06:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "6.7 NM northwest of Fort Providence Aerodrome (CYJP), Northwest Territories",
-          "standardized_location": "+61.42900-117.78200/"
+          "description": "Fort Providence, Northwest Territories, 6.7 NM NW",
+          "standardized_location": "6.7 NM NW of Fort Providence Aerodrome, Fort Providence, Northwest Territories, Canada"
         },
         "occurrence_type": "Fuel related",
         "total_persons_involved": 5,
         "fatalities": 0,
         "injuries": 5,
-        "damage_description": "The aircraft sustained substantial damage to the nose bulkhead area; the nose landing gear was displaced rearward."
+        "damage_description": "substantial damage: nose bulkhead distorted; nose landing gear displaced rearward."
       },
       "aircraft": [
         {
@@ -179,26 +175,24 @@
           "damage": "substantial damage",
           "pilots": [
             {
-              "rank": "Captain",
-              "role": "Pilot flying",
+              "role": "Captain",
               "licence": "Air Transport Pilot Licence (Aeroplane)",
               "age": null,
               "total_flying_experience": 6397,
-              "experience_on_type": 2945
+              "experience_on_type": 2945,
+              "responsibility": "Pilot flying"
             },
             {
-              "rank": "First Officer",
-              "role": "Pilot monitoring",
+              "role": "First Officer",
               "licence": "Commercial Pilot Licence (Aeroplane)",
               "age": null,
               "total_flying_experience": 435,
-              "experience_on_type": 85
+              "experience_on_type": 85,
+              "responsibility": "Pilot monitoring"
             }
           ]
         }
-      ],
-      "trains": [],
-      "vessels": []
+      ]
     }
   },
   {
@@ -207,23 +201,21 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2015-12-17T12:13:00",
+          "local_datetime": "2015-12-17T12:13",
           "time_zone": "UTC+13:00",
-          "time_zone_source": "inferred"
+          "time_zone_source": "explicit_in_report"
         },
         "location": {
           "description": "Hamilton Aerodrome",
-          "standardized_location": "-37.86639+175.33528/"
+          "standardized_location": "Hamilton aerodrome, Hamilton, Waikato, New Zealand"
         },
-        "occurrence_type": "Aircraft separation",
+        "occurrence_type": "ANSP operational error",
         "total_persons_involved": null,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Nil"
+        "damage_description": "nil"
       },
-      "aircraft": [],
-      "trains": [],
-      "vessels": []
+      "aircraft": []
     }
   },
   {
@@ -232,19 +224,19 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2013-08-30T08:19:00",
+          "local_datetime": "2013-08-30T08:19",
           "time_zone": "UTC+12:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
           "description": "En route, near Raglan, Waikato",
-          "standardized_location": "-37.80000+174.86667/"
+          "standardized_location": "En route, near Raglan, Waikato, New Zealand"
         },
         "occurrence_type": "Systems",
         "total_persons_involved": 81,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Nil"
+        "damage_description": "nil"
       },
       "aircraft": [
         {
@@ -263,26 +255,24 @@
           "damage": "nil",
           "pilots": [
             {
-              "rank": "Captain",
-              "role": "Pilot monitoring",
+              "role": "Captain",
               "licence": "Air Transport Pilot Licence (Aeroplane)",
               "age": 44,
               "total_flying_experience": 12100,
-              "experience_on_type": 5200
+              "experience_on_type": 5200,
+              "responsibility": "Pilot monitoring"
             },
             {
-              "rank": "Captain",
-              "role": "Pilot flying",
-              "licence": "Air Transport Pilot Licence (Aeroplane)",
+              "role": "Captain",
+              "licence": null,
               "age": null,
               "total_flying_experience": 10800,
-              "experience_on_type": 3500
+              "experience_on_type": 3500,
+              "responsibility": "Pilot flying"
             }
           ]
         }
-      ],
-      "trains": [],
-      "vessels": []
+      ]
     }
   },
   {
@@ -291,19 +281,19 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2023-08-28T10:06:00",
+          "local_datetime": "2023-08-28T10:06",
           "time_zone": "UTC+12:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "Above and near to the township of Brynderwyn",
-          "standardized_location": "-36.09850+174.49506/"
+          "description": "Above and near to the township of Brynderwyn latitude: 36° 5'54.60\"S longitude: 174°29'42.22\"E",
+          "standardized_location": "En route, Brynderwyn, Northland, New Zealand"
         },
         "occurrence_type": "Aircraft separation",
         "total_persons_involved": 42,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Nil"
+        "damage_description": "nil"
       },
       "aircraft": [
         {
@@ -322,20 +312,20 @@
           "damage": "nil",
           "pilots": [
             {
-              "rank": "Captain",
-              "role": "Pilot flying",
+              "role": "Captain",
               "licence": "Air Transport Pilot Licence (Aeroplane)",
               "age": 37,
               "total_flying_experience": 2800,
-              "experience_on_type": null
+              "experience_on_type": null,
+              "responsibility": "Pilot flying"
             },
             {
-              "rank": "First Officer",
-              "role": "Pilot monitoring",
+              "role": "First Officer",
               "licence": "Commercial Pilot Licence (Aeroplane)",
               "age": 41,
               "total_flying_experience": 1700,
-              "experience_on_type": null
+              "experience_on_type": 214,
+              "responsibility": "Pilot monitoring"
             }
           ]
         },
@@ -355,26 +345,24 @@
           "damage": "nil",
           "pilots": [
             {
-              "rank": "Instructor",
-              "role": "Pilot monitoring",
+              "role": "Instructor",
               "licence": "Air Transport Pilot Licence (Aeroplane)",
               "age": 53,
               "total_flying_experience": 14950,
-              "experience_on_type": null
+              "experience_on_type": null,
+              "responsibility": "Pilot monitoring"
             },
             {
-              "rank": "Trainee",
-              "role": "Pilot flying",
+              "role": "Student Pilot",
               "licence": "Commercial Pilot Licence (Aeroplane)",
               "age": 23,
               "total_flying_experience": 315,
-              "experience_on_type": null
+              "experience_on_type": null,
+              "responsibility": "Pilot flying"
             }
           ]
         }
-      ],
-      "trains": [],
-      "vessels": []
+      ]
     }
   },
   {
@@ -383,19 +371,19 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2011-07-29T07:56:55",
+          "local_datetime": "2011-07-29T07:56",
           "time_zone": "UTC+10:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
           "description": "BLAKA, 93 km south-south-east of Brisbane Airport, Queensland",
-          "standardized_location": "-28.15643+153.48051/"
+          "standardized_location": "BLAKA IFR reporting point, Brisbane, Queensland, Australia"
         },
         "occurrence_type": "Aircraft separation",
         "total_persons_involved": null,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Nil"
+        "damage_description": "nil"
       },
       "aircraft": [
         {
@@ -414,20 +402,20 @@
           "damage": "nil",
           "pilots": [
             {
-              "rank": "Captain",
-              "role": null,
+              "role": "Captain",
               "licence": null,
               "age": null,
               "total_flying_experience": null,
-              "experience_on_type": null
+              "experience_on_type": null,
+              "responsibility": null
             },
             {
-              "rank": "First Officer",
-              "role": null,
+              "role": "First Officer",
               "licence": null,
               "age": null,
               "total_flying_experience": null,
-              "experience_on_type": null
+              "experience_on_type": null,
+              "responsibility": null
             }
           ]
         },
@@ -447,26 +435,24 @@
           "damage": "nil",
           "pilots": [
             {
-              "rank": "Captain",
-              "role": null,
+              "role": "Captain",
               "licence": null,
               "age": null,
               "total_flying_experience": null,
-              "experience_on_type": null
+              "experience_on_type": null,
+              "responsibility": null
             },
             {
-              "rank": "First Officer",
-              "role": null,
+              "role": "First Officer",
               "licence": null,
               "age": null,
               "total_flying_experience": null,
-              "experience_on_type": null
+              "experience_on_type": null,
+              "responsibility": null
             }
           ]
         }
-      ],
-      "trains": [],
-      "vessels": []
+      ]
     }
   },
   {
@@ -475,19 +461,19 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2012-02-21T09:00:00",
+          "local_datetime": "2012-02-21T09:00",
           "time_zone": "UTC+10:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "95 km south-west of Springsure ALA, Queensland",
-          "standardized_location": "-24.704+147.419/"
+          "description": "95 km SW of Springsure ALA, Queensland",
+          "standardized_location": "95 km SW of Springsure ALA, Springsure, Queensland, Australia"
         },
         "occurrence_type": "Terrain collisions",
         "total_persons_involved": 1,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Helicopter seriously damaged after rolling over on landing"
+        "damage_description": "serious damage: helicopter rolled over on landing."
       },
       "aircraft": [
         {
@@ -506,18 +492,16 @@
           "damage": "substantial damage",
           "pilots": [
             {
-              "rank": "Captain",
-              "role": "Pilot flying",
+              "role": "Captain",
               "licence": "Commercial Pilot Licence (Helicopter)",
               "age": null,
               "total_flying_experience": 2600,
-              "experience_on_type": 1150
+              "experience_on_type": 1150,
+              "responsibility": "Pilot flying"
             }
           ]
         }
-      ],
-      "trains": [],
-      "vessels": []
+      ]
     }
   },
   {
@@ -526,19 +510,19 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2016-07-17T10:39:00",
+          "local_datetime": "2016-07-17T10:39",
           "time_zone": "UTC+09:30",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
           "description": "36 km north-west of Hawker, South Australia",
-          "standardized_location": "-31.6075+138.2237/"
+          "standardized_location": "36 km NW of Hawker, Hawker, South Australia, Australia"
         },
         "occurrence_type": "Fuel related",
         "total_persons_involved": 3,
         "fatalities": 0,
         "injuries": 3,
-        "damage_description": "Helicopter substantially damaged after fuel exhaustion and collision with terrain"
+        "damage_description": "substantial damage: helicopter fuel exhaustion and collision with terrain."
       },
       "aircraft": [
         {
@@ -557,18 +541,16 @@
           "damage": "substantial damage",
           "pilots": [
             {
-              "rank": "Captain",
-              "role": "Pilot flying",
+              "role": "Sole Pilot",
               "licence": "Commercial Pilot Licence (Helicopter)",
               "age": null,
               "total_flying_experience": 6679,
-              "experience_on_type": null
+              "experience_on_type": null,
+              "responsibility": "Pilot flying"
             }
           ]
         }
-      ],
-      "trains": [],
-      "vessels": []
+      ]
     }
   },
   {
@@ -577,26 +559,26 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2025-01-11T11:56:00",
+          "local_datetime": "2025-01-11T11:56",
           "time_zone": "UTC+11:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
           "description": "Bankstown Airport, New South Wales",
-          "standardized_location": "-33.9244+150.9883/"
+          "standardized_location": "Bankstown Airport, Bankstown, New South Wales, Australia"
         },
         "occurrence_type": "Runway events",
         "total_persons_involved": 3,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Nil"
+        "damage_description": "nil"
       },
       "aircraft": [
         {
           "aircraft_type": "Aeroplane",
           "registration": "VH-SQY",
           "make": "Cessna",
-          "model": "510",
+          "model": "510 Mustang",
           "number_of_engines": 2,
           "type_of_engines": "turbofan",
           "year_manufactured": 2010,
@@ -608,18 +590,16 @@
           "damage": "nil",
           "pilots": [
             {
-              "rank": "Captain",
-              "role": "Pilot flying",
+              "role": "Sole Pilot",
               "licence": "Air Transport Pilot Licence (Aeroplane)",
               "age": null,
               "total_flying_experience": 6954,
-              "experience_on_type": 133
+              "experience_on_type": 133,
+              "responsibility": "Pilot flying"
             }
           ]
         }
-      ],
-      "trains": [],
-      "vessels": []
+      ]
     }
   },
   {
@@ -628,27 +608,25 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2022-09-10T10:05:00",
+          "local_datetime": "2022-09-10T10:05",
           "time_zone": "UTC+12:00",
           "time_zone_source": "inferred"
         },
         "location": {
-          "description": "Goose Bay, Kaikoura, New Zealand",
-          "standardized_location": "-42.42000+173.70000/"
+          "description": "Goose Bay, New Zealand",
+          "standardized_location": "Goose Bay, Kaikōura, Canterbury, New Zealand"
         },
         "occurrence_type": "Capsizing/listing",
         "total_persons_involved": 11,
         "fatalities": 5,
         "injuries": 3,
-        "damage_description": "Damage to hull, loss of machinery and electrical systems"
+        "damage_description": "damage: hull damaged; machinery and electrical systems lost."
       },
-      "aircraft": [],
-      "trains": [],
       "vessels": [
         {
           "vessel_name": "i-Catcher",
           "vessel_type": "fishing",
-          "classification": "Passenger, restricted to 12 people onboard",
+          "classification": "unclassed",
           "classification_limits": "Restricted Inshore - as per certificate of survey",
           "length": 8.0,
           "breadth": null,
@@ -673,22 +651,20 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2023-04-15T08:09:00",
+          "local_datetime": "2023-04-15T08:09",
           "time_zone": "UTC+12:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
           "description": "Wellington Harbour and off Farewell Spit, New Zealand",
-          "standardized_location": "-40.16533+172.35367/"
+          "standardized_location": "Wellington Harbour and off Farewell Spit, Wellington, Wellington, New Zealand"
         },
         "occurrence_type": "Machinery failure",
         "total_persons_involved": 24,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Contamination of main-engine lubrication-oil reserves and associated components, and minor heavy-weather damage caused by heavy rolling"
+        "damage_description": "contamination and minor damage: main-engine lubrication-oil reserves and associated components contaminated; minor heavy-weather damage caused by heavy rolling."
       },
-      "aircraft": [],
-      "trains": [],
       "vessels": [
         {
           "vessel_name": "Shiling",
@@ -718,30 +694,28 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2011-06-11T12:46:00",
+          "local_datetime": "2011-06-11T12:46",
           "time_zone": "UTC+10:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
           "description": "Gladstone, Queensland, Australia",
-          "standardized_location": "-23.81000+151.22500/"
+          "standardized_location": "Port of Gladstone, Gladstone, Queensland, Australia"
         },
         "occurrence_type": "Capsizing/listing",
         "total_persons_involved": 4,
         "fatalities": 1,
         "injuries": 0,
-        "damage_description": "Tug capsized during towing operation and subsequently sank"
+        "damage_description": "capsized: tug capsized during towing operation and subsequently sank."
       },
-      "aircraft": [],
-      "trains": [],
       "vessels": [
         {
           "vessel_name": "Adonis",
           "vessel_type": "tug",
-          "classification": "Det Norske Veritas (DNV)",
+          "classification": "DNV",
           "classification_limits": null,
           "length": 21.3,
-          "breadth": 6.7,
+          "breadth": 6.72,
           "gross_tonnage": 91,
           "manufacturer": "Mofaz Marine, Malaysia",
           "manufacturer_model": null,
@@ -751,6 +725,25 @@
           "service_speed": 9,
           "owner_operator": "Sea Swift, Cairns",
           "port_of_registry": "Cairns",
+          "primary_port": null,
+          "minimum_crew": null
+        },
+        {
+          "vessel_name": "Wolli",
+          "vessel_type": "tug",
+          "classification": "Lloyd's Register",
+          "classification_limits": "USL Class 2E",
+          "length": 29.88,
+          "breadth": 9.73,
+          "gross_tonnage": 223,
+          "manufacturer": "Carrington Slipway, Newcastle, Australia",
+          "manufacturer_model": null,
+          "year_built": 1970,
+          "propulsion": "diesel",
+          "total_power": 1398,
+          "service_speed": 9,
+          "owner_operator": "Sea Swift, Cairns",
+          "port_of_registry": "Sydney",
           "primary_port": null,
           "minimum_crew": null
         }
@@ -763,27 +756,25 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2020-05-24T06:10:00",
+          "local_datetime": "2020-05-24T06:10",
           "time_zone": "UTC+10:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "46 NM south-east of Sydney, New South Wales, Australia",
-          "standardized_location": "-34.36617+151.91300/"
+          "description": "46 NM south-east of Sydney, New South Wales",
+          "standardized_location": "46 NM south-east of Sydney, Sydney, New South Wales, Australia"
         },
         "occurrence_type": "Damage to ship or equipment",
         "total_persons_involved": 25,
         "fatalities": 0,
         "injuries": 1,
-        "damage_description": "50 containers lost overboard, 63 containers damaged and remaining on board; vessel structure damage"
+        "damage_description": "damage: 50 containers lost overboard; 63 containers damaged and remaining on board; vessel structure damaged."
       },
-      "aircraft": [],
-      "trains": [],
       "vessels": [
         {
           "vessel_name": "APL England",
           "vessel_type": "container",
-          "classification": "DNV-GL",
+          "classification": "DNV",
           "classification_limits": null,
           "length": 277.255,
           "breadth": 40.0,
@@ -804,32 +795,30 @@
   },
   {
     "id": "ATSB Leeuwin II groundings with vessel metadata",
-    "report_id": "ATSB_m_2005_217_219",
+    "report_id": "ATSB_m_2005_217",
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2005-07-22T16:00:00",
+          "local_datetime": "2005-07-22T16:00",
           "time_zone": "UTC+08:00",
           "time_zone_source": "inferred"
         },
         "location": {
           "description": "Prince Frederick Harbour, Western Australia",
-          "standardized_location": "-15.48300+124.93300/"
+          "standardized_location": "Prince Frederick Harbour and Shark Bay, Kimberley and Denham, Western Australia, Australia"
         },
         "occurrence_type": "Grounding/stranding",
-        "total_persons_involved": null,
+        "total_persons_involved": 53,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Grounded on uncharted shoals on two occasions; minor hull paint loss and shell plate deformation reported after first grounding"
+        "damage_description": "minor damage: grounded on uncharted shoals on two occasions; hull minor paint loss and shell plate deformation after first grounding."
       },
-      "aircraft": [],
-      "trains": [],
       "vessels": [
         {
           "vessel_name": "Leeuwin II",
-          "vessel_type": "other",
-          "classification": "USL class 1A, 1B, 1C and 1D (AMSA survey)",
-          "classification_limits": null,
+          "vessel_type": "passenger",
+          "classification": "unclassed",
+          "classification_limits": "USL class 1A, 1B, 1C and 1D (AMSA survey)",
           "length": 55.0,
           "breadth": 9.01,
           "gross_tonnage": null,
@@ -853,27 +842,25 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2021-04-03T17:50:00",
+          "local_datetime": "2021-04-03T17:50",
           "time_zone": "UTC-03:00",
           "time_zone_source": "inferred"
         },
         "location": {
-          "description": "Gulf of St. Lawrence, 20 nautical miles west of Chéticamp, Nova Scotia, Canada",
-          "standardized_location": "+46.65367-061.46700/"
+          "description": "Gulf of St. Lawrence, 20 nautical miles west of Chéticamp, Nova Scotia",
+          "standardized_location": "Gulf of St. Lawrence, Chéticamp, Nova Scotia, Canada"
         },
         "occurrence_type": "Capsizing/listing",
         "total_persons_involved": 5,
         "fatalities": 2,
         "injuries": 0,
-        "damage_description": "Vessel capsized and sank"
+        "damage_description": "capsized: vessel capsized and sank."
       },
-      "aircraft": [],
-      "trains": [],
       "vessels": [
         {
           "vessel_name": "Tyhawk",
           "vessel_type": "fishing",
-          "classification": null,
+          "classification": "unclassed",
           "classification_limits": null,
           "length": 13.61,
           "breadth": null,
@@ -898,22 +885,20 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2001-03-22T16:00:00",
+          "local_datetime": "2001-03-22T16:00",
           "time_zone": "UTC-04:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "Off Chebucto Head, Nova Scotia, Canada",
-          "standardized_location": "+44.50800-063.52700/"
+          "description": "Off Chebucto Head, Nova Scotia",
+          "standardized_location": "Off Chebucto Head, Halifax, Nova Scotia, Canada"
         },
         "occurrence_type": "Fire/explosion",
         "total_persons_involved": 22,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Fire damage to multiple containers; no structural damage to vessel"
+        "damage_description": "fire damage: multiple containers fire damaged; no structural damage to vessel."
       },
-      "aircraft": [],
-      "trains": [],
       "vessels": [
         {
           "vessel_name": "Kitano",
@@ -932,7 +917,7 @@
           "owner_operator": "Nippon Yusen Kabushiki Kaisha",
           "port_of_registry": "Tokyo, Japan",
           "primary_port": null,
-          "minimum_crew": null
+          "minimum_crew": 22
         }
       ]
     }
@@ -943,19 +928,19 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2009-06-07T06:50:00",
+          "local_datetime": "2009-06-07T06:50",
           "time_zone": "UTC-02:30",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "Port Hope Simpson, Newfoundland and Labrador, 4 nm W",
-          "standardized_location": "+52.52800-056.39600/"
+          "description": "Port Hope Simpson, Newfoundland and Labrador 4 nm W",
+          "standardized_location": "4 nm W of Port Hope Simpson Airport, Port Hope Simpson, Newfoundland and Labrador, Canada"
         },
         "occurrence_type": "Terrain collisions",
         "total_persons_involved": 1,
         "fatalities": 1,
         "injuries": 0,
-        "damage_description": "Aircraft destroyed by impact forces and severe post-crash fire"
+        "damage_description": "destroyed: aircraft destroyed by impact forces and severe post-crash fire."
       },
       "aircraft": [
         {
@@ -974,18 +959,16 @@
           "damage": "destroyed",
           "pilots": [
             {
-              "rank": null,
-              "role": "Pilot flying",
+              "role": "Sole Pilot",
               "licence": "Commercial Pilot Licence (Aeroplane)",
               "age": null,
               "total_flying_experience": 13500,
-              "experience_on_type": 600
+              "experience_on_type": 600,
+              "responsibility": "Pilot flying"
             }
           ]
         }
-      ],
-      "trains": [],
-      "vessels": []
+      ]
     }
   },
   {
@@ -994,34 +977,32 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2021-08-21T13:00:00",
+          "local_datetime": "2021-08-21T12:49",
           "time_zone": "UTC-03:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
           "description": "Mile 18.9, Napadogan Subdivision, Pangburn Station, New Brunswick",
-          "standardized_location": null
+          "standardized_location": "Mile 18.9, Pangburn Station, New Brunswick, Canada"
         },
         "occurrence_type": "Derailment",
         "total_persons_involved": 2,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "30 hopper cars derailed; 27 cars breached with potash release"
+        "damage_description": "derailment: 30 hopper cars derailed; 27 cars breached with potash release."
       },
-      "aircraft": [],
       "trains": [
         {
           "train_type": "freight",
           "train_number": "B73041-15",
-          "length": "6552 feet",
-          "weight": "19 852 tons",
+          "length": 1997.05,
+          "weight": 19852.0,
           "classification": "unit",
           "year_manufactured": null,
           "operator": "Canadian National Railway Company",
           "operating_crew": 2
         }
-      ],
-      "vessels": []
+      ]
     }
   },
   {
@@ -1030,34 +1011,32 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2004-10-24T01:38:00",
+          "local_datetime": "2004-10-24T01:38",
           "time_zone": "UTC-06:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "Mile 69.33, Aldersyde Subdivision, near Blackie, Alberta",
-          "standardized_location": null
+          "description": "Mile 69.33, Aldersyde Subdivision Near Blackie, Alberta",
+          "standardized_location": "Mile 69.33 Aldersyde Subdivision, near Blackie, Alberta, Canada"
         },
-        "occurrence_type": "Crossing accident",
+        "occurrence_type": "Level Crossing",
         "total_persons_involved": 4,
         "fatalities": 1,
         "injuries": 1,
-        "damage_description": "Tank car derailed and five dangerous-goods tank cars damaged; truck tractor destroyed by impact and fire; track damage of about 2060 feet"
+        "damage_description": "damage: tank car derailed; five dangerous-goods tank cars damaged; truck tractor destroyed by impact and fire; track about 2060 feet damaged."
       },
-      "aircraft": [],
       "trains": [
         {
           "train_type": "freight",
           "train_number": "2nd 269-23",
-          "length": "4538 feet",
-          "weight": "8135 tons",
+          "length": 1383.18,
+          "weight": 8135.0,
           "classification": "other",
           "year_manufactured": null,
           "operator": "Canadian Pacific Railway",
           "operating_crew": 2
         }
-      ],
-      "vessels": []
+      ]
     }
   },
   {
@@ -1066,34 +1045,32 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2021-04-09T23:30:00",
+          "local_datetime": "2021-04-09T23:30",
           "time_zone": "UTC+12:00",
           "time_zone_source": "inferred"
         },
         "location": {
-          "description": "On board the Aratere at Wellington, New Zealand",
-          "standardized_location": "-41.28889+174.77722/"
+          "description": "On board the Aratere, Interislander ferry terminal, Wellington",
+          "standardized_location": "On board the Aratere, Interislander ferry terminal, Wellington, New Zealand"
         },
-        "occurrence_type": "Shunting accident",
-        "total_persons_involved": 1,
+        "occurrence_type": "Safeworking Rule or Procedure Breach",
+        "total_persons_involved": 3,
         "fatalities": 0,
         "injuries": 1,
-        "damage_description": "Nil"
+        "damage_description": "nil"
       },
-      "aircraft": [],
       "trains": [
         {
           "train_type": "shunt",
           "train_number": "DSG 3210 / EUF24",
-          "length": null,
-          "weight": null,
+          "length": 12.5,
+          "weight": 56.0,
           "classification": "yard/shunting",
           "year_manufactured": null,
           "operator": "KiwiRail",
           "operating_crew": 1
         }
-      ],
-      "vessels": []
+      ]
     }
   },
   {
@@ -1102,34 +1079,32 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2014-02-27T09:42:00",
+          "local_datetime": "2014-02-27T09:42",
           "time_zone": "UTC+13:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "Te Onetea Road level crossing, Rangiriri, New Zealand",
-          "standardized_location": "-37.38700+175.12900/"
+          "description": "Te Onetea Road level crossing, Rangiriri, Waikato District",
+          "standardized_location": "Te Onetea Road level crossing, Rangiriri, Waikato District, New Zealand"
         },
-        "occurrence_type": "Crossing accident",
+        "occurrence_type": "Level Crossing",
         "total_persons_involved": 114,
         "fatalities": 1,
         "injuries": 0,
-        "damage_description": "Moderate damage to the train and extensive damage to the heavy motor vehicle driving unit"
+        "damage_description": "moderate and extensive damage: train moderate damage; heavy motor vehicle driving unit extensive damage."
       },
-      "aircraft": [],
       "trains": [
         {
           "train_type": "passenger",
           "train_number": "Train 201",
-          "length": "130 metres",
-          "weight": "311 tonnes",
+          "length": 130.0,
+          "weight": 311.0,
           "classification": "intercity",
           "year_manufactured": null,
           "operator": "KiwiRail",
           "operating_crew": 5
         }
-      ],
-      "vessels": []
+      ]
     }
   },
   {
@@ -1138,34 +1113,32 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2023-10-09T00:26:00",
+          "local_datetime": "2023-10-09T00:26",
           "time_zone": "UTC+13:00",
-          "time_zone_source": "inferred"
+          "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "Purewa tunnel, Auckland, New Zealand",
-          "standardized_location": null
+          "description": "Purewa tunnel, Auckland",
+          "standardized_location": "Purewa tunnel, Auckland, Auckland, New Zealand"
         },
         "occurrence_type": "Derailment",
         "total_persons_involved": 4,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Significant damage to tamper equipment"
+        "damage_description": "significant damage: tamper equipment significant damage."
       },
-      "aircraft": [],
       "trains": [
         {
           "train_type": "maintenance vehicle",
           "train_number": "Tamper 703",
           "length": null,
           "weight": null,
-          "classification": "test/commissioning",
+          "classification": "maintenance",
           "year_manufactured": null,
           "operator": "KiwiRail",
           "operating_crew": 4
         }
-      ],
-      "vessels": []
+      ]
     }
   },
   {
@@ -1174,34 +1147,32 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2021-09-17T07:24:00",
+          "local_datetime": "2021-09-17T07:24",
           "time_zone": "UTC+10:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "Rockhampton, Queensland, Australia",
-          "standardized_location": "-23.36789+150.50940/"
+          "description": "Alexandra Bridge, Rockhampton, Queensland",
+          "standardized_location": "Alexandra Bridge, Rockhampton, Queensland, Australia"
         },
         "occurrence_type": "Collision",
         "total_persons_involved": 1,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "Damage to Alexandra Bridge and the tipping trailer; no damage to the train"
+        "damage_description": "damage: Alexandra Bridge damaged; tipping trailer damaged; train no damage."
       },
-      "aircraft": [],
       "trains": [
         {
           "train_type": "freight",
           "train_number": "8796",
-          "length": "526 m",
-          "weight": "1,164 t",
+          "length": 526.0,
+          "weight": 1164.0,
           "classification": "other",
           "year_manufactured": null,
           "operator": "Aurizon",
           "operating_crew": 1
         }
-      ],
-      "vessels": []
+      ]
     }
   },
   {
@@ -1210,34 +1181,32 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2013-08-31T10:09:00",
+          "local_datetime": "2013-08-31T10:09",
           "time_zone": "UTC+10:00",
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "Mahers Road level crossing, Inverleigh, Victoria, Australia",
-          "standardized_location": "-38.10442+144.02242/"
+          "description": "Mahers Road, Inverleigh, Victoria",
+          "standardized_location": "Mahers Road, Inverleigh, Victoria, Australia"
         },
-        "occurrence_type": "Collision",
+        "occurrence_type": "Level Crossing",
         "total_persons_involved": 111,
         "fatalities": 0,
         "injuries": 1,
-        "damage_description": "Minor damage to the locomotive and level crossing equipment; dual cab utility substantially damaged"
+        "damage_description": "minor and substantial damage: locomotive minor damage; level crossing equipment minor damage; dual cab utility substantially damaged."
       },
-      "aircraft": [],
       "trains": [
         {
           "train_type": "passenger",
-          "train_number": "7MA8",
-          "length": "215 m",
-          "weight": "535 t",
+          "train_number": "7MA8 - The Overland",
+          "length": 215.0,
+          "weight": 535.0,
           "classification": "intercity",
           "year_manufactured": null,
           "operator": "Great Southern Rail",
           "operating_crew": 7
         }
-      ],
-      "vessels": []
+      ]
     }
   }
 ]

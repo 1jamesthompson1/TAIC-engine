@@ -1,84 +1,84 @@
-Value,mode
-Collision,marine
-Grounding/stranding,marine
-Contact,marine
-Fire/explosion,marine
-Machinery failure,marine
-Equipment failure,marine
-Capsizing/listing,marine
-Hull failure/failure of watertight openings,marine
-Fatality,marine
-Serious injury,marine
-Damage to ship or equipment,marine
-Flooding,marine
-Close quarters,marine
-Missing assumed lost,marine
-Pollution,marine
-Other,marine
-Foundered,marine
-Lifeboat accident,marine
-Airframe,aviation
-Powerplant / Propulsion,aviation
-Systems,aviation
-Aircraft separation,aviation
-Airspace infringement,aviation
-ANSP operational error,aviation
-Operational non-compliance,aviation
-Breakdown of co-ordination,aviation
-Other Airspace,aviation
-Encounter with Remotely Piloted Aircraft,aviation
-ATM,aviation
-Navaids,aviation
-Radar / Surveillance,aviation
-Runway lighting,aviation
-Other Infrastructure,aviation
-Interference with aircraft from ground,aviation
-Weather,aviation
-Wildlife,aviation
-Other Environment,aviation
-Ditching,aviation
-Diversion / Return,aviation
-Emergency evacuation,aviation
-Emergency / Precautionary descent,aviation
-Forced / Precautionary landing,aviation
-Fuel dump/burn off,aviation
-Missed approach / Go-around,aviation
-Rejected take-off,aviation
-Other Consequential Event,aviation
-Aircraft control,aviation
-Aircraft loading,aviation
-Communications,aviation
-Crew and Cabin Safety,aviation
-"Fire, fumes & smoke",aviation
-Flight preparation / Navigation,aviation
-Fuel related,aviation
-Ground operations,aviation
-Ground proximity alerts / warnings,aviation
-Miscellaneous,aviation
-Runway events,aviation
-Terrain collisions,aviation
-Alcohol or drugs Irregularity,rail
-Collision,rail
-Communications System Failure,rail
-Dangerous Goods,rail
-Derailment,rail
-Electrical Infrastructure Irregularity,rail
-Explosion,rail
-Fire,rail
-Gas,rail
-Level Crossing,rail
-Light Rail or Tram Authority Exceeded,rail
-Load Irregularity,rail
-Not Elsewhere Classified,rail
-Proceed Authority Exceeded,rail
-Railway network security,rail
-Rolling stock Irregularity,rail
-Runaway,rail
-Safeworking Rule or Procedure Breach,rail
-Signalling And Other Proceed Authority System Irregularities,rail
-Signals Passed at Danger,rail
-"Slip, Trip or Fall",rail
-Track and Civil Infrastructure Irregularity,rail
-Train Warning and Enforcement System Irregularity,rail
-Trespasser,rail
-Wrong Side Failure,rail
+Value,mode,description
+Collision,marine,Impact between a vessel and another vessel while both are underway or maneuvering.
+Grounding/stranding,marine,"Vessel makes unintended contact with the seabed, shore, or underwater obstruction and becomes grounded or stranded."
+Contact,marine,"Impact between a vessel and a fixed or floating object other than another vessel (for example, wharf, buoy, bridge, or moored structure)."
+Fire/explosion,marine,"Onboard fire, combustion event, or explosion involving cargo, fuel, machinery, or accommodation spaces."
+Machinery failure,marine,"Failure of propulsion or essential mechanical systems (for example, main engine, gearbox, shafting, or steering machinery)."
+Equipment failure,marine,"Failure of onboard equipment not primarily propulsion machinery (for example, navigation, communications, safety, or deck equipment)."
+Capsizing/listing,marine,"Vessel develops severe heel/list or overturns, affecting stability and survivability."
+Hull failure/failure of watertight openings,marine,"Structural breach of hull or failure of watertight integrity (doors, hatches, seals) allowing uncontrolled water ingress."
+Fatality,marine,An occurrence where one or more persons die as a result of marine operations or onboard events.
+Serious injury,marine,A marine occurrence resulting in major injury requiring significant medical treatment or hospitalization.
+Damage to ship or equipment,marine,Physical damage to the vessel or onboard systems/equipment without necessarily involving total loss.
+Flooding,marine,"Uncontrolled ingress of water into the vessel, compartments, or critical spaces."
+Close quarters,marine,Unsafe proximity between vessels with elevated collision risk requiring immediate avoiding action.
+Missing assumed lost,marine,Person(s) or vessel unaccounted for and presumed lost after search or elapsed time.
+Pollution,marine,"Release or discharge of pollutants (for example, oil, fuel, chemicals, or cargo contaminants) into the marine environment."
+Other,marine,Marine occurrence that does not fit any other listed category.
+Foundered,marine,Vessel sinks or is overwhelmed by water and lost from buoyancy/stability failure.
+Lifeboat accident,marine,"Occurrence involving launch, recovery, operation, or failure of lifeboats or rescue craft."
+Airframe,aviation,"Failure, malfunction, or damage involving aircraft structural components (fuselage, wings, control surfaces, landing gear)."
+Powerplant / Propulsion,aviation,"Event involving engine or propulsion system performance, failure, or shutdown."
+Systems,aviation,"Failure or malfunction of aircraft onboard systems (electrical, hydraulic, pneumatic, avionics, etc.)."
+Aircraft separation,aviation,Loss or reduction of required separation between aircraft in flight or on maneuvering areas.
+Airspace infringement,aviation,Unauthorized or incorrect entry into controlled/restricted/prohibited airspace.
+ANSP operational error,aviation,"Error by air navigation service personnel affecting traffic management, separation, or clearances."
+Operational non-compliance,aviation,"Breach of operational procedures, rules, SOPs, or approved limitations."
+Breakdown of co-ordination,aviation,"Failure of coordination between flight crew, ATC units, operators, or other parties."
+Other Airspace,aviation,Airspace-related occurrence not captured by the other specific airspace categories.
+Encounter with Remotely Piloted Aircraft,aviation,Aircraft encounter or conflict with a drone/RPAS posing collision or distraction risk.
+ATM,aviation,"Air traffic management process/event affecting traffic flow, sequencing, control, or safety margins."
+Navaids,aviation,"Issue with navigation aids (for example, ILS, VOR, NDB, GNSS augmentation) affecting navigation guidance."
+Radar / Surveillance,aviation,"Failure or degradation of surveillance systems (radar, ADS-B, multilateration) used for separation/control."
+Runway lighting,aviation,"Failure, degradation, or misuse of runway or approach lighting systems affecting operations."
+Other Infrastructure,aviation,Aerodrome or supporting infrastructure issue not covered by specific infrastructure categories.
+Interference with aircraft from ground,aviation,"Ground-based interference affecting aircraft safety (for example, laser illumination, projectile strike, unauthorized signals)."
+Weather,aviation,Adverse meteorological conditions materially contributing to the occurrence.
+Wildlife,aviation,Bird/wildlife strike or wildlife presence creating risk during flight or ground operations.
+Other Environment,aviation,"Environmental factor other than weather/wildlife (for example, smoke, ash, contaminants) affecting safe operation."
+Ditching,aviation,Intentional forced landing on water.
+Diversion / Return,aviation,Diversion to alternate aerodrome or return to departure due to safety/technical/operational reasons.
+Emergency evacuation,aviation,Emergency disembarkation/evacuation using normal or emergency exits.
+Emergency / Precautionary descent,aviation,Unplanned descent initiated for immediate safety reasons.
+Forced / Precautionary landing,aviation,Landing made as a result of actual or suspected abnormal condition requiring prompt landing.
+Fuel dump/burn off,aviation,Intentional fuel jettison or holding to reduce landing weight for operational/safety reasons.
+Missed approach / Go-around,aviation,Discontinued approach or rejected landing with climb away from runway environment.
+Rejected take-off,aviation,Take-off roll intentionally aborted before liftoff.
+Other Consequential Event,aviation,Consequence-event category for operational outcomes not covered elsewhere.
+Aircraft control,aviation,"Loss, degradation, or anomaly in control of aircraft attitude, flight path, or handling."
+Aircraft loading,aviation,"Weight, balance, or loading configuration issue affecting performance or controllability."
+Communications,aviation,"Communication failure, misunderstanding, or loss affecting safe operation."
+Crew and Cabin Safety,aviation,"Occurrence involving crew/cabin safety procedures, injury risk, or cabin operations."
+"Fire, fumes & smoke",aviation,"Presence of fire, smoke, or fumes in or around the aircraft impacting safety."
+Flight preparation / Navigation,aviation,Pre-flight planning or navigation execution issue contributing to the event.
+Fuel related,aviation,"Fuel quantity, quality, management, contamination, or supply issue affecting operations."
+Ground operations,aviation,"Occurrence during taxi, pushback, towing, ramp, or apron activities."
+Ground proximity alerts / warnings,aviation,Triggered terrain/obstacle proximity alerts or warnings indicating reduced terrain clearance margin.
+Miscellaneous,aviation,Aviation occurrence not fitting any other listed category.
+Runway events,aviation,"Runway-related occurrence (for example, excursion, incursion, confusion, unstable landing outcome)."
+Terrain collisions,aviation,"Collision or impact with terrain, obstacles, or water due to inadequate clearance."
+Alcohol or drugs Irregularity,rail,Occurrence where alcohol or drug use/impairment concerns are relevant to rail safety.
+Collision,rail,"Impact involving train-to-train, train-to-vehicle, or train-to-object collisions. Use level crossing category for collisions at crossings."
+Communications System Failure,rail,Failure or degradation of communications systems critical to safe rail operations.
+Dangerous Goods,rail,"Occurrence involving hazardous materials release, exposure, handling issue, or associated risk."
+Derailment,rail,"Wheelset leaves the rails, partially or fully, during movement or operations."
+Electrical Infrastructure Irregularity,rail,Fault or anomaly in traction power or electrical infrastructure affecting operations.
+Explosion,rail,Detonation or rapid overpressure event causing safety consequences in rail context.
+Fire,rail,"Combustion event affecting rolling stock, infrastructure, cargo, or surrounding areas."
+Gas,rail,"Occurrence involving gas leak, ignition, exposure, or gas-related hazard."
+Level Crossing,rail,Occurrence at a road-rail or pedestrian-rail crossing interface.
+Light Rail or Tram Authority Exceeded,rail,Light rail/tram movement proceeds beyond authorized limits or permissions.
+Load Irregularity,rail,"Unsafe, shifted, insecure, overweight, or otherwise irregular load affecting rail safety."
+Not Elsewhere Classified,rail,Rail occurrence that does not fit any other listed category.
+Proceed Authority Exceeded,rail,Train movement exceeds the limits of movement authority.
+Railway network security,rail,Security-related occurrence affecting rail network safety or operations.
+Rolling stock Irregularity,rail,"Defect or irregular condition in locomotives, wagons, carriages, or other rolling stock."
+Runaway,rail,Uncontrolled rail vehicle movement without intended braking/control.
+Safeworking Rule or Procedure Breach,rail,Non-compliance with safeworking rules or procedural protections.
+Signalling And Other Proceed Authority System Irregularities,rail,Irregularity in signaling or movement-authority systems used to protect train movements.
+Signals Passed at Danger,rail,Train passes a stop signal without authority.
+"Slip, Trip or Fall",rail,"Person sustains or risks injury due to slipping, tripping, or falling in rail environment."
+Track and Civil Infrastructure Irregularity,rail,"Defect or irregularity in track, structures, or civil assets affecting safety."
+Train Warning and Enforcement System Irregularity,rail,"Issue with onboard/trackside warning or enforcement systems (for example, ATP/TPWS-like protections)."
+Trespasser,rail,"Unauthorized person on rail corridor, track, or restricted rail property causing safety risk."
+Wrong Side Failure,rail,Safety-critical failure that presents a less restrictive/unsafe indication than intended.

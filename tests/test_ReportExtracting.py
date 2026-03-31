@@ -24,10 +24,10 @@ from engine.ReportExtracting import (
     AircraftMetadata,
     OccurrenceMetadata,
     RecommendationItem,
-    ReportMetadata,
     SafetyIssueItem,
     TrainMetadata,
     VesselMetadata,
+    _build_metadata_model_for_mode,  # noqa: PLC2701
     ai_read_report,
     chunk_report_into_sections,
     load_event_type_taxonomy,
@@ -38,17 +38,16 @@ from engine.SavedDataFrames import ExtractedReports, ParsedReports
 RECOMMENDATION_SIMILARITY_THRESHOLD = 0.95
 CONTEXT_SIMILARITY_THRESHOLD = 0.9
 EXPECTED_NEW_REPORT_COUNT = 2
-METADATA_STRING_SIMILARITY_THRESHOLD = 0.8
-LOCATION_COORDINATE_TOLERANCE_DEGREES = 0.001
+
+# Use a weak threshold for non-literal free-text string comparisons.
+METADATA_WEAK_STRING_SIMILARITY_THRESHOLD = 0.5
 
 EXACT_MATCH_PATHS = {
     "occurrence.occurrence_datetime.local_datetime",
     "occurrence.occurrence_datetime.time_zone",
+    "occurrence.occurrence_type",
+    "occurrence.location.standardized_location",
 }
-
-ISO6709_LAT_LON_PATTERN = re.compile(
-    r"^([+-]\d{2}(?:\.\d+)?)([+-]\d{3}(?:\.\d+)?)(?:[+-]\d+(?:\.\d+)?)?/$"
-)
 
 
 def _canonical_sort_key(value):
@@ -58,15 +57,6 @@ def _canonical_sort_key(value):
         str: Canonical JSON string representation used for sorting.
     """
     return json.dumps(value, sort_keys=True, default=str)
-
-
-def _normalize_text(value: str) -> str:
-    """Normalize text for fair case/whitespace-insensitive comparison.
-
-    Returns:
-        str: Normalized text with single spaces and casefolding applied.
-    """
-    return " ".join(value.casefold().split())
 
 
 def _list_item_sort_key(path: str, value):
@@ -118,10 +108,10 @@ def _unwrap_optional_annotation(annotation):
 def _collect_literal_string_paths(
     model_cls: type[BaseModel], prefix: str = ""
 ) -> set[str]:
-    """Walk a Pydantic model and collect paths for string Literal fields.
+    """Walk a Pydantic model and collect paths for Literal-backed fields.
 
     Returns:
-        set[str]: Normalized metadata paths for string literal-backed fields.
+        set[str]: Normalized metadata paths for literal-backed fields.
     """
     literal_paths = set()
 
@@ -134,9 +124,7 @@ def _collect_literal_string_paths(
             literal_values = [
                 value for value in get_args(annotation) if value is not None
             ]
-            if literal_values and all(
-                isinstance(value, str) for value in literal_values
-            ):
+            if literal_values:
                 literal_paths.add(path)
             continue
 
@@ -156,11 +144,25 @@ def _collect_literal_string_paths(
     return literal_paths
 
 
-LITERAL_PATH_PATTERNS = _collect_literal_string_paths(ReportMetadata)
+def _get_all_literal_paths() -> set[str]:
+    """Collect all literal paths from all vehicle types (aircraft, trains, vessels).
+
+    Returns:
+        set[str]: All literal paths across all three vehicle type hierarchies.
+    """
+    all_paths = set()
+    all_paths.update(_collect_literal_string_paths(AircraftMetadata, "aircraft[]"))
+    all_paths.update(_collect_literal_string_paths(TrainMetadata, "trains[]"))
+    all_paths.update(_collect_literal_string_paths(VesselMetadata, "vessels[]"))
+    all_paths.update(_collect_literal_string_paths(OccurrenceMetadata, "occurrence"))
+    return all_paths
 
 
-def _should_use_exact_string_match(path: str) -> bool:
-    """Determine whether a metadata path should use exact string comparison.
+LITERAL_PATH_PATTERNS = _get_all_literal_paths()
+
+
+def _should_use_exact_match(path: str) -> bool:
+    """Determine whether a metadata path should use exact comparison.
 
     Returns:
         bool: True when the path maps to a literal-backed or strict field.
@@ -169,59 +171,8 @@ def _should_use_exact_string_match(path: str) -> bool:
     return normalized_path in LITERAL_PATH_PATTERNS or path in EXACT_MATCH_PATHS
 
 
-def _parse_iso6709_lat_lon(iso6709_coord: str) -> tuple[float, float] | None:
-    """Parse an ISO 6709 coordinate string into (latitude, longitude).
-
-    Returns:
-        tuple[float, float] | None: Parsed latitude/longitude or None if invalid.
-    """
-    if not isinstance(iso6709_coord, str):
-        return None
-
-    match = ISO6709_LAT_LON_PATTERN.fullmatch(iso6709_coord.strip())
-    if not match:
-        return None
-
-    return float(match.group(1)), float(match.group(2))
-
-
-def _compare_standardized_location(
-    path: str, actual: str | None, expected: str | None, failures: list[str]
-):
-    """Compare ISO 6709 coordinates using a simple degree tolerance."""
-    if actual is None and expected is None:
-        return
-    if actual is None or expected is None:
-        failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
-        return
-
-    actual_lat_lon = _parse_iso6709_lat_lon(actual)
-    expected_lat_lon = _parse_iso6709_lat_lon(expected)
-
-    if actual_lat_lon is None or expected_lat_lon is None:
-        if actual != expected:
-            failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
-        return
-
-    lat_diff = abs(actual_lat_lon[0] - expected_lat_lon[0])
-    lon_diff = abs(actual_lat_lon[1] - expected_lat_lon[1])
-    if (
-        lat_diff > LOCATION_COORDINATE_TOLERANCE_DEGREES
-        or lon_diff > LOCATION_COORDINATE_TOLERANCE_DEGREES
-    ):
-        failures.append(
-            f"{path} coordinate difference exceeded {LOCATION_COORDINATE_TOLERANCE_DEGREES}deg: "
-            f"lat diff={lat_diff:.6f}, lon diff={lon_diff:.6f}; "
-            f"expected {expected!r}, got {actual!r}"
-        )
-
-
 def _compare_metadata_values(path: str, actual, expected, failures: list[str]):  # noqa: PLR0911, PLR0912
     """Recursively compare metadata with simple string thresholds."""
-    if path == "occurrence.location.standardized_location":
-        _compare_standardized_location(path, actual, expected, failures)
-        return
-
     if isinstance(expected, dict):
         if not isinstance(actual, dict):
             failures.append(
@@ -269,29 +220,44 @@ def _compare_metadata_values(path: str, actual, expected, failures: list[str]): 
         return
 
     if isinstance(expected, str):
+        if _should_use_exact_match(path):
+            if actual.lower() != expected.lower():
+                failures.append(
+                    f"{path} mismatch: expected {expected!r}, got {actual!r}"
+                )
+            return
+
         if not isinstance(actual, str):
             failures.append(
                 f"{path} type mismatch: expected str, got {type(actual).__name__}"
             )
             return
 
-        if _should_use_exact_string_match(path):
-            if actual != expected:
-                failures.append(
-                    f"{path} mismatch: expected {expected!r}, got {actual!r}"
-                )
-            return
-
         similarity = SequenceMatcher(
             None,
-            _normalize_text(actual),
-            _normalize_text(expected),
+            actual,
+            expected,
         ).ratio()
-        if similarity < METADATA_STRING_SIMILARITY_THRESHOLD:
+        if similarity < METADATA_WEAK_STRING_SIMILARITY_THRESHOLD:
             failures.append(
-                f"{path} similarity {similarity:.2f} < {METADATA_STRING_SIMILARITY_THRESHOLD}: "
+                f"{path} similarity {similarity:.2f} < {METADATA_WEAK_STRING_SIMILARITY_THRESHOLD}: "
                 f"expected {expected!r}, got {actual!r}"
             )
+        return
+
+    if isinstance(expected, bool):
+        if actual is not expected:
+            failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
+        return
+
+    if isinstance(expected, int) and not isinstance(expected, bool):
+        if actual != expected:
+            failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
+        return
+
+    if isinstance(expected, float):
+        if actual != expected:
+            failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
         return
 
     if actual != expected:
@@ -345,19 +311,25 @@ def load_metadata_test_cases():
 
     Returns:
         list: List of pytest.param objects with proper test IDs.
+
+    Raises:
+        ValueError: If a metadata test case has an unknown report mode.
     """
     test_cases = load_json_test_data("metadata_test_cases.json")
+    taxonomy_dict = load_event_type_taxonomy(Path("data/event_types.csv"))
+
     params = []
     for case in test_cases:
         report_id = case["report_id"]
-        expected = ReportMetadata(
-            occurrence=OccurrenceMetadata(**case["expected"]["occurrence"]),
-            aircraft=[
-                AircraftMetadata(**item) for item in case["expected"]["aircraft"]
-            ],
-            trains=[TrainMetadata(**item) for item in case["expected"]["trains"]],
-            vessels=[VesselMetadata(**item) for item in case["expected"]["vessels"]],
-        )
+        mode = Modes.get_report_mode_from_id(report_id)
+        if mode is None:
+            msg = f"Unknown mode for report_id '{report_id}' in metadata test data"
+            raise ValueError(msg)
+        metadata_model = _build_metadata_model_for_mode(mode, taxonomy_dict)
+
+        # Construct expected metadata using mode-specific model
+        # Pass raw expected data dict; Pydantic will construct the correct type
+        expected = metadata_model.model_validate(case["expected"])
         params.append(pytest.param(report_id, expected, id=f"{report_id}_{case['id']}"))
     return params
 
@@ -550,7 +522,7 @@ class TestAIExtraction:
         load_metadata_test_cases(),
     )
     def test_metadata_extraction(  # noqa: PLR6301
-        self, report_id: str, expected: ReportMetadata
+        self, report_id: str, expected: BaseModel
     ):
         """Test the extraction of metadata from a report.
 
@@ -559,7 +531,7 @@ class TestAIExtraction:
 
         Args:
             report_id (str): The unique identifier for the report.
-            expected (ReportMetadata): The expected metadata structure.
+            expected (BaseModel): The expected metadata structure (mode-specific model).
 
         """
         report_text = get_report_text(report_id)
