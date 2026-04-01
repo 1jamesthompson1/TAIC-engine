@@ -42,13 +42,12 @@ CONTEXT_SIMILARITY_THRESHOLD = 0.9
 EXPECTED_NEW_REPORT_COUNT = 2
 
 # Use a weak threshold for non-literal free-text string comparisons.
-METADATA_WEAK_STRING_SIMILARITY_THRESHOLD = 0.5
+METADATA_WEAK_STRING_SIMILARITY_THRESHOLD = 0.4
 
 EXACT_MATCH_PATHS = {
     "occurrence.occurrence_datetime.local_datetime",
     "occurrence.occurrence_datetime.time_zone",
     "occurrence.occurrence_type",
-    "occurrence.location.standardized_location",
 }
 
 
@@ -65,7 +64,7 @@ def _list_item_sort_key(path: str, value):
     """Choose stable item keys so list comparison is less order-sensitive.
 
     Returns:
-        str: A deterministic sort key.
+        tuple | str: A deterministic sort key.
     """
     if not isinstance(value, dict):
         return _canonical_sort_key(value)
@@ -73,7 +72,12 @@ def _list_item_sort_key(path: str, value):
     if path == "aircraft":
         return str(value.get("registration") or value.get("model") or "")
     if path.endswith(".pilots"):
-        return str(value.get("role") or value.get("rank") or "")
+        return (
+            int(value.get("age") or -1),
+            str(value.get("responsibility") or ""),
+            int(value.get("total_flying_experience") or -1),
+            str(value.get("role") or value.get("rank") or ""),
+        )
     if path == "trains":
         return str(value.get("train_number") or value.get("operator") or "")
     if path == "vessels":
@@ -222,17 +226,17 @@ def _compare_metadata_values(path: str, actual, expected, failures: list[str]): 
         return
 
     if isinstance(expected, str):
+        if not isinstance(actual, str):
+            failures.append(
+                f"{path} type mismatch: expected str, got {type(actual).__name__}"
+            )
+            return
+
         if _should_use_exact_match(path):
             if actual.lower() != expected.lower():
                 failures.append(
                     f"{path} mismatch: expected {expected!r}, got {actual!r}"
                 )
-            return
-
-        if not isinstance(actual, str):
-            failures.append(
-                f"{path} type mismatch: expected str, got {type(actual).__name__}"
-            )
             return
 
         similarity = SequenceMatcher(

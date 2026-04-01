@@ -157,7 +157,7 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
 
     try:
         response = ai_caller.query(
-            model="gpt-5-mini",
+            model="gpt-5.4-mini",
             reasoning="high",
             system=system_prompt,
             user=user_prompt,
@@ -343,7 +343,7 @@ def process_reports_parallel(
     """
     reports_df = parsed_reports_dc.read()
 
-    event_type_taxonomy_by_mode = load_event_type_taxonomy(str(event_types_csv_path))
+    event_type_taxonomy_by_mode = load_event_type_taxonomy(event_types_csv_path)
 
     current_extracted_df = extracted_reports_dc.read_or_create()
 

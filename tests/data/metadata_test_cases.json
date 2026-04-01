@@ -11,7 +11,7 @@
         },
         "location": {
           "description": "Ardmore Aerodrome",
-          "standardized_location": "Ardmore Aerodrome, Auckland, Auckland, New Zealand"
+          "standardized_location": "Ardmore Aerodrome, Ardmore, Auckland, New Zealand"
         },
         "occurrence_type": "Aircraft separation",
         "total_persons_involved": 6,
@@ -93,7 +93,7 @@
         },
         "location": {
           "description": "Dryden Regional Airport (CYHD), Ontario",
-          "standardized_location": "Dryden Regional Airport (CYHD), Dryden, Ontario, Canada"
+          "standardized_location": "Dryden Regional Airport, Dryden, Ontario, Canada"
         },
         "occurrence_type": "Runway events",
         "total_persons_involved": 8,
@@ -209,8 +209,8 @@
           "description": "Hamilton Aerodrome",
           "standardized_location": "Hamilton aerodrome, Hamilton, Waikato, New Zealand"
         },
-        "occurrence_type": "ANSP operational error",
-        "total_persons_involved": null,
+        "occurrence_type": "Aircraft separation",
+        "total_persons_involved": 5,
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "nil"
@@ -230,7 +230,7 @@
         },
         "location": {
           "description": "En route, near Raglan, Waikato",
-          "standardized_location": "En route, near Raglan, Waikato, New Zealand"
+          "standardized_location": "En route, Raglan, Waikato, New Zealand"
         },
         "occurrence_type": "Systems",
         "total_persons_involved": 81,
@@ -377,7 +377,7 @@
         },
         "location": {
           "description": "BLAKA, 93 km south-south-east of Brisbane Airport, Queensland",
-          "standardized_location": "BLAKA IFR reporting point, Brisbane, Queensland, Australia"
+          "standardized_location": "BLAKA, Brisbane, Queensland, Australia"
         },
         "occurrence_type": "Aircraft separation",
         "total_persons_involved": null,
@@ -386,72 +386,6 @@
         "damage_description": "nil"
       },
       "aircraft": [
-        {
-          "aircraft_type": "Aeroplane",
-          "registration": "VH-VZC",
-          "make": "Boeing",
-          "model": "737-838",
-          "number_of_engines": 2,
-          "type_of_engines": "turbofan",
-          "year_manufactured": null,
-          "operator": null,
-          "flight_type": "scheduled service",
-          "persons_on_board_total": 2,
-          "persons_on_board_crew": 2,
-          "persons_on_board_passengers": 0,
-          "damage": "nil",
-          "pilots": [
-            {
-              "role": "Captain",
-              "licence": null,
-              "age": null,
-              "total_flying_experience": null,
-              "experience_on_type": null,
-              "responsibility": null
-            },
-            {
-              "role": "First Officer",
-              "licence": null,
-              "age": null,
-              "total_flying_experience": null,
-              "experience_on_type": null,
-              "responsibility": null
-            }
-          ]
-        },
-        {
-          "aircraft_type": "Aeroplane",
-          "registration": "VH-VOT",
-          "make": "Boeing",
-          "model": "737-8FE",
-          "number_of_engines": 2,
-          "type_of_engines": "turbofan",
-          "year_manufactured": null,
-          "operator": null,
-          "flight_type": "scheduled service",
-          "persons_on_board_total": 2,
-          "persons_on_board_crew": 2,
-          "persons_on_board_passengers": 0,
-          "damage": "nil",
-          "pilots": [
-            {
-              "role": "Captain",
-              "licence": null,
-              "age": null,
-              "total_flying_experience": null,
-              "experience_on_type": null,
-              "responsibility": null
-            },
-            {
-              "role": "First Officer",
-              "licence": null,
-              "age": null,
-              "total_flying_experience": null,
-              "experience_on_type": null,
-              "responsibility": null
-            }
-          ]
-        }
       ]
     }
   },
@@ -627,7 +561,6 @@
           "vessel_name": "i-Catcher",
           "vessel_type": "fishing",
           "classification": "unclassed",
-          "classification_limits": "Restricted Inshore - as per certificate of survey",
           "length": 8.0,
           "breadth": null,
           "gross_tonnage": null,
@@ -635,12 +568,11 @@
           "manufacturer_model": "820 Hardtop",
           "year_built": 2003,
           "propulsion": null,
-          "total_power": null,
+          "total_power": 171.5,
           "service_speed": 20,
           "owner_operator": "Fish Kaikoura 2011 Limited",
           "port_of_registry": null,
-          "primary_port": "Kaikoura, New Zealand",
-          "minimum_crew": 1
+          "primary_port": "Kaikoura, New Zealand"
         }
       ]
     }
@@ -663,14 +595,13 @@
         "total_persons_involved": 24,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "contamination and minor damage: main-engine lubrication-oil reserves and associated components contaminated; minor heavy-weather damage caused by heavy rolling."
+        "damage_description": "nil"
       },
       "vessels": [
         {
           "vessel_name": "Shiling",
           "vessel_type": "container",
           "classification": "Lloyd's Register",
-          "classification_limits": "SOLAS unlimited",
           "length": 294.4,
           "breadth": 32.2,
           "gross_tonnage": 53807,
@@ -682,8 +613,7 @@
           "service_speed": 25,
           "owner_operator": "Shiling Navigation Pte. Ltd./Asian-Alliance Ship Management",
           "port_of_registry": "Singapore",
-          "primary_port": null,
-          "minimum_crew": 24
+          "primary_port": null
         }
       ]
     }
@@ -713,7 +643,6 @@
           "vessel_name": "Adonis",
           "vessel_type": "tug",
           "classification": "DNV",
-          "classification_limits": null,
           "length": 21.3,
           "breadth": 6.72,
           "gross_tonnage": 91,
@@ -725,14 +654,12 @@
           "service_speed": 9,
           "owner_operator": "Sea Swift, Cairns",
           "port_of_registry": "Cairns",
-          "primary_port": null,
-          "minimum_crew": null
+          "primary_port": null
         },
         {
           "vessel_name": "Wolli",
           "vessel_type": "tug",
           "classification": "Lloyd's Register",
-          "classification_limits": "USL Class 2E",
           "length": 29.88,
           "breadth": 9.73,
           "gross_tonnage": 223,
@@ -744,8 +671,7 @@
           "service_speed": 9,
           "owner_operator": "Sea Swift, Cairns",
           "port_of_registry": "Sydney",
-          "primary_port": null,
-          "minimum_crew": null
+          "primary_port": null
         }
       ]
     }
@@ -775,7 +701,6 @@
           "vessel_name": "APL England",
           "vessel_type": "container",
           "classification": "DNV",
-          "classification_limits": null,
           "length": 277.255,
           "breadth": 40.0,
           "gross_tonnage": 65792,
@@ -787,8 +712,7 @@
           "service_speed": 25,
           "owner_operator": "CMB Ocean 13 Leasing Company / CMA CGM International Shipping Company",
           "port_of_registry": "Singapore",
-          "primary_port": null,
-          "minimum_crew": null
+          "primary_port": null
         }
       ]
     }
@@ -816,9 +740,8 @@
       "vessels": [
         {
           "vessel_name": "Leeuwin II",
-          "vessel_type": "passenger",
+          "vessel_type": "other",
           "classification": "unclassed",
-          "classification_limits": "USL class 1A, 1B, 1C and 1D (AMSA survey)",
           "length": 55.0,
           "breadth": 9.01,
           "gross_tonnage": null,
@@ -830,8 +753,7 @@
           "service_speed": 7,
           "owner_operator": "Leeuwin Ocean Adventure Foundation, Fremantle",
           "port_of_registry": "Fremantle, Western Australia",
-          "primary_port": null,
-          "minimum_crew": 6
+          "primary_port": null
         }
       ]
     }
@@ -842,9 +764,9 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2021-04-03T17:50",
+          "local_datetime": "2021-04-03T17:42",
           "time_zone": "UTC-03:00",
-          "time_zone_source": "inferred"
+          "time_zone_source": "explicit_in_report"
         },
         "location": {
           "description": "Gulf of St. Lawrence, 20 nautical miles west of Chéticamp, Nova Scotia",
@@ -861,7 +783,6 @@
           "vessel_name": "Tyhawk",
           "vessel_type": "fishing",
           "classification": "unclassed",
-          "classification_limits": null,
           "length": 13.61,
           "breadth": null,
           "gross_tonnage": 15.23,
@@ -873,8 +794,7 @@
           "service_speed": null,
           "owner_operator": "Elsipogtog First Nation",
           "port_of_registry": "Moncton, NB",
-          "primary_port": "Richibucto, New Brunswick",
-          "minimum_crew": null
+          "primary_port": "Richibucto, New Brunswick"
         }
       ]
     }
@@ -904,7 +824,6 @@
           "vessel_name": "Kitano",
           "vessel_type": "container",
           "classification": null,
-          "classification_limits": null,
           "length": 288.31,
           "breadth": null,
           "gross_tonnage": 50618,
@@ -916,8 +835,7 @@
           "service_speed": null,
           "owner_operator": "Nippon Yusen Kabushiki Kaisha",
           "port_of_registry": "Tokyo, Japan",
-          "primary_port": null,
-          "minimum_crew": 22
+          "primary_port": null
         }
       ]
     }
@@ -1085,18 +1003,18 @@
         },
         "location": {
           "description": "Te Onetea Road level crossing, Rangiriri, Waikato District",
-          "standardized_location": "Te Onetea Road level crossing, Rangiriri, Waikato District, New Zealand"
+          "standardized_location": "Te Onetea Road level crossing, Rangiriri, Waikato, New Zealand"
         },
         "occurrence_type": "Level Crossing",
         "total_persons_involved": 114,
         "fatalities": 1,
         "injuries": 0,
-        "damage_description": "moderate and extensive damage: train moderate damage; heavy motor vehicle driving unit extensive damage."
+        "damage_description": "moderate and extensive damage: locomotive front and cowcatcher damaged; diesel fuel tank punctured; truck driving unit destroyed; truck engine torn from mountings; semi-trailer skid plate and hydraulic hoses severely damaged."
       },
       "trains": [
         {
           "train_type": "passenger",
-          "train_number": "Train 201",
+          "train_number": "Train 201 - Northern Explorer",
           "length": 130.0,
           "weight": 311.0,
           "classification": "intercity",

@@ -9,7 +9,7 @@ Capsizing/listing,marine,"Vessel develops severe heel/list or overturns, affecti
 Hull failure/failure of watertight openings,marine,"Structural breach of hull or failure of watertight integrity (doors, hatches, seals) allowing uncontrolled water ingress."
 Fatality,marine,An occurrence where one or more persons die as a result of marine operations or onboard events.
 Serious injury,marine,A marine occurrence resulting in major injury requiring significant medical treatment or hospitalization.
-Damage to ship or equipment,marine,Physical damage to the vessel or onboard systems/equipment without necessarily involving total loss.
+Damage to ship or equipment,marine,Physical damage to the vessel or onboard systems/equipment without necessarily involving total loss. Losing equipment (i.e containers lost overboard) should be included here.
 Flooding,marine,"Uncontrolled ingress of water into the vessel, compartments, or critical spaces."
 Close quarters,marine,Unsafe proximity between vessels with elevated collision risk requiring immediate avoiding action.
 Missing assumed lost,marine,Person(s) or vessel unaccounted for and presumed lost after search or elapsed time.
@@ -22,7 +22,7 @@ Powerplant / Propulsion,aviation,"Event involving engine or propulsion system pe
 Systems,aviation,"Failure or malfunction of aircraft onboard systems (electrical, hydraulic, pneumatic, avionics, etc.)."
 Aircraft separation,aviation,Loss or reduction of required separation between aircraft in flight or on maneuvering areas.
 Airspace infringement,aviation,Unauthorized or incorrect entry into controlled/restricted/prohibited airspace.
-ANSP operational error,aviation,"Error by air navigation service personnel affecting traffic management, separation, or clearances."
+ANSP operational error,aviation,"Error by air navigation service personnel (i.e ATC) affecting traffic management  clearances."
 Operational non-compliance,aviation,"Breach of operational procedures, rules, SOPs, or approved limitations."
 Breakdown of co-ordination,aviation,"Failure of coordination between flight crew, ATC units, operators, or other parties."
 Other Airspace,aviation,Airspace-related occurrence not captured by the other specific airspace categories.

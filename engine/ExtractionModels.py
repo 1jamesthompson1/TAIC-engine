@@ -82,7 +82,9 @@ class OccurrenceLocation(BaseModel):
     )
     standardized_location: str | None = Field(
         default=None,
-        description="Normalized location string in exactly 4 comma-separated items: 'location, city/town, region/state, country' (country is stored separately in the country field). Use this only when a location can be stated from report context; if a part is unknown, use 'unknown' in that part. For airports use the name of the airport and do not include the code. For aircraft accidents if a plane is mid flight then the location should be 'en route'.",
+        description="""Normalized location string in exactly 4 comma-separated items: 'exact location, city/town/port, region/state, country' (country is stored separately in the country field). Use this only when a location can be stated from report context; if a part is unknown, use 'unknown' in that part. If report provides a location description that can be coerced into a 4 part strucutre then do so (i.e by adding in country). Avoid quantifiers like "region", "town" etc unless they are explicitly stated in the report.
+        If dealing with boats it should be the port than the location of the port etc etc. If a train is on a rail ferry than the location should be "On board the [name of ferry]" then where the ferry is etc (at terminal/in harbour/in strait etc).
+        For airports use the name of the airport and do not include the code. For aircraft accidents if a plane is mid flight then the location should be 'en route' (not 'above and near' or 'in flight' etc) followed by the next three parts which corresepond to the location at which they are above.""",
         pattern=r"^[^,]+,\s*[^,]+,\s*[^,]+,\s*[^,]+$",
     )
 
@@ -115,8 +117,8 @@ class OccurrenceMetadata(BaseModel):
     )
 
     damage_description: Literal["nil"] | str = Field(
-        description="Brief summary of damage to equipment, property, or environment from the report text. The summary should include a few word overview of the damage (e.g. 'destroyed', 'substantial damage') followed by a colon and then details separated by semicolons. For example, 'substantial damage: left wing damaged; engine detached'. If there are multiple items of damage, separate them with semicolons. If there is no damage, use 'nil'.",
-        pattern=r"((.+):(.+;?)\.)|(nil)",
+        description="Brief summary of damage to equipment, property, or environment from the report text. The summary should include a few word overview of the damage (e.g. 'destroyed', 'substantial damage') followed by a colon and then details separated by semicolons. For example, 'substantial damage: left wing damaged; engine detached.'. If there are multiple items of damage, separate them with semicolons. The overall description should be concise and informative. If there is no damage, use 'nil'.",
+        pattern=r"((.+):(.+;?)\.?)|(nil)",
     )
 
 
@@ -136,11 +138,11 @@ class PilotMetadata(BaseModel):
         | None
     ) = Field(
         default=None,
-        description="Pilot's role or position (e.g., captain, instructor, second officer etc). Use Sole pilot for situations where there is no explicit rank yet there is only a single pilot (common in light aircraft accidents). Student pilot is for situations where there is an isntructor and student pilot. Use 'other' when the report states a role that does not fit the allowed literals.",
+        description="Pilot's role or position (e.g., captain, instructor, second officer etc). Use Sole pilot for situations where there is no explicit rank yet there is only a single pilot (common in light aircraft accidents). Student pilot is for situations where there is an isntructor and student pilot (even if both are pilots, any situation involving an instructor has a student). Use 'other' when the report states a role that does not fit the allowed literals.",
     )
     responsibility: Literal["Pilot flying", "Pilot monitoring"] | None = Field(
         default=None,
-        description="Pilot responsibility for the occurrence phase when reported.",
+        description="Pilot responsibility for the occurrence phase when reported. You are allowed to infer this as it is not always explicitly stated.",
     )
     licence: (
         Literal[
@@ -165,11 +167,11 @@ class PilotMetadata(BaseModel):
     )
     total_flying_experience: int | None = Field(
         default=None,
-        description="Total flying experience (e.g., 10000, 15) as hours. Round to the nearest whole number (using standard rounding rules) and do not include any text (e.g. 'hours').",
+        description="Total flying experience (e.g., 10000, 15) as hours. Round to the nearest whole number (using standard rounding rules) and do not include any text (e.g. 'hours'). IF an approximate is given then just use that.",
     )
     experience_on_type: int | None = Field(
         default=None,
-        description="Flying experience on the specific aircraft type as hours. Round to the nearest whole number (using standard rounding rules) and do not include any text (e.g. 'hours').",
+        description="Flying experience on the specific aircraft type as hours. Round to the nearest whole number (using standard rounding rules) and do not include any text (e.g. 'hours'). IF an approximate is given then just use that.",
     )
 
 
@@ -201,7 +203,7 @@ class AircraftMetadata(BaseModel):
     )
     model: str | None = Field(
         default=None,
-        description="Aircraft model. Just the model of the aircraft, not the manufacturer (e.g., 737-800, A320, 172). If the model commonly includs a name (e.g 'Dash 8 Q400') then include the name as part of the model, but do not include the manufacturer (e.g. 'Q400' not 'Bombardier Q400').",
+        description="Aircraft model. Just the model of the aircraft, not the manufacturer (e.g., 737-800, A320, 172). If the model commonly includs a name (e.g 'P-51 Mustang') then include the name as part of the model, but do not include the manufacturer (e.g. 'Q400' not 'Bombardier Q400').",
     )
     number_of_engines: int | None = Field(
         default=None,
@@ -250,14 +252,14 @@ class AircraftMetadata(BaseModel):
         description=(
             "Type of flight. Map medevac/air ambulance/rescue to 'emergency "
             "services'. Map agricultural/survey/patrol/sling-load/firefighting "
-            "to 'aerial work'. Ferry/positioning used to represent situations where the flight is to move a grounded aircraft to a different location to for repairs, storage or to start a flight."
+            "to 'aerial work'. Ferry/positioning used to represent situations where the flight is to move a grounded aircraft to a different location to for repairs, storage or to start its real flight (i.e passengers or cargo are not on board). All air taxi flights should be mapped to 'charter'."
         ),
     )
     persons_on_board_total: int = Field(
         description="Total number of persons on board the aircraft.",
     )
     persons_on_board_crew: int = Field(
-        description="Number of crew members on board (cabin crew plus flight crew/pilots). This is only the crew members who are working for the particular flight (i.e if there are non-operating crew members on board then they should not be included in this field but should be included in the total persons on board field).",
+        description="Number of operational crew members on board (cabin crew plus flight crew/pilots). Other 'crew' such as other pilots that are not part of the operating crew should be counted as passengers (e.g. a second crew that is being transported but not operating the flight).",
     )
     persons_on_board_passengers: int = Field(
         description="Number of passengers on board.",
@@ -405,10 +407,6 @@ class VesselMetadata(BaseModel):
         ),
     )
 
-    classification_limits: str | None = Field(
-        default=None,
-        description="Classification limits for the vessel. This could be a specific class (e.g. 'DNV 1A', 'Lloyd's Register 100A1') or a description of the limits (e.g. 'Class bc', 'Within 200nm of land'). ",
-    )
     length: float | None = Field(
         default=None,
         description="Length of the vessel in meters",
@@ -444,7 +442,7 @@ class VesselMetadata(BaseModel):
         | None
     ) = Field(
         default=None,
-        description="Primary propulsion type.",
+        description="Primary propulsion type. Wind is to be used for sailing vessels, human is to be used for manually rowed vessels and jet is to be used for jet boats. Note that for any ships that have sails the propulsion should be 'wind' regardless of if they also have an engine or not as long as the sails are a significant form of propulsion for the vessel.",
     )
     total_power: float | None = Field(
         default=None,
@@ -460,11 +458,7 @@ class VesselMetadata(BaseModel):
     )
     port_of_registry: str | None = Field(
         default=None,
-        description="Port where the vessel is registered.",
-    )
-    minimum_crew: int | None = Field(
-        default=None,
-        description="Minimum required crew size.",
+        description="Port where the vessel is registered. This can also just be the country of registry if the port is not specified in the report. Leave as None if no information about registry is provided.",
     )
 
 
@@ -528,7 +522,7 @@ def _build_metadata_model_for_mode(
             list[AircraftMetadata],
             Field(
                 default_factory=list,
-                description="List of aircraft involved in the accident.",
+                description="List of aircraft involved in the accident. For reports about ATC mistakes do not include any aircraft metadata.",
             ),
         )
     elif report_mode == Modes.Mode.r:
@@ -536,7 +530,7 @@ def _build_metadata_model_for_mode(
             list[TrainMetadata],
             Field(
                 default_factory=list,
-                description="List of trains involved in the accident. Note that the comlete consist it treated as a single train, so if there are multiple carriages or locomotives involved then these should be included in the metadata for that single train entry (e.g in the description field or by including the number of carriages in the length field etc).",
+                description="List of trains involved in the accident. If multiple rolling stock are attached togather than they are a single train. Particularly for shunting accidents usually these should be treated as a single train with multiple vehicles rather than multiple trains.",
             ),
         )
     elif report_mode == Modes.Mode.m:

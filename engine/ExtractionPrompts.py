@@ -33,7 +33,7 @@ class PromptBuilder:
         Returns:
             The system prompt string.
         """
-        base = """You are a highly skilled AI specialized in extracting structured information from safety investigation reports. Your task is to read the provided report text and extract specific information based on the given instructions.
+        base = """You are a highly skilled AI specialized in extracting structured information from safety investigation reports. Your task is to read the provided report text and extract specific information based on the given instructions. These safety investigatiosn reports are all published publically by government agencies after they have completed a no-blame investigation into a transport accident.
 
 There are techincal definitions you should understand:
 Safety factor - Any (non-trivial) events or conditions, which increases safety risk. If they occurred in the future, these would increase the likelihood of an occurrence, and/or the severity of any adverse consequences associated with the occurrence.
@@ -115,7 +115,9 @@ I only want recommendations that are formally made by {self.agency_name} in the 
         prompt = """Metadata extraction instructions:
 Extract metadata according to the schema and each field description.
 Include only the main occurrence participants (not minor/peripheral mentions).
-If multiple aircraft, trains, or vessels are involved, include all of them. If a data summary is available this should be used to decide which vehicles to include. If a value is not stated in the report, return null."""
+IMPORTANT:
+If a data summary is provided in the report that is to be used to decide on which vehicles/vessels should be included or not included for metadata extraction. Not all data may be found in the table and so you should use the table as a guide but also use the rest of the report to find any missing information.
+If a value cannot be found or inferred from the report, leave it as null. You are free to make unit conversions as needed. Some fields require more inference than others and will be stated in descriptions"""
 
         if event_type_taxonomy:
             event_types_list = "\n".join(
