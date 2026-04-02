@@ -288,6 +288,7 @@ def extract(output_dir: Path, config: dict, refresh: bool):
         SavedDataFrames.ParsedReports(output_dir),
         SavedDataFrames.ExtractedReports(output_dir),
         ai_extraction_config=extraction_config,
+        report_titles_dc=SavedDataFrames.ReportTitles(output_dir),
         event_types_csv_path=event_types_csv_path,
     )
 

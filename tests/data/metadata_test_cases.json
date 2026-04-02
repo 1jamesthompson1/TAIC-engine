@@ -152,7 +152,7 @@
           "description": "Fort Providence, Northwest Territories, 6.7 NM NW",
           "standardized_location": "6.7 NM NW of Fort Providence Aerodrome, Fort Providence, Northwest Territories, Canada"
         },
-        "occurrence_type": "Fuel related",
+        "occurrence_type": "Forced / Precautionary landing",
         "total_persons_involved": 5,
         "fatalities": 0,
         "injuries": 5,
@@ -209,7 +209,7 @@
           "description": "Hamilton Aerodrome",
           "standardized_location": "Hamilton aerodrome, Hamilton, Waikato, New Zealand"
         },
-        "occurrence_type": "Aircraft separation",
+        "occurrence_type": "ANSP operational error",
         "total_persons_involved": 5,
         "fatalities": 0,
         "injuries": 0,
@@ -299,7 +299,7 @@
         {
           "aircraft_type": "Aeroplane",
           "registration": "ZK-NES",
-          "make": "de Havilland",
+          "make": "de Havilland/Bombardier",
           "model": "DHC-8-311",
           "number_of_engines": 2,
           "type_of_engines": "turboprop",
@@ -380,7 +380,7 @@
           "standardized_location": "BLAKA, Brisbane, Queensland, Australia"
         },
         "occurrence_type": "Aircraft separation",
-        "total_persons_involved": null,
+        "total_persons_involved": 4,
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "nil"
@@ -426,7 +426,7 @@
           "damage": "substantial damage",
           "pilots": [
             {
-              "role": "Captain",
+              "role": "Sole Pilot",
               "licence": "Commercial Pilot Licence (Helicopter)",
               "age": null,
               "total_flying_experience": 2600,
@@ -452,7 +452,7 @@
           "description": "36 km north-west of Hawker, South Australia",
           "standardized_location": "36 km NW of Hawker, Hawker, South Australia, Australia"
         },
-        "occurrence_type": "Fuel related",
+        "occurrence_type": "Terrain collisions",
         "total_persons_involved": 3,
         "fatalities": 0,
         "injuries": 3,
@@ -571,7 +571,7 @@
           "total_power": 171.5,
           "service_speed": 20,
           "owner_operator": "Fish Kaikoura 2011 Limited",
-          "port_of_registry": null,
+          "port_of_registry": "Kaikoura, New Zealand",
           "primary_port": "Kaikoura, New Zealand"
         }
       ]
@@ -595,7 +595,7 @@
         "total_persons_involved": 24,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "nil"
+        "damage_description": "minor damage: cracked cylinder liner in generator 2; generators and associated machinery required repair"
       },
       "vessels": [
         {
@@ -633,10 +633,10 @@
           "standardized_location": "Port of Gladstone, Gladstone, Queensland, Australia"
         },
         "occurrence_type": "Capsizing/listing",
-        "total_persons_involved": 4,
+        "total_persons_involved": 8,
         "fatalities": 1,
         "injuries": 0,
-        "damage_description": "capsized: tug capsized during towing operation and subsequently sank."
+        "damage_description": "substantial damage: Adonis capsized, later sank and was eventually scrapped; Wolli's port bow push-plate was damaged."
       },
       "vessels": [
         {
@@ -651,7 +651,7 @@
           "year_built": 1995,
           "propulsion": "diesel",
           "total_power": 544,
-          "service_speed": 9,
+          "service_speed": 10,
           "owner_operator": "Sea Swift, Cairns",
           "port_of_registry": "Cairns",
           "primary_port": null
@@ -671,6 +671,23 @@
           "service_speed": 9,
           "owner_operator": "Sea Swift, Cairns",
           "port_of_registry": "Sydney",
+          "primary_port": null
+        },
+        {
+          "vessel_name": "Chrysus",
+          "vessel_type": "barge",
+          "classification": "DNV",
+          "length": 54.86,
+          "breadth": 15.26,
+          "gross_tonnage": null,
+          "manufacturer": "Yangzhou Hanjiang Juidian Eastern Shipyard, China",
+          "manufacturer_model": null,
+          "year_built": 2009,
+          "propulsion": null,
+          "total_power": null,
+          "service_speed": null,
+          "owner_operator": "Sea Swift",
+          "port_of_registry": "Australia",
           "primary_port": null
         }
       ]
@@ -740,7 +757,7 @@
       "vessels": [
         {
           "vessel_name": "Leeuwin II",
-          "vessel_type": "other",
+          "vessel_type": "passenger",
           "classification": "unclassed",
           "length": 55.0,
           "breadth": 9.01,
@@ -805,7 +822,7 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2001-03-22T16:00",
+          "local_datetime": "2001-03-22T14:00",
           "time_zone": "UTC-04:00",
           "time_zone_source": "explicit_in_report"
         },
@@ -817,7 +834,7 @@
         "total_persons_involved": 22,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "fire damage: multiple containers fire damaged; no structural damage to vessel."
+        "damage_description": "fire damage: 15 containers fire damaged; no structural damage to vessel."
       },
       "vessels": [
         {
@@ -870,7 +887,7 @@
           "type_of_engines": "piston",
           "year_manufactured": null,
           "operator": "Strait Air 2000 Ltd.",
-          "flight_type": "ferry/positioning",
+          "flight_type": "emergency services",
           "persons_on_board_total": 1,
           "persons_on_board_crew": 1,
           "persons_on_board_passengers": 0,
@@ -914,7 +931,7 @@
           "train_type": "freight",
           "train_number": "B73041-15",
           "length": 1997.05,
-          "weight": 19852.0,
+          "weight": 18009.4,
           "classification": "unit",
           "year_manufactured": null,
           "operator": "Canadian National Railway Company",
@@ -948,8 +965,8 @@
           "train_type": "freight",
           "train_number": "2nd 269-23",
           "length": 1383.18,
-          "weight": 8135.0,
-          "classification": "other",
+          "weight": 7379.6,
+          "classification": "manifest",
           "year_manufactured": null,
           "operator": "Canadian Pacific Railway",
           "operating_crew": 2
@@ -981,8 +998,8 @@
         {
           "train_type": "shunt",
           "train_number": "DSG 3210 / EUF24",
-          "length": 12.5,
-          "weight": 56.0,
+          "length": null,
+          "weight": null,
           "classification": "yard/shunting",
           "year_manufactured": null,
           "operator": "KiwiRail",
@@ -1048,10 +1065,10 @@
       "trains": [
         {
           "train_type": "maintenance vehicle",
-          "train_number": "Tamper 703",
+          "train_number": "AV2 - Tamper 703",
           "length": null,
           "weight": null,
-          "classification": "maintenance",
+          "classification": "test/commissioning",
           "year_manufactured": null,
           "operator": "KiwiRail",
           "operating_crew": 4
@@ -1085,7 +1102,7 @@
           "train_number": "8796",
           "length": 526.0,
           "weight": 1164.0,
-          "classification": "other",
+          "classification": "intermodal",
           "year_manufactured": null,
           "operator": "Aurizon",
           "operating_crew": 1

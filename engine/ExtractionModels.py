@@ -57,14 +57,15 @@ class OccurrenceDateTime(BaseModel):
     """Represents occurrence datetime with timezone as separate fields."""
 
     local_datetime: str = Field(
-        description="Local occurrence datetime as ISO 8601 without timezone (YYYY-MM-DDTHH:MM). Time is required and should come from the report text, not be invented.",
+        description="Local occurrence datetime as ISO 8601 without timezone (YYYY-MM-DDTHH:MM). Time is required and should come from the report text, not be invented. It should be the time that the accident sequence begins (i.e when boat starts to sink). Use the most accurate time found in the report.",
         pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$",
     )
     time_zone: str = Field(
         description=(
             "Canonical UTC offset string for the occurrence local time "
             "in the form UTC+HH:MM or UTC-HH:MM "
-            "(e.g. 'UTC+13:00', 'UTC-06:00', 'UTC+09:30')."
+            "(e.g. 'UTC+13:00', 'UTC-06:00', 'UTC+09:30'). "
+            "This should be the time zone that is used throughout the report."
         ),
         pattern=r"^UTC[+-]\d{2}:\d{2}$",
     )
@@ -78,7 +79,7 @@ class OccurrenceLocation(BaseModel):
     """Represents occurrence location in both descriptive and parseable formats."""
 
     description: str = Field(
-        description="Raw human-readable location extracted from the report wording (do not normalize this field). Keep it faithful to how the report describes the location.",
+        description="Raw human-readable location extracted from the report wording (do not normalize this field). Keep it faithful to how the report describes the location. Best to use full names where possible (avoid airport codes, abbreviations etc).",
     )
     standardized_location: str | None = Field(
         default=None,
@@ -110,14 +111,14 @@ class OccurrenceMetadata(BaseModel):
         description="The total number of persons involved in the occurrence. This should be the total number of people that are involved and/or could of been harmed in the occurrence regardless of if they are on board a vehicle or not. Only use None in the situation where the report does not provide any information at all.",
     )
     fatalities: int = Field(
-        description="The number of fatalities resulting from the occurrence. Use 0 to indicate no fatalities",
+        description="The number of fatalities resulting from the occurrence. Use 0 to indicate no fatalities. People who are considered missing (i.e not found by time of publication) should be counted as fatalities.",
     )
     injuries: int = Field(
         description="The number of persons injured in the occurrence. Use 0 to indicate no injuries.",
     )
 
     damage_description: Literal["nil"] | str = Field(
-        description="Brief summary of damage to equipment, property, or environment from the report text. The summary should include a few word overview of the damage (e.g. 'destroyed', 'substantial damage') followed by a colon and then details separated by semicolons. For example, 'substantial damage: left wing damaged; engine detached.'. If there are multiple items of damage, separate them with semicolons. The overall description should be concise and informative. If there is no damage, use 'nil'.",
+        description="Brief summary of damage to equipment, property, or environment from the report text. The summary should include a few word overview of the damage (e.g. 'lost', 'destroyed', 'substantial damage', 'minor damage' ) followed by a colon and then details separated by semicolons. For example, 'substantial damage: left wing damaged; engine detached.'. If there are multiple items of damage, separate them with semicolons. The overall description should be concise and informative and optimised so that future retrieval is efficient (e.g., using keywords or tags). If there is no damage, use literal 'nil'.",
         pattern=r"((.+):(.+;?)\.?)|(nil)",
     )
 
@@ -138,7 +139,7 @@ class PilotMetadata(BaseModel):
         | None
     ) = Field(
         default=None,
-        description="Pilot's role or position (e.g., captain, instructor, second officer etc). Use Sole pilot for situations where there is no explicit rank yet there is only a single pilot (common in light aircraft accidents). Student pilot is for situations where there is an isntructor and student pilot (even if both are pilots, any situation involving an instructor has a student). Use 'other' when the report states a role that does not fit the allowed literals.",
+        description="Pilot's role or position (e.g., captain, instructor, second officer etc). Use Sole pilot for situations where there is no explicit rank yet there is only a single pilot (common in light aircraft accidents). Student pilot is for situations where there is an isntructor and other pilot who is flying 'under instruction' (even if both are pilots, any situation involving an instructor has a student). Use 'other' when the report states a role that does not fit the allowed literals.",
     )
     responsibility: Literal["Pilot flying", "Pilot monitoring"] | None = Field(
         default=None,
@@ -199,7 +200,7 @@ class AircraftMetadata(BaseModel):
     )
     make: str | None = Field(
         default=None,
-        description="Aircraft manufacturer/make. Just the name of the manufacturer, not the model (e.g., Boeing, Airbus, Cessna).",
+        description="Aircraft manufacturer/make. Just the name of the manufacturer, not the model (e.g., Boeing, Airbus, Cessna). Remove the words after the company name from the manufacturer name if it is present (e.g. 'Bombardier' not 'Bombardier Company').",
     )
     model: str | None = Field(
         default=None,
@@ -250,9 +251,7 @@ class AircraftMetadata(BaseModel):
     ) = Field(
         default=None,
         description=(
-            "Type of flight. Map medevac/air ambulance/rescue to 'emergency "
-            "services'. Map agricultural/survey/patrol/sling-load/firefighting "
-            "to 'aerial work'. Ferry/positioning used to represent situations where the flight is to move a grounded aircraft to a different location to for repairs, storage or to start its real flight (i.e passengers or cargo are not on board). All air taxi flights should be mapped to 'charter'."
+            "Type of flight. All medevac/air ambulance/rescue flights should be mapped to 'emergency services'. Map agricultural/survey/patrol/sling-load/firefighting to 'aerial work'. Ferry/positioning used to rrepresent any situation where the aircraft is not presently carrrying paying passengers or goods or conducting operations (i.e flying to airport to pick up passengers). All air taxi flights should be mapped to 'charter'."
         ),
     )
     persons_on_board_total: int = Field(
@@ -317,8 +316,8 @@ class TrainMetadata(BaseModel):
     weight: float | None = Field(
         default=None,
         description=(
-            "Weight of the train in tonnes as a numeric value only "
-            "(for example, 311.0). Do not include unit text."
+            "Weight of the train in metric tons as a numeric value only "
+            "(for example, 311.0). Do not include unit text. Most tons listed will be metric tons. Treat all TSB reports weights as US short tons and convert them to metric tons (1 short ton = 0.907184 metric tons), unless explicitly stated otherwise. If the report does not specify the type of ton then assume it is metric tons and do not convert."
         ),
     )
     classification: (
@@ -330,6 +329,8 @@ class TrainMetadata(BaseModel):
             "high-speed",
             "heavy-haul",
             "unit",
+            "manifest",
+            "intermodal",
             "yard/shunting",
             "inspection",
             "maintenance",
@@ -341,7 +342,9 @@ class TrainMetadata(BaseModel):
         default=None,
         description=(
             "Service/operational class for the movement. Use the closest "
-            "canonical value and avoid introducing new labels."
+            "canonical value and avoid introducing new labels. Use 'manifest' "
+            "for mixed/general freight consists and 'intermodal' for container "
+            "or trailer-on-flatcar operations."
         ),
     )
     year_manufactured: int | None = Field(
@@ -383,7 +386,7 @@ class VesselMetadata(BaseModel):
         | None
     ) = Field(
         default=None,
-        description="Type of vessel.",
+        description="Type of vessel. This should be what the vessel is built for, not what it is being used for at the time of the occurrence. Passenger is a ship which is designed to accomodate passengers (e.g cruise ship, yacht, ferry etc). Taxi is for vessels that are designed to transport people but only over short distances (e.g water taxi, harbour shuttle etc). Recreational is for vessels that are designed for leisure and not for transportation (e.g fishing boats, sailing boats, motorboats etc).",
     )
 
     classification: (
@@ -403,7 +406,7 @@ class VesselMetadata(BaseModel):
         | None
     ) = Field(
         description=(
-            "Marine classification society. Use one of the allowed literals  or'unclassed' when explicitly not classed (i.e local vessels), or 'other' if a named society is not listed. Use None only in the situation where one would expect a class yet it is not (i.e a large internationally operating vessel that one would expect to be classed but the report does not provide any information about the class)."
+            "Marine classification society. Use one of the allowed literals  or 'unclassed' when it is not classed (i.e local vessels), or 'other' if a named society is not listed. Use None only in the situation where one would expect a class yet it is not listed (i.e a large internationally operating vessel that one would expect to be classed but the report does not provide any information about the class)."
         ),
     )
 
@@ -442,7 +445,7 @@ class VesselMetadata(BaseModel):
         | None
     ) = Field(
         default=None,
-        description="Primary propulsion type. Wind is to be used for sailing vessels, human is to be used for manually rowed vessels and jet is to be used for jet boats. Note that for any ships that have sails the propulsion should be 'wind' regardless of if they also have an engine or not as long as the sails are a significant form of propulsion for the vessel.",
+        description="Primary propulsion type. Wind is to be used for sailing vessels, human is to be used for manually rowed vessels and jet is to be used for jet boats. For all vessels with sails use 'wind' as the propulsion regardless of if they have an auxiliary engine or not. For vessels with multiple propulsion types use the primary propulsion type (e.g a sail boat with a small auxiliary engine should be classified as 'wind').",
     )
     total_power: float | None = Field(
         default=None,
@@ -522,7 +525,7 @@ def _build_metadata_model_for_mode(
             list[AircraftMetadata],
             Field(
                 default_factory=list,
-                description="List of aircraft involved in the accident. For reports about ATC mistakes do not include any aircraft metadata.",
+                description="List of aircraft involved in the accident. For reports that are about ATC occurrences (i.e where ATC agent made mistakes and the report is investigating why), none of the aircraft should be included.",
             ),
         )
     elif report_mode == Modes.Mode.r:

@@ -19,7 +19,7 @@ from engine.ExtractionModels import (
 )
 from engine.ExtractionPrompts import PromptBuilder
 from engine.Logging import get_logger
-from engine.SavedDataFrames import ExtractedReports, ParsedReports
+from engine.SavedDataFrames import ExtractedReports, ParsedReports, ReportTitles
 
 logger = get_logger(__name__)
 
@@ -104,6 +104,7 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
     report_mode: Modes.Mode | None = None,
     event_type_taxonomy_by_mode: dict[Modes.Mode, list[dict[str, str]]] | None = None,
     report_id: str | None = None,
+    agency_id: str | None = None,
 ) -> BaseModel:
     """Use AI to read the report and extract safety issues, recommendations, and metadata as needed.
 
@@ -116,6 +117,8 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
         report_mode: Optional mode parsed from report ID to constrain taxonomy.
         event_type_taxonomy_by_mode: Optional taxonomy entries keyed by mode.
         report_id: The identifier of the report being processed (e.g., 'TAIC_a_2023_011').
+        agency_id: Agency-native occurrence identifier from report titles (for example,
+            ATSB short occurrence ID) used to disambiguate multi-occurrence bulletins.
 
     Returns:
         A BaseModel containing the extracted safety issues, recommendations, and/or metadata,
@@ -131,7 +134,12 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
 
     # Build prompt using the prompt builder
     builder = PromptBuilder(
-        agency_name, report_id, safety_issues, recommendations, metadata
+        agency_name=agency_name,
+        report_id=report_id,
+        agency_id=agency_id,
+        safety_issues=safety_issues,
+        recommendations=recommendations,
+        metadata=metadata,
     )
 
     # Get taxonomy for metadata extraction
@@ -140,7 +148,7 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
         taxonomy = event_type_taxonomy_by_mode.get(report_mode)
 
     system_prompt = builder.build_system_prompt()
-    user_prompt = builder.build_user_prompt(report_text, taxonomy)
+    user_prompt = builder.build_user_prompt(report_mode, report_text, taxonomy)
 
     # Build output model
     try:
@@ -251,6 +259,7 @@ def extract_report(
     report_text = report_row["text"]
     agency = report_id.split("_")[0]
     report_mode = Modes.get_report_mode_from_id(report_id)
+    agency_id = report_row.get("agency_id")
 
     extraction_config = ai_extraction_config[agency].copy()
 
@@ -265,6 +274,7 @@ def extract_report(
         report_text=report_text,
         report_mode=report_mode,
         report_id=report_id,
+        agency_id=agency_id,
         event_type_taxonomy_by_mode=event_type_taxonomy_by_mode,
         **extraction_config,
     )
@@ -300,10 +310,11 @@ def extract_report(
     }
 
 
-def process_reports_parallel(
+def process_reports_parallel(  # noqa: PLR0913, PLR0917
     parsed_reports_dc: ParsedReports,
     extracted_reports_dc: ExtractedReports,
     ai_extraction_config: dict,
+    report_titles_dc: ReportTitles | None = None,
     event_types_csv_path: Path = Path("data/event_types.csv"),
     max_workers: int | None = None,
 ) -> pd.DataFrame:
@@ -319,6 +330,9 @@ def process_reports_parallel(
             extracted reports.
         ai_extraction_config: Configuration dictionary specifying which extraction tasks
             (safety_issues, recommendations, metadata) to perform for each agency.
+        report_titles_dc: Optional ReportTitles data container. When provided,
+            this function reads it and merges 'agency_id' into parsed reports by
+            'report_id'.
         event_types_csv_path: Path to taxonomy CSV used for occurrence_type values.
         max_workers: Maximum number of parallel workers. Adjust
             based on your API rate limits and system resources.
@@ -342,6 +356,21 @@ def process_reports_parallel(
 
     """
     reports_df = parsed_reports_dc.read()
+
+    if report_titles_dc is not None:
+        report_titles_df = report_titles_dc.read()
+    else:
+        report_titles_df = pd.DataFrame(columns=["report_id", "agency_id"])
+
+    if len(report_titles_df) > 0:
+        titles_for_merge = report_titles_df[["report_id", "agency_id"]].drop_duplicates(
+            subset=["report_id"],
+            keep="last",
+        )
+        reports_df = reports_df.merge(titles_for_merge, on="report_id", how="left")
+    else:
+        reports_df = reports_df.copy()
+        reports_df["agency_id"] = None
 
     event_type_taxonomy_by_mode = load_event_type_taxonomy(event_types_csv_path)
 

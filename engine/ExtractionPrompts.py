@@ -1,13 +1,19 @@
 """Prompt builder for structured extraction from accident investigation reports."""
 
+import warnings
+
+from engine import Modes
+
 
 class PromptBuilder:
     """Builder for constructing extraction prompts with agency-specific instructions."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         agency_name: str,
         report_id: str | None = None,
+        agency_id: str | None = None,
+        *,
         safety_issues: bool = False,
         recommendations: bool = False,
         metadata: bool = False,
@@ -17,15 +23,21 @@ class PromptBuilder:
         Args:
             agency_name: The name of the investigation agency (e.g., 'TAIC', 'TSB', 'ATSB').
             report_id: The identifier of the report being processed.
+            agency_id: Agency-native occurrence identifier (for example, ATSB short ID).
             safety_issues: Whether to include safety issue extraction instructions.
             recommendations: Whether to include recommendation extraction instructions.
             metadata: Whether to include metadata extraction instructions.
         """
         self.agency_name = agency_name
         self.report_id = report_id
+        self.agency_id = agency_id
         self._safety_issues_enabled = safety_issues
         self._recommendations_enabled = recommendations
         self._metadata_enabled = metadata
+
+        if self.agency_id is None:
+            warning_msg = "The Agency ID is not provided. This may make it difficult to determine which information in the report text is relevant to the specific occurrence, especially for agencies like ATSB where the report text may contain information about multiple occurrences. It is recommended to provide the agency ID if possible."
+            warnings.warn(warning_msg, stacklevel=2)
 
     def build_system_prompt(self) -> str:
         """Build the system prompt with agency-specific instructions.
@@ -33,7 +45,7 @@ class PromptBuilder:
         Returns:
             The system prompt string.
         """
-        base = """You are a highly skilled AI specialized in extracting structured information from safety investigation reports. Your task is to read the provided report text and extract specific information based on the given instructions. These safety investigatiosn reports are all published publically by government agencies after they have completed a no-blame investigation into a transport accident.
+        base = """You are a highly skilled AI specialized in extracting structured information from safety investigation reports. Your task is to read the provided report text and extract specific information based on the given instructions. These safety investigation reports are all published publically by government agencies after they have completed a no-blame investigation into a transport accident.
 
 There are techincal definitions you should understand:
 Safety factor - Any (non-trivial) events or conditions, which increases safety risk. If they occurred in the future, these would increase the likelihood of an occurrence, and/or the severity of any adverse consequences associated with the occurrence.
@@ -57,20 +69,24 @@ Note that some reports will actually have text that is from a short report bulle
 
     def build_user_prompt(
         self,
+        report_mode: Modes.Mode | None,
         report_text: str,
         event_type_taxonomy: list[dict[str, str]] | None = None,
     ) -> str:
         """Build the user prompt with extraction instructions.
 
         Args:
+            report_mode: The transport mode classification for the report.
             report_text: The full text of the report.
             event_type_taxonomy: Optional taxonomy entries for occurrence types.
 
         Returns:
             The user prompt string.
         """
+        mode_label = report_mode.value if report_mode else "unknown"
         parts = [
-            f"You are processing report ID: {self.report_id or 'Unknown'}\n"
+            f"You are processing report ID: {self.report_id or 'Unknown'} which is a report of mode {mode_label}\n"
+            f"Agency occurrence ID: {self.agency_id or 'Unknown'}\n"
             f"From investigation agency: {self.agency_name}\n\n"
             f"You are provided with the following report text:\n"
             f"'''\n{report_text}\n'''\n\n"
@@ -117,7 +133,13 @@ Extract metadata according to the schema and each field description.
 Include only the main occurrence participants (not minor/peripheral mentions).
 IMPORTANT:
 If a data summary is provided in the report that is to be used to decide on which vehicles/vessels should be included or not included for metadata extraction. Not all data may be found in the table and so you should use the table as a guide but also use the rest of the report to find any missing information.
-If a value cannot be found or inferred from the report, leave it as null. You are free to make unit conversions as needed. Some fields require more inference than others and will be stated in descriptions"""
+You are free to make unit conversions as needed. Some fields require more inference than others and will be stated in descriptions. For most of the fields reasonable inference is allowed.
+
+Vessel propulsion extraction instructions:
+- For vessels with sails (sail ships, sailing vessels, etc.), ALWAYS use 'wind' as the propulsion type, regardless of whether they have auxiliary engines (diesel, etc.)
+- For vessels with multiple propulsion types, extract only the PRIMARY propulsion type
+- Example: A sail training ship with auxiliary diesel engines should be classified as propulsion='wind', not 'diesel'
+- The primary propulsion for a sailing vessel is wind/sail, even if auxiliary engines are mentioned in the report"""
 
         if event_type_taxonomy:
             event_types_list = "\n".join(

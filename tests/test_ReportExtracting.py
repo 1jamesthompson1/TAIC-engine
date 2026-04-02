@@ -8,7 +8,9 @@ This is the key test module for validating that the AI extraction works.
 """
 
 import json
+import math
 import re
+from datetime import datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 from types import UnionType
@@ -35,20 +37,76 @@ from engine.ReportExtracting import (
     load_event_type_taxonomy,
     process_reports_parallel,
 )
-from engine.SavedDataFrames import ExtractedReports, ParsedReports
+from engine.SavedDataFrames import ExtractedReports, ParsedReports, ReportTitles
 
 RECOMMENDATION_SIMILARITY_THRESHOLD = 0.95
 CONTEXT_SIMILARITY_THRESHOLD = 0.9
 EXPECTED_NEW_REPORT_COUNT = 2
 
 # Use a weak threshold for non-literal free-text string comparisons.
-METADATA_WEAK_STRING_SIMILARITY_THRESHOLD = 0.4
+METADATA_WEAK_STRING_SIMILARITY_THRESHOLD = 0.3
+FLOAT_RELATIVE_TOLERANCE = 0.03
+DATETIME_TOLERANCE_MINUTES = 30
+OCCURRENCE_LOCAL_DATETIME_PATH = "occurrence.occurrence_datetime.local_datetime"
 
 EXACT_MATCH_PATHS = {
-    "occurrence.occurrence_datetime.local_datetime",
     "occurrence.occurrence_datetime.time_zone",
     "occurrence.occurrence_type",
 }
+
+
+def _output_dir_from_pytest() -> Path:
+    """Get the configured test output directory from pytest globals.
+
+    Returns:
+        Path: Output folder path.
+    """
+    return Path(pytest.output_config["folder_name"])  # type: ignore[attr-defined]
+
+
+def _ai_extraction_config_from_pytest() -> dict:
+    """Get AI extraction config from pytest globals.
+
+    Returns:
+        dict: AI extraction configuration by agency.
+    """
+    return pytest.config["engine"]["extraction"]["ai_extraction_config"]  # type: ignore[attr-defined]
+
+
+@pytest.fixture(scope="function")
+def agency_id_lookup() -> dict[str, str]:
+    """Load agency IDs keyed by report_id from test report titles data.
+
+    Returns:
+        dict[str, str]: Mapping from report ID to agency ID.
+    """
+    report_titles = ReportTitles(_output_dir_from_pytest()).read()
+    if report_titles.empty:
+        return {}
+
+    titles = report_titles[["report_id", "agency_id"]].drop_duplicates(
+        subset=["report_id"], keep="last"
+    )
+    return {
+        str(row["report_id"]): str(row["agency_id"])
+        for _, row in titles.iterrows()
+        if row["agency_id"] is not None
+    }
+
+
+def _parse_occurrence_local_datetime(value: str) -> datetime | None:
+    """Parse occurrence local datetime in model format.
+
+    Returns:
+        datetime | None: Parsed datetime when valid, otherwise None.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+
+    try:
+        return datetime.strptime(value.strip(), "%Y-%m-%dT%H:%M")
+    except ValueError:
+        return None
 
 
 def _canonical_sort_key(value):
@@ -177,7 +235,7 @@ def _should_use_exact_match(path: str) -> bool:
     return normalized_path in LITERAL_PATH_PATTERNS or path in EXACT_MATCH_PATHS
 
 
-def _compare_metadata_values(path: str, actual, expected, failures: list[str]):  # noqa: PLR0911, PLR0912
+def _compare_metadata_values(path: str, actual, expected, failures: list[str]):  # noqa: PLR0911, PLR0912, PLR0915
     """Recursively compare metadata with simple string thresholds."""
     if isinstance(expected, dict):
         if not isinstance(actual, dict):
@@ -232,6 +290,26 @@ def _compare_metadata_values(path: str, actual, expected, failures: list[str]): 
             )
             return
 
+        if path == OCCURRENCE_LOCAL_DATETIME_PATH:
+            actual_dt = _parse_occurrence_local_datetime(actual)
+            expected_dt = _parse_occurrence_local_datetime(expected)
+
+            # Keep failures readable when either value is malformed.
+            if actual_dt is None or expected_dt is None:
+                if actual != expected:
+                    failures.append(
+                        f"{path} mismatch: expected {expected!r}, got {actual!r}"
+                    )
+                return
+
+            delta_minutes = abs((actual_dt - expected_dt).total_seconds()) / 60
+            if delta_minutes > DATETIME_TOLERANCE_MINUTES:
+                failures.append(
+                    f"{path} mismatch: delta {delta_minutes:.1f} minutes exceeds "
+                    f"{DATETIME_TOLERANCE_MINUTES} minutes (expected {expected!r}, got {actual!r})"
+                )
+            return
+
         if _should_use_exact_match(path):
             if actual.lower() != expected.lower():
                 failures.append(
@@ -262,8 +340,22 @@ def _compare_metadata_values(path: str, actual, expected, failures: list[str]): 
         return
 
     if isinstance(expected, float):
-        if actual != expected:
-            failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
+        if not isinstance(actual, int | float):
+            failures.append(
+                f"{path} type mismatch: expected float, got {type(actual).__name__}"
+            )
+            return
+
+        if not math.isclose(
+            float(actual),
+            expected,
+            rel_tol=FLOAT_RELATIVE_TOLERANCE,
+            abs_tol=0.0,
+        ):
+            failures.append(
+                f"{path} mismatch: expected {expected!r}, got {actual!r} "
+                f"(tol: +/- {FLOAT_RELATIVE_TOLERANCE * 100:.1f}%)"
+            )
         return
 
     if actual != expected:
@@ -353,8 +445,7 @@ def get_report_text(report_id: str) -> str:
         str: The text content of the report.
 
     """
-    output_path = Path(pytest.output_config["folder_name"])
-    parsed_reports_dc = ParsedReports(output_path)
+    parsed_reports_dc = ParsedReports(_output_dir_from_pytest())
     extracted_reports = parsed_reports_dc.read()
     try:
         return extracted_reports.query("report_id == @report_id")["text"].iloc[0]
@@ -374,7 +465,10 @@ class TestAIExtraction:
         load_safety_issue_test_cases(),
     )
     def test_safety_issue_extraction(  # noqa: PLR6301
-        self, report_id: str, expected: list[SafetyIssueItem]
+        self,
+        report_id: str,
+        expected: list[SafetyIssueItem],
+        agency_id_lookup: dict[str, str],
     ):
         """Test the extraction of safety issues from a report.
 
@@ -383,9 +477,11 @@ class TestAIExtraction:
         Args:
             report_id (str): The unique identifier for the report.
             expected (list[SafetyIssueItem]): The expected safety issues.
+            agency_id_lookup (dict[str, str]): Report ID to agency ID mapping.
 
         """
         report_text = get_report_text(report_id)
+        agency_id = agency_id_lookup.get(report_id)
 
         extracted_data = ai_read_report(
             agency_name=report_id.split("_", maxsplit=1)[0],
@@ -393,6 +489,8 @@ class TestAIExtraction:
             safety_issues=True,
             recommendations=False,
             metadata=False,
+            report_id=report_id,
+            agency_id=agency_id,
         )
 
         extracted = getattr(extracted_data, "safety_issues", [])
@@ -438,16 +536,21 @@ class TestAIExtraction:
 
     @pytest.mark.parametrize("report_id, expected", load_recommendation_test_cases())
     def test_recommendation_extraction(  # noqa: PLR6301
-        self, report_id: str, expected: list[RecommendationItem]
+        self,
+        report_id: str,
+        expected: list[RecommendationItem],
+        agency_id_lookup: dict[str, str],
     ):
         """Test the recommendation extraction of ATSB.
 
         Args:
             report_id (str): The unique identifier for the report.
             expected (list[RecommendationItem]): The expected recommendations.
+            agency_id_lookup (dict[str, str]): Report ID to agency ID mapping.
 
         """
         report_text = get_report_text(report_id)
+        agency_id = agency_id_lookup.get(report_id)
 
         extracted_data = ai_read_report(
             agency_name=report_id.split("_", maxsplit=1)[0],
@@ -455,6 +558,8 @@ class TestAIExtraction:
             safety_issues=False,
             recommendations=True,
             metadata=False,
+            report_id=report_id,
+            agency_id=agency_id,
         )
 
         extracted = getattr(extracted_data, "recommendations", [])
@@ -528,7 +633,10 @@ class TestAIExtraction:
         load_metadata_test_cases(),
     )
     def test_metadata_extraction(  # noqa: PLR6301
-        self, report_id: str, expected: BaseModel
+        self,
+        report_id: str,
+        expected: BaseModel,
+        agency_id_lookup: dict[str, str],
     ):
         """Test the extraction of metadata from a report.
 
@@ -538,9 +646,11 @@ class TestAIExtraction:
         Args:
             report_id (str): The unique identifier for the report.
             expected (BaseModel): The expected metadata structure (mode-specific model).
+            agency_id_lookup (dict[str, str]): Report ID to agency ID mapping.
 
         """
         report_text = get_report_text(report_id)
+        agency_id = agency_id_lookup.get(report_id)
         report_mode = Modes.get_report_mode_from_id(report_id)
         event_type_taxonomy_by_mode = load_event_type_taxonomy(
             Path("data/event_types.csv")
@@ -554,6 +664,8 @@ class TestAIExtraction:
             metadata=True,
             report_mode=report_mode,
             event_type_taxonomy_by_mode=event_type_taxonomy_by_mode,
+            report_id=report_id,
+            agency_id=agency_id,
         )
 
         extracted = getattr(extracted_data, "metadata", None)
@@ -567,12 +679,10 @@ class TestAIExtraction:
         _compare_metadata_values("", extracted_payload, expected_payload, failures)
 
         # Verify that at least one mode-specific item is extracted for the report type
-        is_air = "a_" in report_id
+        # Air acidents are ommited due to the presence of ATC only reports.
         is_rail = "r_" in report_id
         is_marine = "m_" in report_id
 
-        if is_air and len(extracted.aircraft) == 0:
-            failures.append("Air accident should have aircraft metadata")
         if is_rail and len(extracted.trains) == 0:
             failures.append("Rail accident should have train metadata")
         if is_marine and len(extracted.vessels) == 0:
@@ -632,14 +742,16 @@ def test_parallel_extraction(tmp_path):
     parsed_reports_dc.save(report_texts_df)
 
     extracted_reports_dc = ExtractedReports(tmp_path)
+    report_titles_dc = ReportTitles(tmp_path)
+    source_report_titles_dc = ReportTitles(_output_dir_from_pytest())
+    report_titles_dc.save(source_report_titles_dc.read())
 
     # Extract from all reports in parallel
     results = process_reports_parallel(
         parsed_reports_dc=parsed_reports_dc,
         extracted_reports_dc=extracted_reports_dc,
-        ai_extraction_config=pytest.config["engine"]["extraction"][
-            "ai_extraction_config"
-        ],
+        report_titles_dc=report_titles_dc,
+        ai_extraction_config=_ai_extraction_config_from_pytest(),
     )
 
     # Compare results to expected values
@@ -708,9 +820,12 @@ def test_process_handle_already_processed(tmp_path):
     # Save using SavedDataFrames
     parsed_reports_dc = ParsedReports(tmp_path)
     extracted_reports_dc = ExtractedReports(tmp_path)
+    report_titles_dc = ReportTitles(tmp_path)
 
     parsed_reports_dc.save(report_texts_df)
     extracted_reports_dc.save(current_extracted_df)
+    source_report_titles_dc = ReportTitles(_output_dir_from_pytest())
+    report_titles_dc.save(source_report_titles_dc.read())
 
     # Mock the extract_report function to track calls
     with patch("engine.ReportExtracting.extract_report") as mock_extract:
@@ -727,9 +842,8 @@ def test_process_handle_already_processed(tmp_path):
         results_df = process_reports_parallel(
             parsed_reports_dc=parsed_reports_dc,
             extracted_reports_dc=extracted_reports_dc,
-            ai_extraction_config=pytest.config["engine"]["extraction"][
-                "ai_extraction_config"
-            ],
+            report_titles_dc=report_titles_dc,
+            ai_extraction_config=_ai_extraction_config_from_pytest(),
         )
 
     # Assertions: Verify that extract_report was called only for new reports

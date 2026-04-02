@@ -22,7 +22,7 @@ Powerplant / Propulsion,aviation,"Event involving engine or propulsion system pe
 Systems,aviation,"Failure or malfunction of aircraft onboard systems (electrical, hydraulic, pneumatic, avionics, etc.)."
 Aircraft separation,aviation,Loss or reduction of required separation between aircraft in flight or on maneuvering areas.
 Airspace infringement,aviation,Unauthorized or incorrect entry into controlled/restricted/prohibited airspace.
-ANSP operational error,aviation,"Error by air navigation service personnel (i.e ATC) affecting traffic management  clearances."
+ANSP operational error,aviation,"Error by air navigation service personnel (i.e ATC) affecting traffic management, loss of separation or clearances."
 Operational non-compliance,aviation,"Breach of operational procedures, rules, SOPs, or approved limitations."
 Breakdown of co-ordination,aviation,"Failure of coordination between flight crew, ATC units, operators, or other parties."
 Other Airspace,aviation,Airspace-related occurrence not captured by the other specific airspace categories.
@@ -51,7 +51,7 @@ Communications,aviation,"Communication failure, misunderstanding, or loss affect
 Crew and Cabin Safety,aviation,"Occurrence involving crew/cabin safety procedures, injury risk, or cabin operations."
 "Fire, fumes & smoke",aviation,"Presence of fire, smoke, or fumes in or around the aircraft impacting safety."
 Flight preparation / Navigation,aviation,Pre-flight planning or navigation execution issue contributing to the event.
-Fuel related,aviation,"Fuel quantity, quality, management, contamination, or supply issue affecting operations."
+Fuel related,aviation,"Fuel quantity, quality, management, contamination, or supply issue affecting operations. Fuel starvation which cause other events (such as dithcings, forced landings, etc.) should be included in their respective categories."
 Ground operations,aviation,"Occurrence during taxi, pushback, towing, ramp, or apron activities."
 Ground proximity alerts / warnings,aviation,Triggered terrain/obstacle proximity alerts or warnings indicating reduced terrain clearance margin.
 Miscellaneous,aviation,Aviation occurrence not fitting any other listed category.
