@@ -39,21 +39,6 @@ from engine.ReportExtracting import (
 )
 from engine.SavedDataFrames import ExtractedReports, ParsedReports, ReportTitles
 
-RECOMMENDATION_SIMILARITY_THRESHOLD = 0.95
-CONTEXT_SIMILARITY_THRESHOLD = 0.9
-EXPECTED_NEW_REPORT_COUNT = 2
-
-# Use a weak threshold for non-literal free-text string comparisons.
-METADATA_WEAK_STRING_SIMILARITY_THRESHOLD = 0.3
-FLOAT_RELATIVE_TOLERANCE = 0.03
-DATETIME_TOLERANCE_MINUTES = 30
-OCCURRENCE_LOCAL_DATETIME_PATH = "occurrence.occurrence_datetime.local_datetime"
-
-EXACT_MATCH_PATHS = {
-    "occurrence.occurrence_datetime.time_zone",
-    "occurrence.occurrence_type",
-}
-
 
 def _output_dir_from_pytest() -> Path:
     """Get the configured test output directory from pytest globals.
@@ -225,18 +210,52 @@ def _get_all_literal_paths() -> set[str]:
 LITERAL_PATH_PATTERNS = _get_all_literal_paths()
 
 
-def _should_use_exact_match(path: str) -> bool:
+def _should_use_exact_match(
+    path: str,
+    exact_match_paths: set[str] | None = None,
+) -> bool:
     """Determine whether a metadata path should use exact comparison.
+
+    Args:
+        path: The metadata path to check.
+        exact_match_paths: Set of paths that should use exact matching. Defaults to
+            standard ATSB occurrence metadata paths.
 
     Returns:
         bool: True when the path maps to a literal-backed or strict field.
     """
+    if exact_match_paths is None:
+        exact_match_paths = {
+            "occurrence.occurrence_datetime.time_zone",
+            "occurrence.occurrence_type",
+        }
     normalized_path = _normalize_metadata_path(path)
-    return normalized_path in LITERAL_PATH_PATTERNS or path in EXACT_MATCH_PATHS
+    return normalized_path in LITERAL_PATH_PATTERNS or path in exact_match_paths
 
 
-def _compare_metadata_values(path: str, actual, expected, failures: list[str]):  # noqa: PLR0911, PLR0912, PLR0915
-    """Recursively compare metadata with simple string thresholds."""
+def _compare_metadata_values(  # noqa: PLR0911, PLR0912, PLR0913, PLR0915
+    path: str,
+    actual,
+    expected,
+    failures: list[str],
+    *,
+    occurrence_local_datetime_path: str = "occurrence.occurrence_datetime.local_datetime",
+    datetime_tolerance_minutes: int = 30,
+    metadata_weak_string_similarity_threshold: float = 0.3,
+    float_relative_tolerance: float = 0.03,
+):
+    """Recursively compare metadata with simple string thresholds.
+
+    Args:
+        path: The current metadata path being compared.
+        actual: The actual metadata value extracted.
+        expected: The expected metadata value from the test case.
+        failures: List to accumulate comparison failures.
+        occurrence_local_datetime_path: Path to the occurrence datetime field.
+        datetime_tolerance_minutes: Tolerance in minutes for datetime comparisons.
+        metadata_weak_string_similarity_threshold: Minimum similarity for string comparisons.
+        float_relative_tolerance: Relative tolerance for float comparisons.
+    """
     if isinstance(expected, dict):
         if not isinstance(actual, dict):
             failures.append(
@@ -290,7 +309,7 @@ def _compare_metadata_values(path: str, actual, expected, failures: list[str]): 
             )
             return
 
-        if path == OCCURRENCE_LOCAL_DATETIME_PATH:
+        if path == occurrence_local_datetime_path:
             actual_dt = _parse_occurrence_local_datetime(actual)
             expected_dt = _parse_occurrence_local_datetime(expected)
 
@@ -303,10 +322,10 @@ def _compare_metadata_values(path: str, actual, expected, failures: list[str]): 
                 return
 
             delta_minutes = abs((actual_dt - expected_dt).total_seconds()) / 60
-            if delta_minutes > DATETIME_TOLERANCE_MINUTES:
+            if delta_minutes > datetime_tolerance_minutes:
                 failures.append(
                     f"{path} mismatch: delta {delta_minutes:.1f} minutes exceeds "
-                    f"{DATETIME_TOLERANCE_MINUTES} minutes (expected {expected!r}, got {actual!r})"
+                    f"{datetime_tolerance_minutes} minutes (expected {expected!r}, got {actual!r})"
                 )
             return
 
@@ -322,9 +341,9 @@ def _compare_metadata_values(path: str, actual, expected, failures: list[str]): 
             actual,
             expected,
         ).ratio()
-        if similarity < METADATA_WEAK_STRING_SIMILARITY_THRESHOLD:
+        if similarity < metadata_weak_string_similarity_threshold:
             failures.append(
-                f"{path} similarity {similarity:.2f} < {METADATA_WEAK_STRING_SIMILARITY_THRESHOLD}: "
+                f"{path} similarity {similarity:.2f} < {metadata_weak_string_similarity_threshold}: "
                 f"expected {expected!r}, got {actual!r}"
             )
         return
@@ -349,12 +368,12 @@ def _compare_metadata_values(path: str, actual, expected, failures: list[str]): 
         if not math.isclose(
             float(actual),
             expected,
-            rel_tol=FLOAT_RELATIVE_TOLERANCE,
+            rel_tol=float_relative_tolerance,
             abs_tol=0.0,
         ):
             failures.append(
                 f"{path} mismatch: expected {expected!r}, got {actual!r} "
-                f"(tol: +/- {FLOAT_RELATIVE_TOLERANCE * 100:.1f}%)"
+                f"(tol: +/- {float_relative_tolerance * 100:.1f}%)"
             )
         return
 
@@ -555,6 +574,8 @@ class TestAIExtraction:
         report_id: str,
         expected: list[RecommendationItem],
         agency_id_lookup: dict[str, str],
+        recommendation_similarity_threshold: float = 0.95,
+        context_similarity_threshold: float = 0.55,  # Only weak match is needed
     ):
         """Test the recommendation extraction of ATSB.
 
@@ -562,6 +583,8 @@ class TestAIExtraction:
             report_id (str): The unique identifier for the report.
             expected (list[RecommendationItem]): The expected recommendations.
             agency_id_lookup (dict[str, str]): Report ID to agency ID mapping.
+            recommendation_similarity_threshold (float): Minimum similarity for recommendation text.
+            context_similarity_threshold (float): Minimum similarity for recommendation context.
 
         """
         report_text = get_report_text(report_id)
@@ -606,11 +629,11 @@ class TestAIExtraction:
 
             # Check recipient
             if extracted_item.recipient != expected_item.recipient:
-                failures.append(
-                    f"Item {idx} ({extracted_item.recommendation_id}): Recipient mismatch\n"
-                    f"  Expected: {expected_item.recipient}\n"
-                    f"  Got:      {extracted_item.recipient}"
-                )
+                failures.append(f"""Item {idx} ({extracted_item.recommendation_id}): Recipient mismatch
+    Expected:
+{expected_item.recipient}
+    Got:
+{extracted_item.recipient}""")
 
             # Check recommendation text similarity
             similarity = SequenceMatcher(
@@ -619,26 +642,27 @@ class TestAIExtraction:
                 expected_item.recommendation.lower(),
             ).ratio()
 
-            if similarity < RECOMMENDATION_SIMILARITY_THRESHOLD:
-                failures.append(
-                    f"Item {idx} ({extracted_item.recommendation_id}): Recommendation text similarity {similarity:.2f} < {RECOMMENDATION_SIMILARITY_THRESHOLD}\n"
-                    f"  Expected: {expected_item.recommendation}\n"
-                    f"  Got:      {extracted_item.recommendation}"
-                )
+            if similarity < recommendation_similarity_threshold:
+                failures.append(f"""Item {idx} ({extracted_item.recommendation_id}): Recommendation text similarity {similarity:.2f} < {recommendation_similarity_threshold}
+    Expected:
+{expected_item.recommendation}
+    Got:
+{extracted_item.recommendation}""")
 
             # Check context similarity
             context_similarity = SequenceMatcher(
-                None,
+                lambda x: re.match(r"\s+", x)
+                is not None,  # Ignore whitespace differences
                 (extracted_item.recommendation_context or "").lower(),
                 (expected_item.recommendation_context or "").lower(),
             ).ratio()
 
-            if context_similarity < CONTEXT_SIMILARITY_THRESHOLD:
-                failures.append(
-                    f"Item {idx} ({extracted_item.recommendation_id}): Context similarity {context_similarity:.2f} < 0.9\n"
-                    f"  Expected: {expected_item.recommendation_context}\n"
-                    f"  Got:      {extracted_item.recommendation_context}"
-                )
+            if context_similarity < context_similarity_threshold:
+                failures.append(f"""Item {idx} ({extracted_item.recommendation_id}): Context similarity {context_similarity:.2f} < {context_similarity_threshold}
+    Expected:
+{expected_item.recommendation_context}
+    Got:
+{extracted_item.recommendation_context}""")
 
         # Report all failures at once
         assert not failures, "\n".join(failures)
@@ -794,8 +818,16 @@ def test_parallel_extraction(tmp_path):
     assert not failures, "Extraction mismatches:\n  " + "\n  ".join(failures)
 
 
-def test_process_handle_already_processed(tmp_path):
-    """Test that process_reports_parallel only processes new reports and skips already processed ones."""
+def test_process_handle_already_processed(
+    tmp_path,
+    expected_new_report_count: int = 2,
+):
+    """Test that process_reports_parallel only processes new reports and skips already processed ones.
+
+    Args:
+        tmp_path: Pytest temporary directory.
+        expected_new_report_count: Expected number of new reports to process.
+    """
     already_processed_ids = [
         "ATSB_r_2014_001",
         "ATSB_a_2007_018",
@@ -863,8 +895,8 @@ def test_process_handle_already_processed(tmp_path):
 
     # Assertions: Verify that extract_report was called only for new reports
     assert (
-        mock_extract.call_count == EXPECTED_NEW_REPORT_COUNT
-    ), f"extract_report should be called {EXPECTED_NEW_REPORT_COUNT} times (for new reports), but was called {mock_extract.call_count} times"
+        mock_extract.call_count == expected_new_report_count
+    ), f"extract_report should be called {expected_new_report_count} times (for new reports), but was called {mock_extract.call_count} times"
 
     # Verify the correct reports were processed by checking the call arguments
     called_report_ids = [

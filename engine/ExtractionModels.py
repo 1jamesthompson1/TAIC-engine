@@ -41,11 +41,11 @@ class RecommendationItem(BaseModel):
     )
     recipient: str | None = Field(
         default=None,
-        description="The recipient of the recommendation. I.e who the recommendation was addressed to.",
+        description="The recipient of the recommendation. I.e who the recommendation was addressed to. Avoid using acronyms or abbreviations if the full name of the recipient is given in the report. If no recipient is given then return None.",
     )
     recommendation_context: str | None = Field(
         default=None,
-        description="The context or background information related to the recommendation, if available. This is not always present. It is normally a paragraph or two that states the reasoning behind the recommendation (typically can end with something along the lines of 'therefore we recommend...'). In some reports recommendation are made only if the safety actions were not sufficient. Then for these situations the context should bethe safety actions taken and why the investigation agency deemed these actions insufficient (i.e the reasoning behind the recommendation). If recommendation context is not present in the recommendaion section then it should be None (do not look for context in other sections of the report, only the section that is talking abuot safety issues/actions and recommendations).",
+        description="The context or background information related to the recommendation, if available. This should include the safety issue or issues that the recommendation is addressing, the entire safety action/response of the recommendation recipient and the final justification from the investiagtion agency as to why their safety action was inadequate. For each of these three elements only include what is actually present in the report. If no context is given in the report then return None. It is important that whatever is copied is copied verbatim and not invented or summarised although removing markdown formatting and cleaing up PDF text extraction artefacts is acceptable. Information on the current status of the recommendation is not to be included.",
     )
     made: str | None = Field(
         default=None,
