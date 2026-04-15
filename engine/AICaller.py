@@ -6,6 +6,7 @@ including cost tracking, token management, and support for structured outputs.
 
 import os
 import warnings
+from dataclasses import dataclass
 from threading import Lock
 
 import openai
@@ -101,12 +102,46 @@ _api_costs = {
     "by_model": {},
 }
 
+
+@dataclass(frozen=True)
+class ModelDefinition:
+    """Definition for a model managed by AICaller."""
+
+    api_model: str
+    limit: int
+    pricing: dict[str, float]
+
+
+MODEL_REGISTRY: dict[str, ModelDefinition] = {
+    "gpt-4": ModelDefinition(
+        api_model="gpt-4o",
+        limit=128_000,
+        pricing={"input": 5.00, "cached_input": 0.50, "output": 15.00},
+    ),
+    "gpt-5-mini": ModelDefinition(
+        api_model="gpt-5-mini",
+        limit=400_000,
+        pricing={"input": 0.25, "cached_input": 0.025, "output": 2.00},
+    ),
+    # Intermittently has problems with not generating as blocked by "I'm sorry I can't respond to that..." error. Otherwise cheap and high reasoning.
+    "gpt-5.4-mini": ModelDefinition(
+        api_model="gpt-5.4-mini",
+        limit=400_000,
+        pricing={"input": 0.75, "cached_input": 0.075, "output": 4.50},
+    ),
+    # Works well yet costs more. Limited reasoning
+    "gpt-5.1-chat": ModelDefinition(
+        api_model="gpt-5.1-chat",
+        limit=400_000,
+        pricing={"input": 1.25, "cached_input": 0.125, "output": 10.00},
+    ),
+}
+
 # Pricing per 1M tokens in USD
 _PRICING = {
-    "gpt-5.4-mini": {"input": 0.75, "cached_input": 0.075, "output": 4.50},
-    "gpt-5-mini": {"input": 0.25, "cached_input": 0.025, "output": 2.00},
-    "gpt-4o": {"input": 5.00, "cached_input": 0.50, "output": 15.00},
+    definition.api_model: definition.pricing for definition in MODEL_REGISTRY.values()
 }
+
 
 # For OpenAI, prioritize Azure OpenAI if credentials are available, otherwise use standard OpenAI
 azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
@@ -456,9 +491,8 @@ class AICaller:
     def __init__(self):
         """Initialize the AICaller with available models."""
         self.models = {
-            "gpt-4": OpenAICaller(openai_client, "gpt-4o", 128_000),
-            "gpt-5-mini": OpenAICaller(openai_client, "gpt-5-mini", 400_000),
-            "gpt-5.4-mini": OpenAICaller(openai_client, "gpt-5.4-mini", 400_000),
+            name: OpenAICaller(openai_client, definition.api_model, definition.limit)
+            for name, definition in MODEL_REGISTRY.items()
         }
 
     def query(

@@ -45,7 +45,7 @@ class PromptBuilder:
         Returns:
             The system prompt string.
         """
-        base = """You are a highly skilled AI specialized in extracting structured information from safety investigation reports. Your task is to read the provided report text and extract specific information based on the given instructions. These safety investigation reports are all published publically by government agencies after they have completed a no-blame investigation into a transport accident.
+        base = """You are a highly skilled AI specialized in extracting structured information from safety investigation reports. Your task is to read the provided report text and extract specific information based on the given instructions. These safety investigation reports are all published publically by government agencies after they have completed a no-blame investigation into a transport accident. The goal of these investigations are to identify problems that reduce safety (safety issues) and to make recommendations to address those safety issues.Your goal is to help extract the data from these reports in a structured way to help safety researchers and practitioners learn from past accidents and improve safety in the future.
 
 There are techincal definitions you should understand:
 Safety factor - Any (non-trivial) events or conditions, which increases safety risk. If they occurred in the future, these would increase the likelihood of an occurrence, and/or the severity of any adverse consequences associated with the occurrence.
@@ -85,12 +85,12 @@ Note that some reports will actually have text that is from a short report bulle
         """
         mode_label = report_mode.value if report_mode else "unknown"
         parts = [
-            f"You are processing report ID: {self.report_id or 'Unknown'} which is a report of mode {mode_label}\n"
-            f"Agency occurrence ID: {self.agency_id or 'Unknown'}\n"
-            f"From investigation agency: {self.agency_name}\n\n"
-            f"You are provided with the following report text:\n"
-            f"'''\n{report_text}\n'''\n\n"
-            f"Based on the provided report text, please extract the following information:\n"
+            f"""You are processing report ID: {self.report_id or 'Unknown'}
+which is a report of mode {mode_label}
+Agency occurrence ID: {self.agency_id or 'Unknown'}
+From investigation agency: {self.agency_name}
+Based on the provided report text, please extract the following information:
+"""
         ]
 
         if self._safety_issues_enabled:
@@ -101,6 +101,14 @@ Note that some reports will actually have text that is from a short report bulle
 
         if self._metadata_enabled:
             parts.append(self._metadata_prompt(event_type_taxonomy))
+
+        parts.append(
+            f"""You are provided with the following report text:\n"
+'''
+{report_text}
+'''
+"""
+        )
 
         return "\n\n".join(parts)
 
@@ -117,7 +125,7 @@ An exact safety issue will start with something like 'safety issue: ...' and wil
         elif self.agency_name == "TSB":
             prompt += """
 
-An inferred safety issue will generally be found in the "findings" section of the report. You are to treat all "findings as to risk" as 'inferred' safety issues, this is due to a slight terminomology difference between TSB and other agencies. Exact Safety issues are not generally stated in TSB reports, the exception being when there is a format like "Safety issue: ..."."""
+An inferred safety issue will generally be found in the "findings" section of the report. You are to treat all "findings as to risk" as 'inferred' safety issues, this is due to a slight terminomology difference between TSB and other agencies. Exact Safety issues are not generally stated in TSB reports, the exception being when there is a format like "Safety issue: ...". There are also "Findings as to causes and contributing factors" which are not safety issues, however in some exceptional cases these may be safety issues and you are to use your judgement. """
 
         return prompt
 

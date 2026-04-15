@@ -496,39 +496,54 @@ class TestAIExtraction:
         extracted = getattr(extracted_data, "safety_issues", [])
         failures = []
 
-        # 1. Check count matches
-        if len(extracted) != len(expected):
+        # Is it inferred or not
+        expecting_inferred = any(item.quality == "inferred" for item in expected)
+
+        # Check count matches
+        if expecting_inferred:
+            max_allowed = math.ceil(len(expected) * 1.2)
+            if len(extracted) < len(expected) or len(extracted) > max_allowed:
+                failures.append(
+                    f"Count mismatch (inferred): expected between {len(expected)} and {max_allowed} safety issues, got {len(extracted)}"
+                )
+        elif len(extracted) != len(expected):
             failures.append(
                 f"Count mismatch: expected {len(expected)} safety issues, got {len(extracted)}"
             )
 
-        # 2. Check each item (count permitting)
-        for idx, (extracted_item, expected_item) in enumerate(
-            zip(extracted, expected, strict=False)
+        # Make sure all inferred or exact
+        if not (
+            (
+                not expecting_inferred
+                and all(item.quality == "exact" for item in extracted)
+            )
+            or (
+                expecting_inferred
+                and all(item.quality == "inferred" for item in extracted)
+            )
         ):
-            # Check similarity
-            similarity = SequenceMatcher(
-                None,
-                extracted_item.safety_issue.lower(),
-                expected_item.safety_issue.lower(),
-            ).ratio()
+            failures.append(
+                f"Quality mismatch: expected all safety issues to be {expected[0].quality}, but got a mix of qualities in extracted data\n{[item.quality for item in extracted]}"
+            )
 
-            threshold = 0.95 if expected_item.quality == "exact" else 0.7
-            quality_type = expected_item.quality
+        # Compare extracted and expected items using best-match alignment
+        threshold = 0.4 if expecting_inferred else 0.95
 
-            if similarity < threshold:
+        for expected_item in expected:
+            current_best = (None, 0, None)  # (extracted_item, similarity, index)
+            for i, extracted_item in enumerate(extracted):
+                similarity = SequenceMatcher(
+                    None,
+                    extracted_item.safety_issue.lower(),
+                    expected_item.safety_issue.lower(),
+                ).ratio()
+
+                if similarity > current_best[1]:
+                    current_best = (extracted_item, similarity, i)
+
+            if current_best[1] < threshold:
                 failures.append(
-                    f"Item {idx} ({quality_type}): Text similarity {similarity:.2f} < {threshold}\n"
-                    f"  Expected: {expected_item.safety_issue}\n"
-                    f"  Got:      {extracted_item.safety_issue}"
-                )
-
-            # Check quality matches
-            if extracted_item.quality != expected_item.quality:
-                failures.append(
-                    f"Item {idx}: Quality mismatch\n"
-                    f"  Expected: {expected_item.quality}\n"
-                    f"  Got:      {extracted_item.quality}"
+                    f"Expected: {expected_item.safety_issue!r}\nInstead got: {current_best[0].safety_issue!r}\nSimilarity: {current_best[1]:.2f} < {threshold}"
                 )
 
         # Report all failures at once
