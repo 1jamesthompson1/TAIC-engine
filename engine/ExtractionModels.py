@@ -121,6 +121,10 @@ class OccurrenceMetadata(BaseModel):
         description="Brief summary of damage to equipment, property, or environment from the report text. The summary should include a few word overview of the damage (e.g. 'lost', 'destroyed', 'substantial damage', 'minor damage' ) followed by a colon and then details separated by semicolons. For example, 'substantial damage: left wing damaged; engine detached.'. If there are multiple items of damage, separate them with semicolons. The overall description should be concise and informative and optimised so that future retrieval is efficient (e.g., using keywords or tags). If there is no damage, use literal 'nil'.",
         pattern=r"((.+):(.+;?)\.?)|(nil)",
     )
+    who_may_benefit: str | None = Field(
+        default=None,
+        description="Some reports include a section, sentence or phrase that explicitly states who may benefit from the lessons of the report. If this is explicitly stated in the report then include it here verbatim, if not then use None. This should be a text field and not a list of categories (i.e do not attempt to categorise this information into predefined buckets, just copy the text as is from the report if it is present).",
+    )
 
 
 class PilotMetadata(BaseModel):

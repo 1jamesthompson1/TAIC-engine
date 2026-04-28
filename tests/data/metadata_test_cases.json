@@ -17,7 +17,8 @@
         "total_persons_involved": 6,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "nil"
+        "damage_description": "nil",
+        "who_may_benefit": "Aerodrome operators, aircraft owners and all pilots may benefit from reading this report."
       },
       "aircraft": [
         {
@@ -99,7 +100,8 @@
         "total_persons_involved": 8,
         "fatalities": 0,
         "injuries": 1,
-        "damage_description": "substantial damage: propellers both damaged; fuselage panels and skins penetrated; engine mounts fractured; nacelles distorted."
+        "damage_description": "substantial damage: propellers both damaged; fuselage panels and skins penetrated; engine mounts fractured; nacelles distorted.",
+        "who_may_benefit": null
       },
       "aircraft": [
         {
@@ -156,7 +158,8 @@
         "total_persons_involved": 5,
         "fatalities": 0,
         "injuries": 5,
-        "damage_description": "substantial damage: nose bulkhead distorted; nose landing gear displaced rearward."
+        "damage_description": "substantial damage: nose bulkhead distorted; nose landing gear displaced rearward.",
+        "who_may_benefit": null
       },
       "aircraft": [
         {
@@ -213,7 +216,8 @@
         "total_persons_involved": 5,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "nil"
+        "damage_description": "nil",
+        "who_may_benefit": null
       },
       "aircraft": []
     }
@@ -236,7 +240,8 @@
         "total_persons_involved": 81,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "nil"
+        "damage_description": "nil",
+        "who_may_benefit": null
       },
       "aircraft": [
         {
@@ -286,14 +291,15 @@
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "Above and near to the township of Brynderwyn latitude: 36° 5'54.60\"S longitude: 174°29'42.22\"E",
+          "description": "Above and near to the township of Brynderwyn latitude: 36\u00b0 5'54.60\"S longitude: 174\u00b029'42.22\"E",
           "standardized_location": "En route, Brynderwyn, Northland, New Zealand"
         },
         "occurrence_type": "Aircraft separation",
         "total_persons_involved": 42,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "nil"
+        "damage_description": "nil",
+        "who_may_benefit": "All aviation participants may benefit from the findings and recommendations in this report."
       },
       "aircraft": [
         {
@@ -383,10 +389,10 @@
         "total_persons_involved": 4,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "nil"
+        "damage_description": "nil",
+        "who_may_benefit": null
       },
-      "aircraft": [
-      ]
+      "aircraft": []
     }
   },
   {
@@ -407,7 +413,8 @@
         "total_persons_involved": 1,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "serious damage: helicopter rolled over on landing."
+        "damage_description": "serious damage: helicopter rolled over on landing.",
+        "who_may_benefit": null
       },
       "aircraft": [
         {
@@ -456,7 +463,8 @@
         "total_persons_involved": 3,
         "fatalities": 0,
         "injuries": 3,
-        "damage_description": "substantial damage: helicopter fuel exhaustion and collision with terrain."
+        "damage_description": "substantial damage: helicopter fuel exhaustion and collision with terrain.",
+        "who_may_benefit": null
       },
       "aircraft": [
         {
@@ -505,7 +513,8 @@
         "total_persons_involved": 3,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "nil"
+        "damage_description": "nil",
+        "who_may_benefit": null
       },
       "aircraft": [
         {
@@ -548,13 +557,14 @@
         },
         "location": {
           "description": "Goose Bay, New Zealand",
-          "standardized_location": "Goose Bay, Kaikōura, Canterbury, New Zealand"
+          "standardized_location": "Goose Bay, Kaik\u014dura, Canterbury, New Zealand"
         },
         "occurrence_type": "Capsizing/listing",
         "total_persons_involved": 11,
         "fatalities": 5,
         "injuries": 3,
-        "damage_description": "damage: hull damaged; machinery and electrical systems lost."
+        "damage_description": "damage: hull damaged; machinery and electrical systems lost.",
+        "who_may_benefit": "All mariners, maritime regulatory agencies, industry stakeholders, recreational boaters, lifejacket manufacturers and their consumers, and agencies and operators involved in search and rescue operations."
       },
       "vessels": [
         {
@@ -595,7 +605,8 @@
         "total_persons_involved": 24,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "minor damage: cracked cylinder liner in generator 2; generators and associated machinery required repair"
+        "damage_description": "minor damage: cracked cylinder liner in generator 2; generators and associated machinery required repair",
+        "who_may_benefit": "All ship owners and operators (including ship managers), port state [8], and flag state [9] regulators, classification societies, insurance providers and deck and engineering officers may benefit from the findings of this inquiry."
       },
       "vessels": [
         {
@@ -636,7 +647,8 @@
         "total_persons_involved": 8,
         "fatalities": 1,
         "injuries": 0,
-        "damage_description": "substantial damage: Adonis capsized, later sank and was eventually scrapped; Wolli's port bow push-plate was damaged."
+        "damage_description": "substantial damage: Adonis capsized, later sank and was eventually scrapped; Wolli's port bow push-plate was damaged.",
+        "who_may_benefit": null
       },
       "vessels": [
         {
@@ -711,7 +723,8 @@
         "total_persons_involved": 25,
         "fatalities": 0,
         "injuries": 1,
-        "damage_description": "damage: 50 containers lost overboard; 63 containers damaged and remaining on board; vessel structure damaged."
+        "damage_description": "damage: 50 containers lost overboard; 63 containers damaged and remaining on board; vessel structure damaged.",
+        "who_may_benefit": null
       },
       "vessels": [
         {
@@ -752,7 +765,8 @@
         "total_persons_involved": 53,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "minor damage: grounded on uncharted shoals on two occasions; hull minor paint loss and shell plate deformation after first grounding."
+        "damage_description": "minor damage: grounded on uncharted shoals on two occasions; hull minor paint loss and shell plate deformation after first grounding.",
+        "who_may_benefit": null
       },
       "vessels": [
         {
@@ -786,14 +800,15 @@
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "Gulf of St. Lawrence, 20 nautical miles west of Chéticamp, Nova Scotia",
-          "standardized_location": "Gulf of St. Lawrence, Chéticamp, Nova Scotia, Canada"
+          "description": "Gulf of St. Lawrence, 20 nautical miles west of Ch\u00e9ticamp, Nova Scotia",
+          "standardized_location": "Gulf of St. Lawrence, Ch\u00e9ticamp, Nova Scotia, Canada"
         },
         "occurrence_type": "Capsizing/listing",
         "total_persons_involved": 5,
         "fatalities": 2,
         "injuries": 0,
-        "damage_description": "capsized: vessel capsized and sank."
+        "damage_description": "capsized: vessel capsized and sank.",
+        "who_may_benefit": null
       },
       "vessels": [
         {
@@ -834,7 +849,8 @@
         "total_persons_involved": 22,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "fire damage: 15 containers fire damaged; no structural damage to vessel."
+        "damage_description": "fire damage: 15 containers fire damaged; no structural damage to vessel.",
+        "who_may_benefit": null
       },
       "vessels": [
         {
@@ -875,7 +891,8 @@
         "total_persons_involved": 1,
         "fatalities": 1,
         "injuries": 0,
-        "damage_description": "destroyed: aircraft destroyed by impact forces and severe post-crash fire."
+        "damage_description": "destroyed: aircraft destroyed by impact forces and severe post-crash fire.",
+        "who_may_benefit": null
       },
       "aircraft": [
         {
@@ -924,7 +941,8 @@
         "total_persons_involved": 2,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "derailment: 30 hopper cars derailed; 27 cars breached with potash release."
+        "damage_description": "derailment: 30 hopper cars derailed; 27 cars breached with potash release.",
+        "who_may_benefit": null
       },
       "trains": [
         {
@@ -958,7 +976,8 @@
         "total_persons_involved": 4,
         "fatalities": 1,
         "injuries": 1,
-        "damage_description": "damage: tank car derailed; five dangerous-goods tank cars damaged; truck tractor destroyed by impact and fire; track about 2060 feet damaged."
+        "damage_description": "damage: tank car derailed; five dangerous-goods tank cars damaged; truck tractor destroyed by impact and fire; track about 2060 feet damaged.",
+        "who_may_benefit": null
       },
       "trains": [
         {
@@ -992,7 +1011,8 @@
         "total_persons_involved": 3,
         "fatalities": 0,
         "injuries": 1,
-        "damage_description": "nil"
+        "damage_description": "nil",
+        "who_may_benefit": "Rail operators and operational staff involved in shunting activities may benefit from this report."
       },
       "trains": [
         {
@@ -1026,7 +1046,8 @@
         "total_persons_involved": 114,
         "fatalities": 1,
         "injuries": 0,
-        "damage_description": "moderate and extensive damage: locomotive front and cowcatcher damaged; diesel fuel tank punctured; truck driving unit destroyed; truck engine torn from mountings; semi-trailer skid plate and hydraulic hoses severely damaged."
+        "damage_description": "moderate and extensive damage: locomotive front and cowcatcher damaged; diesel fuel tank punctured; truck driving unit destroyed; truck engine torn from mountings; semi-trailer skid plate and hydraulic hoses severely damaged.",
+        "who_may_benefit": null
       },
       "trains": [
         {
@@ -1060,7 +1081,8 @@
         "total_persons_involved": 4,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "significant damage: tamper equipment significant damage."
+        "damage_description": "significant damage: tamper equipment significant damage.",
+        "who_may_benefit": "Organisations and anyone responsible for managing or working within a safety-critical environment may benefit from the findings and recommendations in this report."
       },
       "trains": [
         {
@@ -1094,7 +1116,8 @@
         "total_persons_involved": 1,
         "fatalities": 0,
         "injuries": 0,
-        "damage_description": "damage: Alexandra Bridge damaged; tipping trailer damaged; train no damage."
+        "damage_description": "damage: Alexandra Bridge damaged; tipping trailer damaged; train no damage.",
+        "who_may_benefit": null
       },
       "trains": [
         {
@@ -1128,7 +1151,8 @@
         "total_persons_involved": 111,
         "fatalities": 0,
         "injuries": 1,
-        "damage_description": "minor and substantial damage: locomotive minor damage; level crossing equipment minor damage; dual cab utility substantially damaged."
+        "damage_description": "minor and substantial damage: locomotive minor damage; level crossing equipment minor damage; dual cab utility substantially damaged.",
+        "who_may_benefit": null
       },
       "trains": [
         {
