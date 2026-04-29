@@ -5,11 +5,13 @@
     "expected": [
       {
         "safety_issue": "securing of vehicular cargo on car and rail decks",
-        "quality": "exact"
+        "quality": "exact",
+        "safety_issue_id": null
       },
       {
         "safety_issue": "securing of heavy items of equipment in passenger accessible areas",
-        "quality": "exact"
+        "quality": "exact",
+        "safety_issue_id": null
       }
     ]
   },
@@ -29,11 +31,13 @@
     "expected": [
       {
         "safety_issue": "If spin training is initiated from a height that does not provide a pilot a wide enough recovery margin, there is an increased risk of collision with terrain.",
-        "quality": "inferred"
+        "quality": "inferred",
+        "safety_issue_id": "Risk 1"
       },
       {
         "safety_issue": "If emergency locator transmitters are incorrectly installed and/or tested, they may not   function as designed, increasing the risk that search and rescue efforts are not timely.",
-        "quality": "inferred"
+        "quality": "inferred",
+        "safety_issue_id": "Risk 2"
       }
     ]
   },
@@ -43,7 +47,8 @@
     "expected": [
       {
         "safety_issue": "The current overhaul manual provides no guidance to assemblers on the maximum allowable assembly time following the tower shaft/bevel gear heating and cooling process to reduce the likelihood of producing surface damage (galling damage) to the components during assembly.",
-        "quality": "exact"
+        "quality": "exact",
+        "safety_issue_id": null
       }
     ]
   },
@@ -52,28 +57,34 @@
     "report_id": "ATSB_a_2000_157",
     "expected": [
       {
-        "safety_issue": "High‑power piston engine leaning practices during climb and cruise increased the risk of forming combustion chamber deposits that could cause preignition.",
-        "quality": "inferred"
+        "safety_issue": "High\u2011power piston engine leaning practices during climb and cruise increased the risk of forming combustion chamber deposits that could cause preignition.",
+        "quality": "inferred",
+        "safety_issue_id": null
       },
       {
-        "safety_issue": " Inadequate management of combustion chamber deposits (including lead oxybromides) reduced engine reliability across operators of high‑powered piston engines.",
-        "quality": "inferred"
+        "safety_issue": " Inadequate management of combustion chamber deposits (including lead oxybromides) reduced engine reliability across operators of high\u2011powered piston engines.",
+        "quality": "inferred",
+        "safety_issue_id": null
       },
       {
-        "safety_issue": "Lack of required life jackets or flotation devices on over‑water flights within 50 NM of land reduced passenger survival prospects during ditching.",
-        "quality": "inferred"
+        "safety_issue": "Lack of required life jackets or flotation devices on over\u2011water flights within 50 NM of land reduced passenger survival prospects during ditching.",
+        "quality": "inferred",
+        "safety_issue_id": null
       },
       {
-        "safety_issue": "Absence of upper‑body restraints for passenger seats reduced occupant survivability in impact conditions.",
-        "quality": "inferred"
+        "safety_issue": "Absence of upper\u2011body restraints for passenger seats reduced occupant survivability in impact conditions.",
+        "quality": "inferred",
+        "safety_issue_id": null
       },
       {
-        "safety_issue": "Under‑achievement of CASA surveillance activities limited the opportunity to detect operator‑level safety concerns.",
-        "quality": "inferred"
+        "safety_issue": "Under\u2011achievement of CASA surveillance activities limited the opportunity to detect operator\u2011level safety concerns.",
+        "quality": "inferred",
+        "safety_issue_id": null
       },
       {
         "safety_issue": "Inadequate national guidance material for ditching procedures reduced pilot preparedness for such emergencies.",
-        "quality": "inferred"
+        "quality": "inferred",
+        "safety_issue_id": null
       }
     ]
   },
@@ -83,15 +94,18 @@
     "expected": [
       {
         "safety_issue": "The standard of team resource management in the Hamilton ATC tower did not match good industry practice.",
-        "quality": "exact"
+        "quality": "exact",
+        "safety_issue_id": "SI 6.1"
       },
       {
         "safety_issue": "Changes in the size and shape of the Hamilton zone have shifted some VFR traffic congestion to prominent points outside the zone, and likely increased the risk of collision in those areas.",
-        "quality": "exact"
+        "quality": "exact",
+        "safety_issue_id": null
       },
       {
         "safety_issue": "Some aerodrome controllers are 'over-controlling' VFR traffic in and around the zone, which is unnecessarily congesting the radio frequencies and risks causing difficulties for inexperienced pilots and those for whom English is their second language.",
-        "quality": "exact"
+        "quality": "exact",
+        "safety_issue_id": "SI 6.3"
       }
     ]
   },
@@ -101,7 +115,8 @@
     "expected": [
       {
         "safety_issue": "The number of wagons loaded on the Aratere's outer tracks at the time of the accident exceeded the limits that would have put them in a position to be safely accommodated without presenting difficulty when coupling.",
-        "quality": "exact"
+        "quality": "exact",
+        "safety_issue_id": null
       }
     ]
   }

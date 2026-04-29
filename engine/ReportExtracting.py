@@ -165,7 +165,7 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
 
     try:
         response = ai_caller.query(
-            model="gpt-5.4-mini",
+            model="gpt-5.4-nano",
             reasoning="high",
             system=system_prompt,
             user=user_prompt,
@@ -178,15 +178,14 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
     return response
 
 
-def chunk_report_into_sections(report_text: str) -> dict[str, str]:
-    """Chunks the report into sections based on headings, with each chunk labeled by its starting page.
+def chunk_report_into_sections(report_text: str) -> list[dict[str, str]]:
+    """Chunks the report into sections based on headings and returns section dicts.
 
     Args:
         report_text (str): The full text of the report.
 
     Returns:
-        dict[str, str]: A dictionary mapping page numbers (as strings) to their corresponding chunk text.
-                       Keys are formatted as "page_X" where X is the page number.
+        list[dict[str, str]]: A list of section records, each with "page" and "text" keys.
 
     """
     page_regex = re.compile(r"<< Page (\d+|[xvi]+) >>")
@@ -203,7 +202,7 @@ def chunk_report_into_sections(report_text: str) -> dict[str, str]:
     )
     sections = reporter_splitter.split_text(report_text)
 
-    chunks_with_pages = {}
+    chunks_with_pages = []
     page_for_sections = []
     search_from = 0
 
@@ -232,7 +231,7 @@ def chunk_report_into_sections(report_text: str) -> dict[str, str]:
         page_counts[page] = page_counts.get(page, 0) + 1
         suffix = page_counts[page]
         page_key = f"page_{page}.{suffix}" if page_totals[page] > 1 else f"page_{page}"
-        chunks_with_pages[page_key] = section
+        chunks_with_pages.append({"section": page_key, "text": section})
 
     return chunks_with_pages
 
@@ -253,6 +252,10 @@ def extract_report(
     Returns:
         dict: Extracted fields with keys 'report_id', 'safety_issues',
               'recommendations', 'metadata', and 'sections'.
+
+    Raises:
+        ValueError: If extracted metadata appears invalid or incomplete such that
+            the report text is likely not properly scraped.
 
     """
     report_id = report_row["report_id"]
@@ -299,18 +302,40 @@ def extract_report(
     else:
         metadata = metadata or {}
 
+    # Make sure that atleat the accident type, location and date are simultanously non-None treat it as a failed metadata extraction and asume the report text is actually not scrapped properly.
+    required_metadata_fields = [
+        "occurrence_type",
+        "total_persons_involved",
+        "who_may_benefit",
+    ]
+    occurrence_metadata = metadata["occurrence"] if metadata else {}
+    if (
+        occurrence_metadata
+        and all(
+            field in occurrence_metadata and occurrence_metadata[field] is None
+            for field in required_metadata_fields
+        )
+        and occurrence_metadata.get("location", {}).get("standardised_location") is None
+    ):
+        logger.warning(
+            f"Metadata for report {report_id} is missing required fields or has None values. Treating as failed extraction. Extracted metadata: {occurrence_metadata}"
+        )
+        raise ValueError(  # noqa: TRY003
+            f"Report {report_id} has invalid metadata extraction which likely indicates the report text was not properly scraped. Metadata: {occurrence_metadata}"
+        )
+
     sections = chunk_report_into_sections(report_text)
 
     return {
         "report_id": report_id,
-        "safety_issues": safety_issues,
-        "recommendations": recommendations,
+        "safety_issues": safety_issues if len(safety_issues) > 0 else None,
+        "recommendations": recommendations if len(recommendations) > 0 else None,
         "metadata": metadata,
         "sections": sections,
     }
 
 
-def process_reports_parallel(  # noqa: PLR0913, PLR0917
+def process_reports_parallel(  # noqa: PLR0912, PLR0913, PLR0917
     parsed_reports_dc: ParsedReports,
     extracted_reports_dc: ExtractedReports,
     ai_extraction_config: dict,
@@ -332,7 +357,7 @@ def process_reports_parallel(  # noqa: PLR0913, PLR0917
             (safety_issues, recommendations, metadata) to perform for each agency.
         report_titles_dc: Optional ReportTitles data container. When provided,
             this function reads it and merges 'agency_id' into parsed reports by
-            'report_id'.
+            'report_id'. Used for disambiguating multi-occurrence bulletins (for example, ATSB) during AI extraction.
         event_types_csv_path: Path to taxonomy CSV used for occurrence_type values.
         max_workers: Maximum number of parallel workers. Adjust
             based on your API rate limits and system resources.
@@ -398,6 +423,8 @@ def process_reports_parallel(  # noqa: PLR0913, PLR0917
 
     results = []
 
+    errors = 0
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_report = {
             executor.submit(
@@ -419,6 +446,7 @@ def process_reports_parallel(  # noqa: PLR0913, PLR0917
                 result = future.result()
             except Exception as exc:
                 logger.warning(f"Error processing {report_id}: {exc}", exc_info=True)
+                errors += 1
                 continue
             if result is not None:
                 results.append(result)
@@ -431,6 +459,11 @@ def process_reports_parallel(  # noqa: PLR0913, PLR0917
         )
     else:
         completed_df = new_extracted_df
+
+    if errors > 0:
+        logger.warning(
+            f"Completed with {errors} missed reports due to errors. Check logs for details."
+        )
 
     extracted_reports_dc.save(completed_df)
 

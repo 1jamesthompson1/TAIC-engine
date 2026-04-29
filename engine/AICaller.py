@@ -13,6 +13,7 @@ import openai
 import tiktoken
 from dotenv import load_dotenv
 from openai import OpenAI
+from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
@@ -68,6 +69,18 @@ class AICallerFailedError(Exception):
             message: The error message describing the failure.
         """
         super().__init__(f"AI call failed: {message}")
+
+
+class AIRefusalError(Exception):
+    """Raised when the AI model refuses to respond to a query."""
+
+    def __init__(self, message: str):
+        """Initialize AIRefusalError.
+
+        Args:
+            message: The error message describing the refusal.
+        """
+        super().__init__(f"Model refused to respond: {message}")
 
 
 class QueryTooLongError(Exception):
@@ -128,6 +141,11 @@ MODEL_REGISTRY: dict[str, ModelDefinition] = {
         api_model="gpt-5.4-mini",
         limit=400_000,
         pricing={"input": 0.75, "cached_input": 0.075, "output": 4.50},
+    ),
+    "gpt-5.4-nano": ModelDefinition(
+        api_model="gpt-5.4-nano",
+        limit=400_000,
+        pricing={"input": 0.2, "cached_input": 0.02, "output": 1.25},
     ),
     # Works well yet costs more. Limited reasoning
     "gpt-5.1-chat": ModelDefinition(
@@ -378,7 +396,7 @@ class OpenAICaller(BaseAICaller):
         """
         super().__init__(client, model, limit)
 
-    def query(  # noqa: PLR0913, PLR0917
+    def query(  # noqa: PLR0912, PLR0913, PLR0917
         self,
         system,
         user,
@@ -406,6 +424,10 @@ class OpenAICaller(BaseAICaller):
         Raises:
             ClientNotAvailableError: If OpenAI/Azure client is not configured.
             AICallerFailedError: If the API call fails due to an error.
+            ValidationError: If parsing the model response into the requested
+                structured format fails (JSON validation error).
+            AIRefusalError: If the model appears to refuse to answer (detected
+                when validation error message contains "I'm sorry").
         """
         if self.client is None:
             raise ClientNotAvailableError()
@@ -440,10 +462,17 @@ class OpenAICaller(BaseAICaller):
 
         try:
             if output_structure is not None:
-                response = self.client.responses.parse(
-                    **params,
-                    text_format=output_structure,
-                )
+                try:
+                    response = self.client.responses.parse(
+                        **params,
+                        text_format=output_structure,
+                    )
+                except ValidationError as e:
+                    if "I'm sorry" in str(e):
+                        raise AIRefusalError(
+                            message="No reason given, however caused validation error of JSON"
+                        ) from None
+                    raise
 
             else:
                 response = self.client.responses.create(

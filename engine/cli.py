@@ -8,14 +8,15 @@ from pathlib import Path
 import pandas as pd
 
 from . import (
+    Combine,
     Config,
-    Embedding,
     Modes,
     PDFParsing,
     ReportExtracting,
     SavedDataFrames,
     WebsiteScraping,
 )
+from .AICaller import print_api_cost_summary
 from .AzureStorage import (
     EngineOutputDownloader,
     EngineOutputUploader,
@@ -296,11 +297,29 @@ def extract(output_dir: Path, config: dict, refresh: bool):
 def embed(output_dir: Path, config: dict, refresh: bool):
     """Embed extracted reports into the vector database.
 
+    First step is creating the long dataformat dataframe, then embedding the document text from each row.
+
     Args:
         output_dir (Path): Directory where output artifacts are written.
         config (dict): Engine configuration settings.
         refresh (bool): Whether to refresh cached data and reprocess sources.
     """
+    Combine.create_long_data_format(
+        Combine.LongDataFormatDCs(
+            parsed_reports_dc=SavedDataFrames.ParsedReports(output_dir),
+            extracted_reports_dc=SavedDataFrames.ExtractedReports(output_dir),
+            report_titles_dc=SavedDataFrames.ReportTitles(output_dir),
+            atsb_safety_issues_dc=SavedDataFrames.ATSBWebsiteSafetyIssues(output_dir),
+            tsb_recommendations_dc=SavedDataFrames.TSBWebsiteRecommendations(
+                output_dir
+            ),
+            taic_recommendations_dc=SavedDataFrames.TAICWebsiteRecommendations(
+                output_dir
+            ),
+        ),
+        SavedDataFrames.DataForVectorDB(output_dir),
+    )
+
     vector_config = config.get("vector")
 
     logger.welcome(
@@ -312,34 +331,7 @@ def embed(output_dir: Path, config: dict, refresh: bool):
         },
     )
 
-    vector_db = Embedding.VectorDB(
-        SavedDataFrames.VectorDBDocumentIDs(output_dir),
-        os.environ["VECTORDB_URI"],
-        vector_config["model"]["name"],
-        vector_config["model"]["context_limit"],
-        vector_config["table_name"],
-    )
-    vector_db.process_extracted_reports(
-        SavedDataFrames.ExtractedReports(output_dir),
-        [
-            (
-                "safety_issues",
-                "safety_issue",
-            ),
-            (
-                "recommendations",
-                "recommendation",
-            ),
-            (
-                "sections",
-                "section",
-            ),
-            (
-                "summary",
-                "summary",
-            ),
-        ],
-    )
+    # To be completed
 
 
 def upload(container_name: str, output_dir: Path, output_config: dict):
@@ -362,8 +354,6 @@ def upload(container_name: str, output_dir: Path, output_config: dict):
 
 def cli():
     """Main CLI entry point for the engine."""
-    configure_logging(log_level="INFO")
-
     parser = argparse.ArgumentParser(
         description="A engine that will download, extract, and summarize PDFs from the marine accident investigation reports. More information can be found here: https://github.com/1jamesthompson1/TAIC-engine/"
     )
@@ -374,9 +364,9 @@ def cli():
         action="store_true",
     )
     parser.add_argument(
-        "-c",
-        "--calculate_cost",
-        help="Calculate the API cost of doing a summarize. Note this action itself will use some API token, however it should be a negligible amount. Currently not going to give an accurate response",
+        "-v",
+        "--verbose",
+        help="Enables verbose logging output for debugging purposes.",
         action="store_true",
     )
     parser.add_argument(
@@ -388,6 +378,11 @@ def cli():
     )
 
     args = parser.parse_args()
+
+    if args.verbose:
+        configure_logging("DEBUG")
+    else:
+        configure_logging("INFO")
 
     # Initialize timing tracker
     timing_results = {}
@@ -438,6 +433,9 @@ def cli():
 
     # Print timing summary
     log_timing_summary(timing_results, total_time)
+
+    # Print API cost summary
+    print_api_cost_summary()
 
 
 if __name__ == "__main__":

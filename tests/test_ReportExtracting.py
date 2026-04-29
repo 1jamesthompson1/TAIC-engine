@@ -752,6 +752,8 @@ def test_chunking_into_section(report_id, num_sections):
     assert (
         len(sections) == num_sections
     ), f"Expected {num_sections} sections but got {len(sections)}"
+    assert all(isinstance(section, dict) for section in sections)
+    assert all({"page", "text"}.issubset(section) for section in sections)
 
 
 def test_parallel_extraction(tmp_path):
@@ -852,7 +854,7 @@ def test_process_handle_already_processed(
             "safety_issues": [[] for _ in already_processed_ids],
             "recommendations": [[] for _ in already_processed_ids],
             "metadata": [{} for _ in already_processed_ids],
-            "sections": [{} for _ in already_processed_ids],
+            "sections": [[] for _ in already_processed_ids],
         }
     )
 

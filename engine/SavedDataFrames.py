@@ -219,11 +219,11 @@ class ExtractedReports(SavedDataFrame):
         """Schema for a single row in the extracted reports dataframe."""
 
         report_id: str = Field(..., description="Unique identifier for the report")
-        safety_issues: list[dict[str, Any]] = Field(
+        safety_issues: list[dict[str, Any]] | None = Field(
             default_factory=list,
             description="List of safety issues extracted from the report",
         )
-        recommendations: list[dict[str, Any]] = Field(
+        recommendations: list[dict[str, Any]] | None = Field(
             default_factory=list,
             description="List of recommendations extracted from the report",
         )
@@ -231,8 +231,8 @@ class ExtractedReports(SavedDataFrame):
             default_factory=dict,
             description="Occurrence metadata including occurrence details and vehicle/vessel/personnel information",
         )
-        sections: dict[str, str] = Field(
-            default_factory=dict,
+        sections: list[dict[str, str]] = Field(
+            default_factory=list,
             description="Report sections chunked by page, with section keys like 'page_1', 'page_2.1', etc.",
         )
 
@@ -378,3 +378,27 @@ class VectorDBDocumentIDs(SavedDataFrame):
         document_id: str = Field(
             ..., description="Document ID embedded in vector database"
         )
+
+
+class DataForVectorDB(SavedDataFrame):
+    """SavedDataFrame for the long-format canonical document rows."""
+
+    filename = "complete_data.pkl"
+
+    class Row(BaseModel):
+        """Schema for a single row in the complete data for vector database dataframe."""
+
+        report_id: str
+        document_id: str
+        document: str
+        document_type: str
+        url: str | None = None
+        location: str | None = None
+        date: datetime | None = None
+        occurrence_type: str | None = None
+        fatalities: int | None = None
+        injuries: int | None = None
+        damage: str | None = None
+        who_may_benefit: str | None = None
+        agency_id: str | None = None
+        mode: int = None

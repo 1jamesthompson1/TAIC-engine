@@ -18,6 +18,10 @@ class SafetyIssueItem(BaseModel):
         ...,
         description="The text of the actual safety issue (e.g ignore 'safety issue -').",
     )
+    safety_issue_id: str | None = Field(
+        default=None,
+        description="The unique identifier for the safety issue if it exists in the report (sometimes called 'id', 'number'). If none is given then return None.",
+    )
     quality: Literal["exact", "inferred"] = Field(
         ...,
         description=(
