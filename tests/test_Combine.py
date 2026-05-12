@@ -111,7 +111,9 @@ def test_recommendation_combination():
     ), f"Combined recommendations should have columns {expected_columns}, but got {set(combined_recs.columns)}"
 
     expected_length = (
-        len(atsb_extracted.explode("recommendations"))
+        len(
+            atsb_extracted.explode("recommendations").dropna(subset=["recommendations"])
+        )
         + len(tsb_scraped)
         + len(taic_scraped)
     )
@@ -139,10 +141,20 @@ def test_safety_issue_combination():
         set(combined_si.columns) == expected_columns
     ), f"Combined safety issues should have columns {expected_columns}, but got {set(combined_si.columns)}"
 
-    expected_length = len(extracted_si.explode("safety_issues")) + len(atsb_scraped_si)
+    expected_length = len(
+        extracted_si.explode("safety_issues").dropna(subset=["safety_issues"])
+    ) + len(atsb_scraped_si)
+
     assert (
         len(combined_si) == expected_length
     ), f"Combined safety issues should have {expected_length} rows, but got {len(combined_si)}"
+
+    test_report = combined_si[combined_si["report_id"] == "TAIC_m_2004_205"]
+
+    assert test_report["document_id"].tolist() == [
+        "TAIC_m_2004_205_si_1",
+        "TAIC_m_2004_205_si_2",
+    ], "Safety issues from the same report should have unique document IDs"
 
 
 def test_creation_of_long_data_format(tmp_path):

@@ -6,6 +6,7 @@ from typing import Literal
 import pandas as pd
 
 from engine import Modes
+from engine.Logging import get_logger
 from engine.SavedDataFrames import (
     ATSBWebsiteSafetyIssues,
     DataForVectorDB,
@@ -15,6 +16,8 @@ from engine.SavedDataFrames import (
     TAICWebsiteRecommendations,
     TSBWebsiteRecommendations,
 )
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -207,11 +210,13 @@ def combine_safety_issues(extracted_si, atsb_scraped_si) -> pd.DataFrame:
         .reset_index(drop=True)
     )
 
-    # For extracted si that have ID none simply label them as 0, 1, 2 etc. within each report, so that we can create a unique document id for each safety issue.
-    generated_ids = extracted_si.groupby("report_id").cumcount()
+    extracted_si["safety_issue_id"] = extracted_si["safety_issue_id"].astype("string")
 
-    extracted_si["safety_issue_id"] = extracted_si["safety_issue_id"].combine_first(
-        generated_ids
+    # For extracted si that have ID none simply label them as 1,2,3 etc. within each report, so that we can create a unique document id for each safety issue.
+    generated_ids = extracted_si.groupby("report_id").cumcount() + 1
+
+    extracted_si["safety_issue_id"] = extracted_si["safety_issue_id"].fillna(
+        generated_ids.astype(str)
     )
 
     columns_to_merge = ["report_id", "safety_issue_id", "safety_issue", "quality"]
@@ -230,13 +235,13 @@ def combine_safety_issues(extracted_si, atsb_scraped_si) -> pd.DataFrame:
         axis=1,
     )
 
-    final_si = combined_si[["report_id", "document_id"]]
+    final_si = combined_si[["report_id", "document_id"]].copy()
 
-    final_si["document"] = combined_si.apply(
+    final_si.loc[:, "document"] = combined_si.apply(
         lambda row: f"{row['safety_issue']}\n\n(quality: {row['quality']})", axis=1
     )
 
-    final_si["document_type"] = "safety_issue"
+    final_si.loc[:, "document_type"] = "safety_issue"
 
     return final_si
 
@@ -315,10 +320,22 @@ def create_long_data_format(
         axis=0,
     )
 
+    missing_metadata_report_ids = set(long_format["report_id"].unique()) - set(
+        report_metadata["report_id"].unique()
+    )
+
+    if missing_metadata_report_ids:
+        logger.warning(
+            f"There are {len(missing_metadata_report_ids)} reports in the long format that do not have metadata and will be dropped when we merge with the metadata."
+        )
+        logger.info(
+            f"Documents with missing metadata:\n{long_format[long_format['report_id'].isin(missing_metadata_report_ids)][['report_id', 'document_type', 'document_id']].to_csv(index=False)}"
+        )
+
     long_format = long_format.merge(
         report_metadata,
         on="report_id",
-        how="left",
+        how="inner",
         suffixes=("", "_metadata"),
     )
 
