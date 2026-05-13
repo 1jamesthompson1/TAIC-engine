@@ -6,8 +6,7 @@ database and embedding them for search and analysis.
 
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import timedelta
-from pathlib import Path
+from datetime import datetime, timedelta
 from typing import ClassVar
 
 import lancedb
@@ -25,6 +24,7 @@ from lancedb.pydantic import LanceModel, Vector
 from tqdm import tqdm
 
 from engine.Logging import get_logger
+from engine.SavedDataFrames import DataForVectorDB, VectorDBDocumentIDs
 
 logger = get_logger(__name__)
 
@@ -147,7 +147,6 @@ class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
                 raise ValueError(msg)
             texts = texts.tolist()
 
-        # batch process so that no more than 96 texts are sent at once.
         batch_size = 96
         embeddings = []
         for i in range(0, len(texts), batch_size):
@@ -190,7 +189,6 @@ class VectorDB:
 
     def __init__(
         self,
-        local_embedded_ids_path: Path,
         db_uri: str,
         model_name: str,
         context_limit: int,
@@ -199,13 +197,14 @@ class VectorDB:
         """Initialize the VectorDB.
 
         Args:
-            local_embedded_ids_path: Path to store locally embedded document IDs.
             db_uri: URI for the LanceDB database.
             model_name: Name of the embedding model to use.
             context_limit: Maximum context limit for the model.
             table_name: Name of the table in the database.
+
+        Raises:
+            ValueError: If the existing table's embedding function does not match the specified model.
         """
-        self.local_embedded_ids_path = local_embedded_ids_path
         self.model_context_limit = context_limit
         self.table_name = table_name
         self.db = lancedb.connect(db_uri)
@@ -215,6 +214,7 @@ class VectorDB:
             .create(name=model_name)
         )
 
+        # This is effectively a rewrite of the SavedDataFrame 'DataForVectorDB'.
         class VectorDBSchema(LanceModel):
             vector: Vector(azure_embeddings.ndims()) = azure_embeddings.VectorField()
             document: str = azure_embeddings.SourceField()
@@ -223,16 +223,29 @@ class VectorDB:
             year: int
             mode: str
             agency: str
-            type: str
             agency_id: str
-            url: str
+            url: str | None = None
             document_type: str
+            location: str | None = None
+            occurrence_date: datetime | None = None
+            occurrence_type: str | None = None
+            fatalities: int | None = None
+            injuries: int | None = None
+            damage: str | None = None
+            who_may_benefit: str | None = None
 
         self.VectorDBSchema = VectorDBSchema
 
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
         self.table = self._get_or_create_table()
+
+        self.current_table_model = self.table.embedding_functions[
+            "vector"
+        ].function.name
+        if self.current_table_model != model_name:
+            msg = f"Existing table {self.table_name} has embedding function {self.current_table_model} which does not match the specified model {model_name}. Please specify a different table name or delete the existing table if you want to use a different embedding model."
+            raise ValueError(msg)
 
     def _get_or_create_table(self):
         """Get existing table or create new one.
@@ -275,7 +288,7 @@ class VectorDB:
         Args:
             df: The dataframe containing documents.
             document_column_name: Name of the column with documents.
-            tokenization_column_name: Name of the column to store token counts.
+            tokenization_column_name: Name of the column to add with token counts.
 
         Returns:
             pd.DataFrame: The dataframe with token counts added.
@@ -315,12 +328,14 @@ class VectorDB:
         Raises:
             ValueError: If dataframe columns don't match the expected schema.
         """
-        # Check if the df follows the schema
-        if (
-            documents_df.columns.tolist()
-            != list(self.VectorDBSchema.model_fields.keys())[1:]
-        ):
-            msg = f"Dataframe columns {documents_df.columns.tolist()} do not match the expected schema {list(self.VectorDBSchema.model_fields.keys())[1:]}"
+        # Validate dataframe has required columns (order not required)
+        expected_cols = list(self.VectorDBSchema.model_fields.keys())[1:]
+        missing = [c for c in expected_cols if c not in documents_df.columns.tolist()]
+        if missing:
+            msg = (
+                f"Dataframe is missing required columns {missing}. "
+                f"Expected at least: {expected_cols}"
+            )
             raise ValueError(msg)
 
         # Get document lengths
@@ -347,7 +362,7 @@ class VectorDB:
             return None
 
         # Truncate all documents to just below the context limit
-        documents_df[document_column_name] = documents_df.apply(
+        documents_df.loc[:, document_column_name] = documents_df.apply(
             lambda x: x[document_column_name][: self.model_context_limit - 50],
             axis=1,
         )
@@ -355,6 +370,9 @@ class VectorDB:
         num_batches = min(os.cpu_count() or 1, len(documents_df))
 
         # Split the dataframe into batches based on token length
+        # Reorder columns so they match the table schema (token length kept for batching)
+        documents_df = documents_df.copy()
+
         df_sorted = documents_df.sort_values(
             token_length_column_name, ascending=False
         ).reset_index(drop=True)
@@ -400,222 +418,68 @@ class VectorDB:
 
         return documents_df["document_id"]
 
-    def clean_dataframes(
-        self, dataframe_to_embed, dataframe_column_name, document_column_name
-    ) -> pd.DataFrame:
-        """Clean and prepare the dataframe for embedding.
-
-        Cleans the dataframe to all have the right column names, formats,
-        and data types.
-
-        Args:
-            dataframe_to_embed: The dataframe to clean.
-            dataframe_column_name: Name of the document column in the dataframe.
-            document_column_name: Name to use for the document column.
-
-        Returns:
-            pd.DataFrame: The cleaned and formatted dataframe.
-
-        Raises:
-            ValueError: If the document column name is unknown.
-        """
-        match dataframe_column_name:
-            case "recommendations":
-                dataframe_to_embed = dataframe_to_embed.rename(
-                    columns={"recommendation": "document"}
-                )
-                dataframe_to_embed["document_id"] = dataframe_to_embed.apply(
-                    lambda row: (
-                        f"{row['recommendation_id']}_{'rec'}_{row['report_id']}"
-                    ),
-                    axis=1,
-                )
-                dataframe_to_embed["document_type"] = "recommendation"
-            case "sections":
-                dataframe_to_embed = dataframe_to_embed.rename(
-                    columns={"section_text": "document"}
-                )
-                dataframe_to_embed["document_id"] = dataframe_to_embed.apply(
-                    lambda row: f"{row['section']}_{'sec'}_{row['report_id']}",
-                    axis=1,
-                )
-                dataframe_to_embed["document_type"] = "section"
-            case "safety_issues":
-                dataframe_to_embed = dataframe_to_embed.rename(
-                    columns={"safety_issue": "document"}
-                )
-                dataframe_to_embed["document_id"] = dataframe_to_embed.apply(
-                    lambda row: f"{row['safety_issue_id']}_{'si'}_{row['report_id']}",
-                    axis=1,
-                )
-                dataframe_to_embed["document_type"] = "safety_issue"
-            case "summary":
-                dataframe_to_embed = dataframe_to_embed.rename(
-                    columns={dataframe_column_name: "document"}
-                )
-                dataframe_to_embed["document_type"] = dataframe_column_name
-
-                dataframe_to_embed["document_id"] = dataframe_to_embed.apply(
-                    lambda row: f"sum_{row['report_id']}", axis=1
-                )
-            case _:
-                msg = f"Unknown document column name: {document_column_name}"
-                raise ValueError(msg)
-
-        dataframe_to_embed = dataframe_to_embed[
-            list(self.VectorDBSchema.model_fields.keys())[1:]
-        ]
-        # Drop unmatched
-        # Drop unmatched documents and track count
-        unmatched_count = dataframe_to_embed["report_id"].str.contains("nmatched").sum()
-        dataframe_to_embed = dataframe_to_embed[
-            ~dataframe_to_embed["report_id"].str.contains("nmatched")
-        ]
-        logger.info(f"Dropped {unmatched_count} unmatched documents")
-
-        # Drop columns that are none or are empty strings and track count
-        initial_count = len(dataframe_to_embed)
-        dataframe_to_embed = dataframe_to_embed.dropna(subset=["document"])
-        dataframe_to_embed = dataframe_to_embed[
-            dataframe_to_embed["document"].str.strip() != ""
-        ]
-        empty_document_count = initial_count - len(dataframe_to_embed)
-        logger.info(f"Dropped {empty_document_count} documents with empty/null content")
-
-        # Check for missing values
-        max_sample_rows = 200
-        if dataframe_to_embed.isna().any(axis=1).any():
-            missing_values = dataframe_to_embed[
-                dataframe_to_embed.isna().any(axis=1)
-            ].drop(labels="document", axis=1)
-            if missing_values.shape[0] > max_sample_rows:
-                missing_values = missing_values.sample(n=max_sample_rows)
-            logger.warning(
-                f"Dataframe {dataframe_column_name} has {missing_values.shape[0]} missing values. No missing values should be present at this point. They will be ignored but they should be checked on. Rows with missing values are:\n{missing_values.to_csv()}"
-            )
-            dataframe_to_embed = dataframe_to_embed.dropna()
-
-        if dataframe_to_embed.duplicated(keep=False).any():
-            duplicated_rows = dataframe_to_embed[
-                dataframe_to_embed.duplicated(keep=False)
-            ].drop(labels="document", axis=1)
-            logger.warning(
-                f"Dataframe {dataframe_column_name} has {duplicated_rows.shape[0]} duplicated rows. Duplicated rows will be ignored but they should be checked on. Rows with duplicates are:\n{duplicated_rows.to_csv()}"
-            )
-            dataframe_to_embed = dataframe_to_embed.drop_duplicates()
-
-        dataframe_to_embed["agency_id"] = dataframe_to_embed["agency_id"].astype(str)
-        dataframe_to_embed["mode"] = dataframe_to_embed["mode"].astype(str)
-        dataframe_to_embed["type"] = dataframe_to_embed["type"].astype(str)
-
-        return dataframe_to_embed
-
-    def process_extracted_reports(self, extracted_df_path, embeddings_config) -> None:
+    def process_extracted_reports(
+        self,
+        complete_data_dc: DataForVectorDB,
+        already_embedded_ids_dc: VectorDBDocumentIDs,
+    ) -> None:
         """Process extracted reports and generate embeddings.
 
         Args:
-            extracted_df_path: Path to the extracted reports dataframe.
-            embeddings_config: Configuration for which embeddings to generate.
+            complete_data_dc: The complete data for vector database insertion.
+            already_embedded_ids_dc: A list of document IDs that have already been embedded.
         """
-        logger.info("Embedding reports")
-        logger.info(f"Extracted reports: {extracted_df_path}")
-        logger.info(f"Embeddings {len(embeddings_config)} dataframes")
-        logger.info(
-            f"Embeddings config: {chr(10).join([str(config) for config in embeddings_config])}"
+        logger.welcome(
+            "Embedding Reports",
+            {
+                "complete_data_dc": complete_data_dc.path,
+                "already_embedded_ids_dc": already_embedded_ids_dc.path,
+                "table_name": self.table_name,
+                "db_uri": self.db.uri,
+                "model_name": self.current_table_model,
+                "context_limit": self.model_context_limit,
+            },
         )
 
-        extracted_df = pd.read_pickle(extracted_df_path)
+        complete_data = complete_data_dc.read()
 
-        for dataframe_column_name, document_column_name in (
-            pbar := tqdm(embeddings_config)
-        ):
-            pbar.set_description(f"Embedding {dataframe_column_name}")
-            dataframe_to_embed = None
-            if isinstance(
-                extracted_df[dataframe_column_name].dropna().iloc[0], pd.DataFrame
-            ):
-                filtered_extracted_df = extracted_df.dropna(
-                    subset=[dataframe_column_name]
-                )
-                dataframe_to_embed = pd.concat(
-                    [
-                        df.assign(
-                            report_id=report_id,
-                            type=report_type,
-                            mode=mode,
-                            year=year,
-                            agency=agency,
-                            agency_id=agency_id,
-                            url=url,
-                        )
-                        for df, report_id, report_type, mode, year, agency, agency_id, url in zip(
-                            filtered_extracted_df[dataframe_column_name],
-                            filtered_extracted_df["report_id"],
-                            filtered_extracted_df["type"],
-                            filtered_extracted_df["mode"],
-                            filtered_extracted_df["year"],
-                            filtered_extracted_df["agency"],
-                            filtered_extracted_df["agency_id"],
-                            filtered_extracted_df["url"],
-                            strict=False,
-                        )
-                    ],
-                    ignore_index=True,
-                )
-            else:
-                dataframe_to_embed = extracted_df[
-                    [
-                        dataframe_column_name,
-                        *list(self.VectorDBSchema.model_fields.keys())[3:-1],
-                    ]
-                ].dropna()
+        already_embedded_ids = already_embedded_ids_dc.read_or_create()["document_id"]
 
-            cleaned_df = self.clean_dataframes(
-                dataframe_to_embed,
-                dataframe_column_name,
-                document_column_name,
+        if len(already_embedded_ids) == 0:
+            logger.warning(
+                f"No already embedded document IDs found, starting fresh embedding process. If you have previously embedded documents, make sure to save the document IDs to {already_embedded_ids_dc.path} to avoid re-embedding."
             )
 
-            if self.local_embedded_ids_path.exists():
-                local_embedded_ids = pd.read_pickle(self.local_embedded_ids_path)
-                already_completed = cleaned_df["document_id"].isin(local_embedded_ids)
-                cleaned_df = cleaned_df[~already_completed]
-                logger.info(
-                    f"Filtered out {sum(already_completed)} already embedded documents"
-                )
-            else:
-                local_embedded_ids = pd.Series(dtype=str)
+        data_to_add = complete_data[
+            ~complete_data["document_id"].isin(already_embedded_ids)
+        ]
 
-            if cleaned_df.empty:
-                logger.info(
-                    f"No new documents to embed for {dataframe_column_name}. Skipping."
-                )
-                continue
+        current_table_version = self.table.version
 
-            current_table_version = self.table.version
-            try:
-                added_document_ids = self.add_documents(
-                    cleaned_df,
-                )
-                if added_document_ids is None:
-                    logger.info(f"No new documents added for {dataframe_column_name}")
-                    continue
-                logger.info(
-                    f"Added {len(added_document_ids)} documents to the database for {dataframe_column_name}"
-                )
-                pd.concat(
-                    [local_embedded_ids, added_document_ids],
-                ).to_pickle(self.local_embedded_ids_path)
-                logger.info(
-                    f"Saved updated local embedded IDs to {self.local_embedded_ids_path}"
-                )
+        try:
+            added_document_ids = self.add_documents(
+                data_to_add,
+            )
 
-            except Exception:
-                logger.exception(
-                    "Error during adding of documents, going to restore previous state of the table"
+            logger.info(
+                f"Added {len(added_document_ids)} documents to the vector database table {self.table_name}."
+            )
+            already_embedded_ids_dc.save(
+                pd.DataFrame(
+                    {
+                        "document_id": pd.concat(
+                            [already_embedded_ids, added_document_ids]
+                        )
+                    }
                 )
-                self.table = self.table.restore(current_table_version)
-                raise
+            )
+
+        except Exception:
+            logger.exception(
+                "Error during adding of documents, going to restore previous state of the table"
+            )
+            self.table = self.table.restore(current_table_version)
+            raise
 
         logger.info("Finished embedding all reports.")
         self.table.optimize(cleanup_older_than=timedelta(days=14))

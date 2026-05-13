@@ -19,6 +19,8 @@ from engine.SavedDataFrames import (
 
 logger = get_logger(__name__)
 
+MISSING_REPORTS_MAX_DISPLAY = 20
+
 
 @dataclass(frozen=True)
 class LongDataFormatDCs:
@@ -57,7 +59,9 @@ def expand_extracted_report_metadata(extracted_report: pd.DataFrame) -> pd.DataF
         occurrence_metadata = metadata["occurrence"]
         return {
             "location": occurrence_metadata["location"]["standardized_location"],
-            "date": occurrence_metadata["occurrence_datetime"]["local_datetime"],
+            "occurrence_date": occurrence_metadata["occurrence_datetime"][
+                "local_datetime"
+            ],
             "occurrence_type": occurrence_metadata["occurrence_type"],
             "fatalities": occurrence_metadata["fatalities"],
             "injuries": occurrence_metadata["injuries"],
@@ -68,7 +72,9 @@ def expand_extracted_report_metadata(extracted_report: pd.DataFrame) -> pd.DataF
     pulled_metadata = pd.DataFrame(
         extracted_report["metadata"].map(pull_metadata).tolist()
     )
-    pulled_metadata["date"] = pd.to_datetime(pulled_metadata["date"], errors="coerce")
+    pulled_metadata["occurrence_date"] = pd.to_datetime(
+        pulled_metadata["occurrence_date"], errors="coerce"
+    )
 
     return pd.concat(
         [extracted_report.drop(columns=["metadata"]), pulled_metadata], axis=1
@@ -90,8 +96,16 @@ def create_complete_report_metadata(
         A dataframe where the extracted report metadata and scraped report metadata have been combined, so that each row is information rich.
     """
     combined_metadata = extracted_metadata.merge(
-        scraped_metadata[["report_id", "url", "agency_id"]], on="report_id", how="outer"
+        scraped_metadata[["report_id", "url", "agency_id"]], on="report_id", how="inner"
     )
+
+    missing_scraped_metadata_report_ids = set(
+        extracted_metadata["report_id"].unique()
+    ) - set(scraped_metadata["report_id"].unique())
+    if missing_scraped_metadata_report_ids:
+        logger.warning(
+            f"There are {len(missing_scraped_metadata_report_ids)} reports in the extracted metadata that do not have scraped metadata and so are skipped. These reports are:\n{combined_metadata[combined_metadata['report_id'].isin(missing_scraped_metadata_report_ids)][['report_id']].to_csv(index=False) if len(missing_scraped_metadata_report_ids) < MISSING_REPORTS_MAX_DISPLAY else 'too many to display (>20)'}"
+        )
 
     # Take the scraped event type if it exists, otherwise take the extracted occurrence type.
     combined_metadata["occurrence_type"] = scraped_metadata["event_type"].combine_first(
@@ -100,7 +114,16 @@ def create_complete_report_metadata(
 
     # Add in mode
     combined_metadata["mode"] = combined_metadata["report_id"].apply(
-        lambda x: Modes.get_report_mode_from_id(x).value
+        lambda x: str(Modes.get_report_mode_from_id(x).value)
+    )
+
+    # Add in year (from report ID which is the year of investigation launch)
+    combined_metadata["year"] = combined_metadata["report_id"].apply(
+        lambda x: int(x.split("_")[2])
+    )
+
+    combined_metadata["agency"] = combined_metadata["report_id"].apply(
+        lambda x: x.split("_")[0]
     )
 
     return combined_metadata
@@ -329,7 +352,7 @@ def create_long_data_format(
             f"There are {len(missing_metadata_report_ids)} reports in the long format that do not have metadata and will be dropped when we merge with the metadata."
         )
         logger.info(
-            f"Documents with missing metadata:\n{long_format[long_format['report_id'].isin(missing_metadata_report_ids)][['report_id', 'document_type', 'document_id']].to_csv(index=False)}"
+            f"Documents with missing metadata:\n{long_format[long_format['report_id'].isin(missing_metadata_report_ids)][['report_id', 'document_type', 'document_id']].to_csv(index=False) if len(missing_metadata_report_ids) < MISSING_REPORTS_MAX_DISPLAY else 'too many to display (>20)'}"
         )
 
     long_format = long_format.merge(
@@ -338,6 +361,15 @@ def create_long_data_format(
         how="inner",
         suffixes=("", "_metadata"),
     )
+
+    # FInd rows with missing document
+    missing_document_rows = long_format[long_format["document"].isna()]
+    if not missing_document_rows.empty:
+        logger.warning(
+            f"There are {len(missing_document_rows)} rows in the long format that have missing document text. These rows will be dropped when we save the long format.\n{missing_document_rows[['report_id', 'document_type', 'document_id']].to_csv(index=False) if len(missing_document_rows) < MISSING_REPORTS_MAX_DISPLAY else 'too many to display (>20)'}"
+        )
+
+    long_format = long_format.dropna(subset=["document"])
 
     # Allow specific URLs for particular documents (i.e recommendations) to be used over the generic report URL from the metadata.
     long_format["url"] = long_format["url"].combine_first(long_format["url_metadata"])

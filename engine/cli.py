@@ -5,11 +5,10 @@ import os
 import time
 from pathlib import Path
 
-import pandas as pd
-
 from . import (
     Combine,
     Config,
+    Embedding,
     Modes,
     PDFParsing,
     ReportExtracting,
@@ -169,87 +168,6 @@ def scrape(output_dir: Path, config: dict, refresh: bool):
     taic_recs_scraper.extract_recommendations_from_website()
 
 
-def create_extracted_reports_df(output_dir: Path, output_config: dict):
-    """Create the combined extracted reports dataframe and persist it to disk.
-
-    Args:
-        output_dir (Path): Directory where output artifacts are written.
-        output_config (dict): Output configuration containing expected file names.
-    """
-    raise NotImplementedError(
-        "This needs to be updated to reflect the new simpler processing pipeline. It will take in all of the different dataframes and combine them into a single long dataframe"
-    )
-
-    dataframes = [
-        pd.read_pickle(output_dir / file_name).set_index("report_id")
-        for file_name in [
-            output_config.get("parsed_reports_df_file_name"),
-            output_config.get("toc_df_file_name"),
-            output_config.get("report_sections_df_file_name"),
-            output_config.get("report_event_types_df_file_name"),
-            output_config.get("recommendations_df_file_name"),
-            output_config.get("safety_issues_df_file_name"),
-        ]
-    ]
-
-    dataframes[-2] = dataframes[-2].rename(
-        columns={
-            "important_text": "important_text_recommendation",
-            "pages_read": "pages_read_recommendation",
-        }
-    )
-    dataframes[-1] = dataframes[-1].rename(
-        columns={
-            "important_text": "important_text_safety_issue",
-            "pages_read": "pages_read_safety_issue",
-        }
-    )
-
-    combined_df = dataframes[0].join(dataframes[1:], how="outer")
-
-    # Adding agency_id and url
-    report_titles = pd.read_pickle(
-        output_dir / output_config.get("report_titles_df_file_name")
-    )
-    combined_df = combined_df.merge(
-        report_titles[["report_id", "agency_id", "url", "summary"]],
-        how="left",
-        on="report_id",
-    )
-
-    # Add metadata columns
-    problematic_ids = []
-    for report_id in combined_df["report_id"]:
-        # Check to see if they follow the correct format defined by f"{self.agency}_{mode.name}_{year}_{id}"
-        parts = str(report_id).split("_")
-        report_id_parts = 4
-        if len(parts) != report_id_parts:
-            problematic_ids.append((report_id, len(parts), parts))
-
-    if problematic_ids:
-        logger.warning("Found %s problematic report IDs", len(problematic_ids))
-
-    # Drop all problematic ids
-    combined_df = combined_df[
-        ~combined_df["report_id"].isin([x[0] for x in problematic_ids])
-    ]
-
-    combined_df["year"] = [
-        int(x.split("_")[2]) if "_" in x else None for x in combined_df["report_id"]
-    ]
-    combined_df["mode"] = combined_df["report_id"].map(
-        lambda x: str(Modes.get_report_mode_from_id(x).value) if "_" in x else None
-    )
-
-    combined_df["agency"] = [
-        (x.split("_")[0] if "_" in x else None) for x in combined_df["report_id"]
-    ]
-
-    combined_df.to_pickle(
-        output_dir / output_config.get("extracted_reports_df_file_name")
-    )
-
-
 def extract(output_dir: Path, config: dict, refresh: bool):
     """Extract report artifacts from PDFs.
 
@@ -322,16 +240,17 @@ def embed(output_dir: Path, config: dict, refresh: bool):
 
     vector_config = config.get("vector")
 
-    logger.welcome(
-        "Embedding Reports",
-        {
-            "Output directory": str(output_dir),
-            "Vector DB URI": os.environ.get("VECTORDB_URI", "Not set"),
-            "Table name": vector_config["table_name"],
-        },
+    vector_db = Embedding.VectorDB(
+        os.environ["VECTORDB_URI"],
+        vector_config["model"]["name"],
+        vector_config["model"]["context_limit"],
+        vector_config["table_name"],
     )
 
-    # To be completed
+    vector_db.process_extracted_reports(
+        SavedDataFrames.DataForVectorDB(output_dir),
+        SavedDataFrames.VectorDBDocumentIDs(output_dir),
+    )
 
 
 def upload(container_name: str, output_dir: Path, output_config: dict):
