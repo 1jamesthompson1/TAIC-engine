@@ -86,7 +86,7 @@ def create_complete_report_metadata(
 ) -> pd.DataFrame:
     """Combine the extracted report metadata with the scraped report metadata to create a complete report metadata dataframe.
 
-    This is used later to build the long format where each row is information rich.
+    This is used later to build the long format where each row is information rich. It combines the extracted metadata and scraped metadata togather. Only reports with both extracted and scraped metadata will be included.
 
     Args:
         extracted_metadata: The dataframe containing the extracted report metadata.

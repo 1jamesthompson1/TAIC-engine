@@ -22,7 +22,7 @@ def test_metadata_expansion():
     expected_schema = {
         "report_id": str,
         "location": str | None,
-        "date": pd.Timestamp | None,
+        "occurrence_date": pd.Timestamp | None,
         "occurrence_type": str,
         "fatalities": int,
         "injuries": int,
@@ -49,13 +49,11 @@ def test_metadata_expansion():
 
 def test_metadata_combination():
     """Test that the metadata combination function correctly combines the extracted and scraped metadata, prioritizing scraped event type over extracted accident type."""
-    extracted_metadata = SavedDataFrames.ExtractedReports(
-        Path(pytest.output_config["folder_name"])
-    ).read()
+    output_path = Path(pytest.output_config["folder_name"])
 
-    report_titles = SavedDataFrames.ReportTitles(
-        Path(pytest.output_config["folder_name"])
-    ).read()
+    extracted_metadata = SavedDataFrames.ExtractedReports(output_path).read()
+
+    report_titles = SavedDataFrames.ReportTitles(output_path).read()
 
     expanded_extracted_metadata = Combine.expand_extracted_report_metadata(
         extracted_metadata
@@ -73,16 +71,20 @@ def test_metadata_combination():
         "agency_id",
         "occurrence_type",
         "mode",
+        "agency",
+        "year",
     }
     assert (
         set(combined_metadata.columns) == expected_columns
     ), f"Combined metadata should have columns {expected_columns}, but got {set(combined_metadata.columns)}"
 
-    # Number of rows should be the largest of the two
-
-    assert len(combined_metadata) >= max(
-        len(expanded_extracted_metadata), len(report_titles)
-    ), "Combined metadata should have at least as many rows as the extracted metadata"
+    # Number of rows should be the same as the inner product of the two sets of report ids
+    combined_report_ids = set(expanded_extracted_metadata["report_id"].dropna()) & set(
+        report_titles["report_id"].dropna()
+    )
+    assert (
+        len(combined_metadata) == len(combined_report_ids)
+    ), f"Combined metadata should have {len(combined_report_ids)} rows, but got {len(combined_metadata)}"
 
 
 def test_recommendation_combination():

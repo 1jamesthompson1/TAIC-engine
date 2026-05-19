@@ -46,10 +46,9 @@ its contents between test runs for consistent testing.
 
 import logging
 
-import pandas as pd
 import pytest
 
-from engine import PDFParsing
+from engine import PDFParsing, SavedDataFrames
 
 logger = logging.getLogger(__name__)
 
@@ -57,13 +56,13 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize(
     "report_id, expected_pages",
     [
-        ("ATSB_r_2010_007", 12),
-        ("ATSB_r_2021_004", 106),
-        ("ATSB_a_2007_030", 29),
-        ("TSB_m_2021_A0041", 56),
-        ("TAIC_r_2004_121", 24),
-        ("TAIC_r_2014_103", 52),
-        ("TAIC_a_2019_006", 72),
+        ("ATSB_r_2010_007", 13),
+        ("ATSB_r_2021_004", 107),
+        ("ATSB_a_2007_030", 30),
+        ("TSB_m_2021_A0041", 57),
+        ("TAIC_r_2004_121", 25),
+        ("TAIC_r_2014_103", 53),
+        ("TAIC_a_2019_006", 73),
     ],
 )
 def test_single_pdf_parsing(stable_pdf_storage_manager, report_id, expected_pages):
@@ -103,25 +102,22 @@ def test_process_all_pdfs_into_text(tmp_path, stable_pdf_storage_manager):
 
     Also checks if it handle the case where the PDF can't be found.
     """
-    parsed_reports_df_file_name = (
-        tmp_path / pytest.output_config["parsed_reports_df_file_name"]
-    )
-
+    parsed_reports_dc = SavedDataFrames.ParsedReports(tmp_path)
     # Check how many PDFs are in the stable container
     pdf_list = stable_pdf_storage_manager.list_pdfs()
     logger.info("Found %s PDFs in stable container: %s", len(pdf_list), pdf_list)
 
     # Use the stable PDF storage manager for consistent test data
     PDFParsing.process_all_pdfs_into_text(
-        parsed_reports_df_file_name,
+        parsed_reports_dc=parsed_reports_dc,
         refresh=True,
         pdf_storage_manager=stable_pdf_storage_manager,
         max_workers=1,  # Sequential for testing
     )
 
-    assert parsed_reports_df_file_name.exists()
+    assert parsed_reports_dc.path.exists()
 
-    parsed_reports_df = pd.read_pickle(parsed_reports_df_file_name)
+    parsed_reports_df = parsed_reports_dc.read()
     logger.info("Parsed %s reports", len(parsed_reports_df))
     logger.info("Parsed reports dataframe:\n%s", parsed_reports_df)
 

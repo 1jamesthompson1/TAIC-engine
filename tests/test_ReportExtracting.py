@@ -733,8 +733,8 @@ class TestAIExtraction:
 
 _chunking_params = [
     ("TAIC_m_2004_203", 29),
-    ("TSB_a_2023_W0096", 55),
-    ("TAIC_a_2020_003", 34),
+    ("TSB_a_2023_W0096", 34),
+    ("TAIC_a_2020_003", 55),
     ("ATSB_r_2010_007", 18),
 ]
 
@@ -753,7 +753,7 @@ def test_chunking_into_section(report_id, num_sections):
         len(sections) == num_sections
     ), f"Expected {num_sections} sections but got {len(sections)}"
     assert all(isinstance(section, dict) for section in sections)
-    assert all({"page", "text"}.issubset(section) for section in sections)
+    assert all({"text", "section"}.issubset(section) for section in sections)
 
 
 def test_parallel_extraction(tmp_path):

@@ -13,7 +13,7 @@ from engine.AzureStorage import (
 )
 
 # Manually update this to be the 'output' folder.
-EXPECTED_FILE_COUNT = 17
+EXPECTED_FILE_COUNT = 9
 
 
 def test_upload_outputs():

@@ -110,33 +110,24 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
     """
 
     def _get_agency_scraper(agency: str) -> WebsiteScraping.ReportScraper:
+        data_path = Path(pytest.output_config.get("folder_name"))
         if agency == "TAIC":
             # Use the canonical TAIC reports table from the tests data folder, but
             # copy it into the test's tmpdir so the original isn't modified by tests.
-            original_path = Path(
-                pytest.output_config.get("folder_name")
-            ) / pytest.output_config.get("taic_website_reports_table_file_name")
-            tmp_path = Path(tmpdir) / pytest.output_config.get(
-                "taic_website_reports_table_file_name"
-            )
+            original_path = SavedDataFrames.TAICWebsiteReportsTable(data_path).path
 
             if original_path.exists():
-                shutil.copy2(original_path, tmp_path)
+                shutil.copy(original_path, tmpdir)
 
             return WebsiteScraping.TAICReportScraper(
                 SavedDataFrames.TAICWebsiteReportsTable(tmpdir),
                 report_scraping_settings,
             )
         if agency == "ATSB":
-            original_path = Path(
-                pytest.output_config.get("folder_name")
-            ) / pytest.output_config.get("atsb_website_reports_table_file_name")
-            tmp_path = Path(tmpdir) / pytest.output_config.get(
-                "atsb_website_reports_table_file_name"
-            )
+            original_path = SavedDataFrames.ATSBWebsiteReportsTable(data_path).path
 
             if original_path.exists():
-                shutil.copy2(original_path, tmp_path)
+                shutil.copy(original_path, tmpdir)
 
             return WebsiteScraping.ATSBReportScraper(
                 SavedDataFrames.ATSBWebsiteReportsTable(tmpdir),
@@ -298,14 +289,9 @@ def test_agency_website_scraper_collecting_all_reports(
 def test_atsb_safety_issue_scrape(tmpdir):
     """Test scraping ATSB safety issues from the website."""
     # Copy existing files to temporary directory for automatic cleanup
-    original_output_path = (
-        Path(pytest.output_config["folder_name"])
-        / pytest.output_config["atsb_website_safety_issues_file_name"]
-    )
-    original_report_titles = (
-        Path(pytest.output_config["folder_name"])
-        / pytest.output_config["report_titles_df_file_name"]
-    )
+    output_folder = Path(pytest.output_config.get("folder_name"))
+    original_output_path = SavedDataFrames.ATSBWebsiteSafetyIssues(output_folder).path
+    original_report_titles = SavedDataFrames.ReportTitles(output_folder).path
 
     # Create temporary paths
     atsb_safety_issues_df = SavedDataFrames.ATSBWebsiteSafetyIssues(Path(str(tmpdir)))

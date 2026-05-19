@@ -165,7 +165,7 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
 
     try:
         response = ai_caller.query(
-            model="gpt-5.4-nano",
+            model="gpt-5.4-mini",
             reasoning="high",
             system=system_prompt,
             user=user_prompt,
