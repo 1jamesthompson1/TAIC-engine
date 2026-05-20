@@ -51,7 +51,7 @@ Communications,aviation,"Communication failure, misunderstanding, or loss affect
 Crew and Cabin Safety,aviation,"Occurrence involving crew/cabin safety procedures, injury risk, or cabin operations."
 "Fire, fumes & smoke",aviation,"Presence of fire, smoke, or fumes in or around the aircraft impacting safety."
 Flight preparation / Navigation,aviation,Pre-flight planning or navigation execution issue contributing to the event.
-Fuel related,aviation,"Fuel quantity, quality, management, contamination, or supply issue affecting operations. Fuel starvation which cause other events (such as dithcings, forced landings, etc.) should be included in their respective categories."
+Fuel related,aviation,"Fuel quantity, quality, management, contamination, or supply issue affecting operations. Fuel starvation which cause other events (such as dithcings, forced landings, Terrain collisions etc.) should be included in their respective categories."
 Ground operations,aviation,"Occurrence during taxi, pushback, towing, ramp, or apron activities."
 Ground proximity alerts / warnings,aviation,Triggered terrain/obstacle proximity alerts or warnings indicating reduced terrain clearance margin.
 Miscellaneous,aviation,Aviation occurrence not fitting any other listed category.
@@ -66,7 +66,7 @@ Electrical Infrastructure Irregularity,rail,Fault or anomaly in traction power o
 Explosion,rail,Detonation or rapid overpressure event causing safety consequences in rail context.
 Fire,rail,"Combustion event affecting rolling stock, infrastructure, cargo, or surrounding areas."
 Gas,rail,"Occurrence involving gas leak, ignition, exposure, or gas-related hazard."
-Level Crossing,rail,Occurrence at a road-rail or pedestrian-rail crossing interface.
+Level Crossing,rail,"Occurrence at a road-rail or pedestrian-rail crossing interface. Any collision at a crossing should be categorized as a level crossing occurrence, not a collision."
 Light Rail or Tram Authority Exceeded,rail,Light rail/tram movement proceeds beyond authorized limits or permissions.
 Load Irregularity,rail,"Unsafe, shifted, insecure, overweight, or otherwise irregular load affecting rail safety."
 Not Elsewhere Classified,rail,Rail occurrence that does not fit any other listed category.
@@ -74,7 +74,7 @@ Proceed Authority Exceeded,rail,Train movement exceeds the limits of movement au
 Railway network security,rail,Security-related occurrence affecting rail network safety or operations.
 Rolling stock Irregularity,rail,"Defect or irregular condition in locomotives, wagons, carriages, or other rolling stock."
 Runaway,rail,Uncontrolled rail vehicle movement without intended braking/control.
-Safeworking Rule or Procedure Breach,rail,Non-compliance with safeworking rules or procedural protections.
+Safeworking Rule or Procedure Breach,rail,Non-compliance with safeworking rules or procedural protections. This should be used if it caused or nearly caused an occurrence.
 Signalling And Other Proceed Authority System Irregularities,rail,Irregularity in signaling or movement-authority systems used to protect train movements.
 Signals Passed at Danger,rail,Train passes a stop signal without authority.
 "Slip, Trip or Fall",rail,"Person sustains or risks injury due to slipping, tripping, or falling in rail environment."

@@ -45,7 +45,7 @@ class PromptBuilder:
         Returns:
             The system prompt string.
         """
-        base = """You are a highly skilled AI specialized in extracting structured information from safety investigation reports. Your task is to read the provided report text and extract specific information based on the given instructions. These safety investigation reports are all published publically by government agencies after they have completed a no-blame investigation into a transport accident. The goal of these investigations are to identify problems that reduce safety (safety issues) and to make recommendations to address those safety issues.Your goal is to help extract the data from these reports in a structured way to help safety researchers and practitioners learn from past accidents and improve safety in the future.
+        base = """You are a highly skilled AI specialized in extracting structured information from safety investigation reports. You are helping the New Zealand Transport Accident Investigation Commission build a structured database. Your task is to read the provided report text and extract specific information based on the given instructions. These safety investigation reports are all published publically on their websites by government agencies after they have completed a no-blame investigation into a transport accident. The goal of these investigations are to identify problems that reduce safety (safety issues) and to make recommendations to address those safety issues.Your goal is to help extract the data from these reports in a structured way to help safety researchers and practitioners learn from past accidents and improve safety in the future.
 
 There are techincal definitions you should understand:
 Safety factor - Any (non-trivial) events or conditions, which increases safety risk. If they occurred in the future, these would increase the likelihood of an occurrence, and/or the severity of any adverse consequences associated with the occurrence.
@@ -65,7 +65,10 @@ Recommendations - Formal suggestions made by the investigation agency to address
 
 Note that some reports will actually have text that is from a short report bulletin that contains the information for many differnt short investigations. You should take great care in only extracting information that is relevant to the specific occurrence in question. You should use the report id and occurrence details to determine which information is relevant to the specific occurrence. If you are unsure about which information is relevant to the specific occurrence then it is better to not extract that information."""
 
-        return base
+        return (
+            base
+            + """We really appreciate you helping us with the best of your abilities."""
+        )
 
     def build_user_prompt(
         self,
@@ -107,6 +110,8 @@ Based on the provided report text, please extract the following information:
 '''
 {report_text}
 '''
+
+Thank you for your help in extracting this information.
 """
         )
 
@@ -163,6 +168,11 @@ Occurrence type assignment instructions:
 - Assign metadata.occurrence.occurrence_type using occurrence details in the report text.
 - The value MUST be one of the allowed event types for this mode:
 {event_types_list}
-- Choose the most specific matching type."""
+- Choose the most specific matching type.
+
+Aviation ATC reports:
+For reports that are occurrences involving air traffic control giving bad/incorrect instructions to pilots, you should NOT include aircraft metadata for the aircraft involved in the occurrence, as the main occurrence participants are really the air traffic controllers and the ATC system, not the aircraft.
+
+"""
 
         return prompt

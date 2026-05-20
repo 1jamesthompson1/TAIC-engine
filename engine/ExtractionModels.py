@@ -49,7 +49,7 @@ class RecommendationItem(BaseModel):
     )
     recommendation_context: str | None = Field(
         default=None,
-        description="The context or background information related to the recommendation, if available. This should include the safety issue or issues that the recommendation is addressing, the entire safety action/response of the recommendation recipient and the final justification from the investiagtion agency as to why their safety action was inadequate. For each of these three elements only include what is actually present in the report. If no context is given in the report then return None. It is important that whatever is copied is copied verbatim and not invented or summarised although removing markdown formatting and cleaing up PDF text extraction artefacts is acceptable. Information on the current status of the recommendation is not to be included.",
+        description="The context or background information related to the recommendation, if available. This should include the safety issue or issues that the recommendation is addressing, the entire safety action/response of the recommendation recipient and the final justification from the investiagtion agency as to why their safety action was inadequate. For each of these three elements only include what is actually present in the report. If no context is given around the recommendation then return None. It is important that whatever is copied is copied verbatim and not invented or summarised although removing markdown formatting and cleaing up PDF text extraction artefacts is acceptable. Information on the current status of the recommendation is not to be included.",
     )
     made: str | None = Field(
         default=None,
@@ -127,7 +127,7 @@ class OccurrenceMetadata(BaseModel):
     )
     who_may_benefit: str | None = Field(
         default=None,
-        description="Some reports include a section, sentence or phrase that explicitly states who may benefit from the lessons of the report. If this is explicitly stated in the report then include it here verbatim, if not then use None. This should be a text field and not a list of categories (i.e do not attempt to categorise this information into predefined buckets, just copy the text as is from the report if it is present).",
+        description="Some reports include a section, sentence or phrase that explicitly states who may benefit from the lessons of the report. If this is explicitly stated in the report then include it here verbatim. If there is no explicit section/sentence of the sort 'who may benefit' then leave it as None. This should be a text field and not a list of categories (i.e do not attempt to categorise this information into predefined buckets, just copy the text as is from the report if it is present).",
     )
 
 
@@ -180,7 +180,7 @@ class PilotMetadata(BaseModel):
     )
     experience_on_type: int | None = Field(
         default=None,
-        description="Flying experience on the specific aircraft type as hours. Round to the nearest whole number (using standard rounding rules) and do not include any text (e.g. 'hours'). IF an approximate is given then just use that.",
+        description="Total of all time Flying experience on the specific aircraft type as hours. Round to the nearest whole number (using standard rounding rules) and do not include any text (e.g. 'hours'). IF an approximate is given then just use that. Avoid using the flight hours in just the last n days as this is not the total of all time experience on the type.",
     )
 
 
@@ -457,7 +457,7 @@ class VesselMetadata(BaseModel):
     )
     total_power: float | None = Field(
         default=None,
-        description="Total power of the vessel's propulsion system in kW",
+        description="Total power of the vessel's propulsion system in kW. This may require some simple calculations based on the information in the report and standard conversion factors.",
     )
     service_speed: float | None = Field(
         default=None,
@@ -469,7 +469,7 @@ class VesselMetadata(BaseModel):
     )
     port_of_registry: str | None = Field(
         default=None,
-        description="Port where the vessel is registered. This can also just be the country of registry if the port is not specified in the report. Leave as None if no information about registry is provided.",
+        description="Port where the vessel is registered. This can just be the country that the boat is from if the port is not specified (i.e in case of local vessels).",
     )
 
 

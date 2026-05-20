@@ -569,7 +569,7 @@
       "vessels": [
         {
           "vessel_name": "i-Catcher",
-          "vessel_type": "fishing",
+          "vessel_type": "recreational",
           "classification": "unclassed",
           "length": 8.0,
           "breadth": null,
@@ -640,7 +640,7 @@
           "time_zone_source": "explicit_in_report"
         },
         "location": {
-          "description": "Gladstone, Queensland, Australia",
+          "description": "at the southern end of the Targinie Channel, Gladstone, Queensland, Australia",
           "standardized_location": "Port of Gladstone, Gladstone, Queensland, Australia"
         },
         "occurrence_type": "Capsizing/listing",
@@ -663,7 +663,7 @@
           "year_built": 1995,
           "propulsion": "diesel",
           "total_power": 544,
-          "service_speed": 10,
+          "service_speed": 9,
           "owner_operator": "Sea Swift, Cairns",
           "port_of_registry": "Cairns",
           "primary_port": null
@@ -1090,7 +1090,7 @@
           "train_number": "AV2 - Tamper 703",
           "length": null,
           "weight": null,
-          "classification": "test/commissioning",
+          "classification": "maintenance",
           "year_manufactured": null,
           "operator": "KiwiRail",
           "operating_crew": 4
@@ -1152,7 +1152,7 @@
         "fatalities": 0,
         "injuries": 1,
         "damage_description": "minor and substantial damage: locomotive minor damage; level crossing equipment minor damage; dual cab utility substantially damaged.",
-        "who_may_benefit": null
+        "who_may_benefit": "All local councils and track managers."
       },
       "trains": [
         {

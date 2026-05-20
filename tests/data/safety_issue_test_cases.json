@@ -67,12 +67,12 @@
         "safety_issue_id": null
       },
       {
-        "safety_issue": "Lack of required life jackets or flotation devices on over\u2011water flights within 50 NM of land reduced passenger survival prospects during ditching.",
+        "safety_issue": "Lack of required life jackets or flotation devices on over\u2011water flights within 50 NM of land reduced fare-paying passenger survival prospects during ditching.",
         "quality": "inferred",
         "safety_issue_id": null
       },
       {
-        "safety_issue": "Absence of upper\u2011body restraints for passenger seats reduced occupant survivability in impact conditions.",
+        "safety_issue": "Passenger seats in small aircraft used for fare-paying passenger operations were not required to be fitted with upper body restraints for all occupants.",
         "quality": "inferred",
         "safety_issue_id": null
       },
@@ -83,6 +83,11 @@
       },
       {
         "safety_issue": "Inadequate national guidance material for ditching procedures reduced pilot preparedness for such emergencies.",
+        "quality": "inferred",
+        "safety_issue_id": null
+      },
+      {
+        "safety_issue": "Whyalla Airlines' small organisational structure, concentrated management roles and weak safety culture left safety heavily dependent on a few individuals and vulnerable to schedule and commercial pressures.",
         "quality": "inferred",
         "safety_issue_id": null
       }
