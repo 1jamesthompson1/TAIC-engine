@@ -284,6 +284,28 @@ class WebsiteScraper:
             raise ValueError(error_msg)
         return self.id_dict[agency].get(agency_id)
 
+    @staticmethod
+    def html_table_to_dict(table: BeautifulSoup) -> dict[str, str]:
+        """Take in a table that has two columns and turn it into a dictionary where the first column is the key and the second column is the value.
+
+        Currently used by ATSB scrapers however could be useful elsehwere.
+
+        Args:
+            table: BeautifulSoup object of the HTML table.
+
+        Returns:
+            Dictionary representation of the table.
+        """
+        result = {}
+        for row in table.find_all("tr"):
+            cells = row.find_all(["td", "th"])
+            number_of_cells = 2
+            if len(cells) == number_of_cells:
+                key = cells[0].get_text(strip=True)
+                value = cells[1].get_text(strip=True)
+                result[key] = value
+        return result
+
 
 class ReportScraper(WebsiteScraper, ABC):
     """Abstract base class for scraping reports from different transportation safety agencies.
@@ -308,6 +330,9 @@ class ReportScraper(WebsiteScraper, ABC):
 
         self.agency = agency
         super().__init__(self.settings.report_titles_dc)
+
+    def collect_all(self):
+        """Collect reports for all configured modes."""
         logger.welcome(
             f"Downloading report PDFs for {self.agency}",
             {
@@ -319,9 +344,6 @@ class ReportScraper(WebsiteScraper, ABC):
                 "Ignored report IDs": len(self.settings.ignored_report_ids),
             },
         )
-
-    def collect_all(self):
-        """Collect reports for all configured modes."""
         # Loop through each mode
         for mode in self.settings.modes:
             self.collect_mode(mode)
@@ -846,6 +868,73 @@ class ATSBReportScraper(ReportScraper):
         self.report_table_dc = website_report_table_dc
         self.agency_reports = self.__get_atsb_investigations()
 
+        logger.debug(
+            f"ATSB investigations dataframe has {len(self.agency_reports)} rows after initial scrape."
+        )
+
+    @staticmethod
+    def __parse_custom_divs_into_df(soup: BeautifulSoup) -> pd.DataFrame:
+        """Parses the custom div based table from the investigation search and listing page.
+
+        Args:
+            soup: BeautifulSoup object of the ATSB investigations page.
+
+        Returns:
+            DataFrame of parsed investigation information.
+
+        Raises:
+            ValueError: If the expected container div (ct-list__rows) is missing
+                from the provided BeautifulSoup object.
+        """
+        table_container = soup.find("div", class_="ct-list__rows")
+        if not table_container:
+            msg = "Could not find the expected table container with class 'ct-list__rows' in the provided BeautifulSoup object."
+            raise ValueError(msg)
+
+        table_cells = table_container.find_all("div", class_="col-xxs-12")
+
+        investigations = []
+
+        for cell in table_cells:
+            title_link = cell.find("a", class_="ct-promo-card__title-link")
+            agency_id = title_link.text.strip()
+            url = title_link["href"]
+
+            date = cell.find("time", class_="ct-timestamp__start").text.strip()
+
+            title = cell.find("div", class_="ct-promo-card__summary").text.strip()
+
+            investigations.append(
+                {
+                    "title": title,
+                    "url": url,
+                    "agency_id": agency_id,
+                    "occurrence_date": date,
+                }
+            )
+
+        return pd.DataFrame(investigations)
+
+    def __get_atsb_investigation_table_url(self, mode, page_num):
+        """Constructs the URL for the ATSB investigation table based on the mode and page number.
+
+        Args:
+            mode: The transportation mode (aviation, rail, marine).
+            page_num: The page number to access.
+
+        Returns:
+            The constructed URL for the ATSB investigation table.
+        """
+        dates = f"occurrence_date%5Bmin%5D={self.settings.start_year}-01-01&occurrence_date%5Bmax%5D={self.settings.end_year}-12-31"
+
+        mode_to_number = {
+            "aviation": 607,
+            "rail": 610,
+            "marine": 609,
+        }
+
+        return f"https://www.atsb.gov.au/investigations?atsb_sort=release_date_desc&transport_mode={mode_to_number[mode]}&investigation_number=&keywords=&location=&state=All&investigation_type=457&investigation_status=All&report_status=All&highest_injury_level=All&occurrence_class=All&{dates}&anticipated_completion%5Bmin%5D=&anticipated_completion%5Bmax%5D=&report_release_date%5Bmin%5D=&report_release_date%5Bmax%5D=&page={page_num}"
+
     def __get_atsb_investigations(self):
         """ATSBs websites provides an investigation table than can be easily read by pandas read_html.
 
@@ -858,17 +947,9 @@ class ATSBReportScraper(ReportScraper):
         """
         investigations = self.report_table_dc.read_or_create()
 
-        url_start_date = (
-            f"field_occurence_date_value%5Bmin%5D={self.settings.start_year}-01-01"
+        logger.debug(
+            f"Existing investigations dataframe has {len(investigations)} rows before scraping."
         )
-        url_end_date = (
-            f"field_occurence_date_value%5Bmax%5D={self.settings.end_year}-12-31"
-        )
-
-        url = "https://www.atsb.gov.au/{mode}-investigation-reports?order=field_occurence_date&sort=desc&page={page_num}&field_investigation_type_target_id=162&field_report_status_target_id=93&{url_start_date}&{url_end_date}"
-
-        parsed = urlparse(url)
-        base_url = f"{parsed.scheme}://{parsed.netloc}"
 
         dfs = []
         for mode in (
@@ -880,84 +961,61 @@ class ATSBReportScraper(ReportScraper):
             page_num = 0
             while True:
                 pbar.set_description(f"Scraping mode: {mode}, page: {page_num}")
+
+                page_url = self.__get_atsb_investigation_table_url(mode, page_num)
+
                 try:
-                    page_url = url.format(
-                        mode=mode,
-                        page_num=page_num,
-                        url_start_date=url_start_date,
-                        url_end_date=url_end_date,
-                    )
                     page = self.get(
                         page_url,
                     ).content
 
-                    page_df = pd.read_html(
-                        page,
-                        flavor="lxml",
-                        extract_links="body",
-                    )[0]
-
-                    page_df = page_df.rename(
-                        columns={
-                            "Investigation title": "title",
-                            "Investigation number": "agency_id",
-                            "Investigation webpage": "url",
-                            "Occurrence date  Sort ascending": "occurrence_date",
-                            "Occurrence date  Sort descending": "occurrence_date",
-                            "Occurrence date": "occurrence_date",
-                            "Report status": "report_status",
-                            "Report release": "report_release",
-                        }
-                    )
-
-                    page_df["url"] = page_df["title"].apply(
-                        lambda x: urljoin(base_url, x[1])
-                    )
-
-                    page_df = page_df.map(lambda x: x[0] if isinstance(x, tuple) else x)
-
-                    new_investigations = page_df[
-                        ~page_df["agency_id"].isin(investigations["agency_id"])
-                    ].copy()
-
-                    new_investigations.loc[:, "year"] = pd.to_datetime(
-                        new_investigations["occurrence_date"].to_list(),
-                        format="%d/%m/%Y",
-                        errors="coerce",
-                    ).year.map(int)
-
-                    new_investigations = new_investigations.query(
-                        f"year >= {self.settings.start_year}"
-                    )
-
-                    new_investigations["id"] = new_investigations["agency_id"].map(
-                        lambda x: re.search(r"(\d{3})$|(?:(?:\d{5})(\d{4}))$", str(x))
-                    )
-
-                    new_investigations = new_investigations.dropna(subset=["id"])
-                    new_investigations["id"] = new_investigations["id"].map(
-                        lambda x: x.group(1) if x.group(1) is not None else x.group(2)
-                    )
-
-                    if new_investigations.empty:
-                        logger.info(
-                            f"Looking at page {page_num} for mode {mode}, found no new investigations, did find {len(page_df)} existing ones.\n{page_url}"
-                        )
-                        break
-
-                    pages.append(new_investigations)
-
-                    page_num += 1
                 except hrequests.exceptions.ClientException as e:
                     logger.warning(
                         f"Timeout while trying to scrape {mode} page {page_num}: {e}"
                     )
                     logger.info("Retrying...")
                     continue
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Failed to scrape {mode} page {page_num}: {e}")
-                    logger.info(f"Assuming end of {mode} reports")
+
+                soup = BeautifulSoup(page, "html.parser")
+
+                page_df = self.__parse_custom_divs_into_df(soup)
+
+                page_df["url"] = page_df["title"].apply(
+                    lambda x: urljoin("https://www.atsb.gov.au", x[1])
+                )
+
+                new_investigations = page_df[
+                    ~page_df["agency_id"].isin(investigations["agency_id"])
+                ].copy()
+
+                new_investigations.loc[:, "year"] = pd.to_datetime(
+                    new_investigations["occurrence_date"].to_list(),
+                    format="%d %b %Y",
+                    errors="coerce",
+                ).year.map(int)
+
+                new_investigations = new_investigations.query(
+                    f"year >= {self.settings.start_year}"
+                )
+
+                new_investigations["report_id"] = new_investigations["agency_id"].map(
+                    lambda x: re.search(r"(\d{3})$|(?:(?:\d{5})(\d{4}))$", str(x))
+                )
+
+                new_investigations = new_investigations.dropna(subset=["report_id"])
+                new_investigations["report_id"] = new_investigations["report_id"].map(
+                    lambda x: x.group(1) if x.group(1) is not None else x.group(2)
+                )
+
+                if new_investigations.empty:
+                    logger.info(
+                        f"Looking at page {page_num} for mode {mode}, found no new investigations, did find {len(page_df)} existing ones. Treating this as the end of the {mode} investigations and stopping."
+                    )
                     break
+
+                pages.append(new_investigations)
+
+                page_num += 1
 
             if len(pages) == 0:
                 logger.warning(f"No investigations found for mode: {mode}")
@@ -999,7 +1057,7 @@ class ATSBReportScraper(ReportScraper):
         return [
             (self.get_report_id(mode, year, str(atsb_id)[-3:]), url, str(atsb_id))
             for atsb_id, url in self.agency_reports.loc[mode]
-            .query(f"year == {year} & `report_status` == 'Final'")
+            .query(f"year == {year}")
             .dropna(subset=["url"])[
                 [
                     "agency_id",
@@ -1023,34 +1081,20 @@ class ATSBReportScraper(ReportScraper):
             ReportMetadata object with extracted information.
         """
         report_mode = Modes.get_report_mode_from_id(report_id)
-        event_type = None
-        if report_mode is Modes.Mode.a:
-            event_type_div = soup.find(
-                "div", class_="field--name-field-aviation-occurrence-type"
-            )
-            if event_type_div is not None:
-                event_type = event_type_div.find("div", class_="field__item").text
 
-        investigation_level = soup.find(
-            "div", class_="field--name-field-investigation-level"
+        title = soup.find("h1", class_="ct-banner__title").text.strip()
+
+        table_div = soup.find(
+            "div",
+            class_="block-field-blocknodeinvestigation-reportfield-n-occurrence-date",
         )
-        if investigation_level is not None:
-            investigation_level = investigation_level.find(
-                "div", class_="field__item"
-            ).text
 
-        title_div = soup.find("div", class_="field--name-title")
-
-        title = title_div.text
-
-        agency_id = soup.find("div", class_="field--name-field-report-id")
-        if agency_id is not None:
-            agency_id = agency_id.find("div", class_="field__item").text.strip()
-            agency_id = re.sub(r"^\d{3}-M", "M", agency_id, flags=re.IGNORECASE)
+        table_dict = self.html_table_to_dict(table_div)
 
         # Getting the safety summary
         summary = self.get_summary(soup)
 
+        investigation_level = table_dict.get("Investigation level")
         investigation_type = "unknown"
         if investigation_level is None:
             investigation_type = "unknown"
@@ -1058,6 +1102,12 @@ class ATSBReportScraper(ReportScraper):
             investigation_type = "full"
         else:
             investigation_type = "short"
+
+        event_type = table_dict.get(
+            f"{Modes.Mode.as_string(report_mode)} occurrence category"
+        )
+
+        agency_id = table_dict.get("Investigation number")
 
         return ReportMetadata(
             url=url,
@@ -1082,13 +1132,13 @@ class ATSBReportScraper(ReportScraper):
         Returns:
             Summary text if found, None otherwise.
         """
-        summary_div = soup.find("div", class_="field--type-text-with-summary")
+        summary_div = soup.find("div", class_="atsb-investigation-section--first")
         if summary_div is None:
             return None
 
+        summary_heading = None
         # Try to find h2 with "Executive summary" or "Investigation summary"
-        h2 = None
-        for candidate in summary_div.find_all("h2"):
+        for candidate in summary_div.find_all("h3"):
             heading = candidate.get_text(strip=True).lower()
             summary_headings = [
                 "executive summary",
@@ -1096,22 +1146,48 @@ class ATSBReportScraper(ReportScraper):
                 "safety summary",
             ]
             if any(h in heading for h in summary_headings):
-                h2 = candidate
+                summary_heading = candidate
                 break
 
-        if h2 is None:  # Return the full text is no summary is found.
-            return summary_div.get_text(" ", strip=True)
+        if summary_heading is None:
+            h2_headings = list(summary_div.find_all("h2"))
+            for candidate in h2_headings:
+                if candidate.text.strip().lower() == "summary":
+                    summary_heading = candidate
+                    break
+
+            if summary_heading is None:
+                prelim_heading = [
+                    h
+                    for h in summary_div.find_all("h2")
+                    if h.text.strip() == "Preliminary report"
+                ]
+                if len(prelim_heading) > 0:
+                    summary_heading = prelim_heading[0]
+
+            if summary_heading is None:
+                # If we still can't find a summary heading, just return the whole text of the div as the summary
+                logger.debug(
+                    "Could not find specific summary heading, returning full text of the content div as summary."
+                )
+                return summary_div.get_text(" ", strip=True)
+
+        logger.debug(f"Found summary heading: {summary_heading.text.strip()}")
 
         summary_parts = []
-        for sibling in h2.find_next_siblings():
-            if sibling.name == "h2":
+        for sibling in summary_heading.find_next_siblings():
+            if sibling.name in {"h1", "h2", "h3"} or sibling.class_ == "show-more":
                 break
             if (
                 sibling.find("h2") is not None
                 or sibling.get_text("", strip=True).lower() == "the occurrence"
             ):
                 break
+            logger.debug(
+                f"Adding sibling to summary: {sibling.name}, text: {sibling.get_text(strip=True)[:100]}..."
+            )
             summary_parts.append(sibling.get_text(" ", strip=True))
+
         return "\n".join([part for part in summary_parts if part.strip()])
 
 
@@ -1347,39 +1423,114 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
         """
         soup = BeautifulSoup(html_content, "html.parser")
 
-        if not soup.find("div", class_="view-content"):
-            pbar.write(
-                f"Failed to scrape page {current_page} of mode {mode}. No table found"
+        table = soup.find("div", class_="ct-list__rows")
+
+        if table is None:
+            logger.info(
+                f"Failed to scrape page {current_page} of mode {mode}. No table found, likely end of pages. Stopping."
             )
             return None
 
-        safety_issues = [
-            {
-                field.find(class_="field__label").get_text(strip=True): field.find(
-                    class_="field__item"
-                ).get_text(strip=True)
-                for field in row.find_all(class_="field--label-inline")
-            }
-            for row in soup.find("div", class_="view-content").children
-            if not isinstance(row, str)
+        safety_issues = []
+
+        for row in table.select(".col-xxs-12"):
+            if not row.contents:
+                logger.debug(
+                    f"Skipping empty row on page {current_page} of mode {mode}"
+                )
+                continue
+            link = row.find("a", class_="ct-promo-card__title-link")
+            if link is None:
+                logger.warning(
+                    f"Failed to find link for a safety issue on page {current_page} of mode {mode}. Skipping this issue. Likely due to it being the last page"
+                )
+                continue
+
+            # IMPORTANT! This drops some safety issues from the scrape
+            # This sometimes happens with older Safety issues where there is no date. For example on page: https://www.atsb.gov.au/safety-issues-and-actions?issue_owner=&issue_number=&date_issue_released%5Bmin%5D=&date_issue_released%5Bmax%5D=&issue_status=All&transport_mode=607&field_p_transport_function_target_id=All&page=48 you can see many don't have dates.
+            date = row.find("time", class_="ct-timestamp__start")
+            if date is None:
+                logger.warning(
+                    f"Failed to find date for a safety issue {link.text.strip()} on page {current_page} of mode {mode}. Skipping this issue."
+                )
+                continue
+
+            safety_issues.append(
+                {
+                    "safety_issue_id": link.text.strip(),
+                    "safety_issue_title": row.find(
+                        "div", class_="ct-promo-card__summary"
+                    ).text.strip(),
+                    "safety_issue_link": link["href"].strip(),
+                    "safety_issue_date": date.text.strip(),
+                }
+            )
+
+        return pd.DataFrame(safety_issues)
+
+    def extract_safety_issue_details(self, safety_issue_df):
+        """Extract details for each safety issue by visiting their individual pages.
+
+        Args:
+            safety_issue_df: DataFrame containing safety issues with their links.
+
+        Returns:
+            DataFrame with extracted details for each safety issue.
+        """
+        # Only extract details for the new safety issue (i.e ones that have none as Safety Issue description).
+        to_be_extracted = safety_issue_df[safety_issue_df["safety_issue"].isna()]
+
+        already_extracted = safety_issue_df[
+            ~safety_issue_df["report_id"].isin(to_be_extracted["report_id"])
         ]
-        table = pd.DataFrame(safety_issues)
 
-        if "Safety issue title" not in table.columns:
-            pbar.write(
-                f"Failed to scrape page {current_page} of mode {mode}. Page contains no safety issues"
-            )
-            return None
-
-        table["safety_issue"] = table.apply(
-            lambda row: (
-                f"{row['Safety issue title']}\n{row['Safety Issue Description']}"
-            ),
-            axis=1,
+        logger.info(
+            f"Extracting details for {to_be_extracted.shape[0]} safety issues out of {safety_issue_df.shape[0]} total safety issues"
         )
 
-        table["safety_issue_id"] = table["Issue number"].astype(str)
-        return table
+        detailed_safety_issues = []
+
+        for _, row in tqdm(
+            to_be_extracted.iterrows(),
+            total=to_be_extracted.shape[0],
+            desc="Extracting safety issue details",
+        ):
+            url = "https://www.atsb.gov.au" + row["safety_issue_link"]
+            try:
+                response = self.get(url)
+            except hrequests.exceptions.ClientException as e:
+                logger.warning(
+                    f"Error while trying to scrape safety issue details for {row['safety_issue_id']} from {url}: {e}"
+                )
+                continue
+            if response.status_code != HTTPStatus.OK:
+                logger.warning(
+                    f"Failed to scrape safety issue details for {row['safety_issue_id']} from {url}"
+                )
+                continue
+
+            soup = BeautifulSoup(response.content, "html.parser")
+
+            # Find the table that is a sibling of the h2 with text "Safety issue"
+            h2 = soup.find("h2", string="Safety issue")
+            if h2 is None:
+                logger.warning(f"Failed to find safety issue details table in {url}")
+                continue
+            table = h2.find_next_sibling("table")
+
+            if table is None:
+                logger.warning(f"Failed to find safety issue details table in {url}")
+                continue
+
+            details_dict = self.html_table_to_dict(table)
+
+            row["safety_issue"] = details_dict.pop("Safety issue description")
+
+            detailed_safety_issues.append(row)
+
+        new_si = pd.DataFrame(detailed_safety_issues)
+
+        return pd.concat([already_extracted, new_si], ignore_index=True)
 
     def _format_and_save_safety_issues(self, safety_issue_df):
         """Format safety issues and save them to disk.
@@ -1389,7 +1540,7 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
         """
         safety_issue_df = safety_issue_df.drop_duplicates(subset=["safety_issue_id"])
 
-        safety_issue_df["report_id"] = (
+        safety_issue_df.loc[:, "report_id"] = (
             safety_issue_df["safety_issue_id"]
             .map(
                 # This needed because the safety issue id is simply the agency_id plus some extrae identifiers on the end.
@@ -1399,20 +1550,17 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
                 lambda x: (
                     self.id_converter("ATSB", x)
                     if self.id_converter("ATSB", x)
-                    else f"Unmatched ({x})"
+                    else f"Unmatched safety issue ({x})"
                 )
             )
         )
-        safety_issue_df["quality"] = "exact"
+        safety_issue_df.loc[:, "quality"] = "exact"
         safety_issue_df = safety_issue_df[
             ["report_id", "safety_issue_id", "safety_issue", "quality"]
         ]
 
-        logger.info(f"Now there are {safety_issue_df.shape[0]} safety issues")
-        logger.info(
-            "Spread across %s reports",
-            safety_issue_df["report_id"].nunique(),
-        )
+        logger.info(f"""Now there are {safety_issue_df.shape[0]} safety issues
+Spread across {safety_issue_df["report_id"].nunique()} reports""")
 
         self.safety_issues_dc.save(safety_issue_df)
 
@@ -1423,15 +1571,26 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
         else:
             safety_issues_df = self.safety_issues_dc.read_or_create()
 
-        base_url = "https://www.atsb.gov.au/safety-issues-and-actions?field_issue_number_value={mode}O&page={page}"
+        base_url = "https://www.atsb.gov.au/safety-issues-and-actions?transport_mode={mode}&page={page}"
 
-        logger.info("Scraping safety issues from ATSB")
-        logger.info(f"Output file: {self.safety_issues_dc.path}")
-        logger.info(f"Currently have {safety_issues_df.shape[0]} safety issues")
-        logger.info(
-            "Spread across %s reports",
-            safety_issues_df.get("report_id", pd.Series(dtype=str)).nunique(),
+        starting_count = safety_issues_df.shape[0]
+
+        logger.welcome(
+            "Extracting safety issues from ATSB website",
+            {
+                "Output directory": self.safety_issues_dc.path,
+                "Base URL": base_url,
+                "Number of safety issues:": safety_issues_df.shape[0],
+                "Number of reports with safety issues:": safety_issues_df[
+                    "report_id"
+                ].nunique(),
+            },
         )
+        mode_to_mode_num = {
+            "A": "607",
+            "R": "610",
+            "M": "609",
+        }
 
         for mode in (pbar := tqdm(["A", "R", "M"])):
             current_page = 0
@@ -1441,7 +1600,7 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
             failed = 0
             while True:
                 pbar.set_description(f"Scraping page {current_page} of mode {mode}")
-                url = base_url.format(mode=mode, page=current_page)
+                url = base_url.format(mode=mode_to_mode_num[mode], page=current_page)
                 response = self.get(url)
 
                 if response.status_code != HTTPStatus.OK:
@@ -1477,7 +1636,13 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
 
                 current_page += 1
 
-        self._format_and_save_safety_issues(safety_issues_df)
+        detailed_safety_issues_df = self.extract_safety_issue_details(safety_issues_df)
+
+        logger.info(
+            f"Finished extracting safety issue details, now formatting and saving them, found {detailed_safety_issues_df.shape[0] - starting_count} new safety issues"
+        )
+
+        self._format_and_save_safety_issues(detailed_safety_issues_df)
 
 
 class RecommendationScraper(WebsiteScraper, ABC):

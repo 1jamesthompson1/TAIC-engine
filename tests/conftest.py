@@ -2,14 +2,13 @@
 
 import contextlib
 import json
-import logging
 import os
 from pathlib import Path
 
 import dotenv
 import pytest
 
-from engine import Config
+from engine import Config, Logging
 from engine.AICaller import get_api_costs, print_api_cost_summary
 from engine.AzureStorage import PDFStorageManager
 
@@ -19,23 +18,19 @@ def load_test_config():
     """Load test configuration and setup logging for the test session.
 
     This fixture runs once per test session and configures:
-    - Logging at DEBUG level for all tests
+    - Test logger filtering for noisy third-party libraries
     - Test configuration from test_config.yaml
     - Environment variables from .env file
 
     The loaded configuration is stored in pytest.config and made available
     to all tests in the session.
     """
-    # Configure logging for tests.
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-    # Silence noisy Azure HTTP logging in test output.
-    logging.getLogger("azure").setLevel(logging.WARNING)
-    logging.getLogger("azure.core.pipeline").setLevel(logging.WARNING)
-    logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(
-        logging.WARNING
+    # Centralize logging configuration for tests using engine.Logging.
+    log_level = os.getenv("TEST_LOG_LEVEL", "DEBUG").upper()
+    Logging.configure_logging(
+        log_level=log_level,
+        format_string="%(asctime)s %(levelname).1s %(module)s: %(message)s",
+        suppress_azure_logging=True,
     )
 
     config = Config.ConfigReader(Path("tests") / "test_config.yaml").get_config()

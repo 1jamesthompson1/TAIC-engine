@@ -19,6 +19,7 @@ import socket
 from pathlib import Path
 from unittest.mock import patch
 
+import bs4
 import pandas as pd
 import pytest
 
@@ -100,7 +101,9 @@ def report_scraping_settings(tmpdir, test_pdf_storage_manager):
 
 
 @pytest.fixture(scope="function")
-def get_agency_scraper(tmpdir, report_scraping_settings):
+def get_agency_scraper(
+    tmpdir, report_scraping_settings
+) -> WebsiteScraping.ReportScraper:
     """Fixture that returns a function to create agency scrapers with their own temp directories.
 
     Each scraper gets its own temporary directory for file operations.
@@ -118,6 +121,10 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
 
             if original_path.exists():
                 shutil.copy(original_path, tmpdir)
+            else:
+                pytest.fail(
+                    f"Test data file {original_path} is missing in the test data folder."
+                )
 
             return WebsiteScraping.TAICReportScraper(
                 SavedDataFrames.TAICWebsiteReportsTable(tmpdir),
@@ -128,6 +135,10 @@ def get_agency_scraper(tmpdir, report_scraping_settings):
 
             if original_path.exists():
                 shutil.copy(original_path, tmpdir)
+            else:
+                pytest.fail(
+                    f"Test data file {original_path} is missing in the test data folder."
+                )
 
             return WebsiteScraping.ATSBReportScraper(
                 SavedDataFrames.ATSBWebsiteReportsTable(tmpdir),
@@ -286,33 +297,94 @@ def test_agency_website_scraper_collecting_all_reports(
     assert pdf_count == expected_count
 
 
+@pytest.mark.parametrize(
+    "url, report_id, expected",
+    [
+        pytest.param(
+            "https://www.atsb.gov.au/investigations/ao-2025-052",
+            "ATSB_a_2025_052",
+            {
+                "summary_start": "What ",
+                "summary_end": "come.",
+                "summary_length": 3584,
+                "investigation_level": "short",
+                "occurrence_type": "Engine failure or malfunction, Missed approach",
+                "agency_id": "AO-2025-052",
+            },
+            id="ATSB standard full report",
+        ),
+        pytest.param(
+            "https://www.atsb.gov.au/investigations/ao-2007-038",
+            "ATSB_a_2007_038",
+            {
+                "summary_start": "At about",
+                "summary_end": "ments.",
+                "summary_length": 1433,
+                "investigation_level": "full",
+                "occurrence_type": "Loss of separation",
+                "agency_id": "AO-2007-038",
+            },
+            id="ATSB old report with single H2 Summary",
+        ),
+        pytest.param(
+            "https://www.atsb.gov.au/investigations/ao-2017-032",
+            "ATSB_a_2017_032",
+            {
+                "summary_start": "Preliminary report released 13 Apr",
+                "summary_end": "detachment",
+                "summary_length": 9615,
+                "investigation_level": "full",
+                "occurrence_type": "Propeller/rotor malfunction",
+                "agency_id": "AO-2017-032",
+            },
+            id="ATSB report with preliminary report treated as summary",
+        ),
+    ],
+)
+def test_atsb_report_metadata_scrape(get_agency_scraper, url, report_id, expected):
+    """Test the scraping logic of the ATSB report page."""
+    scraper = get_agency_scraper("ATSB")
+
+    soup = bs4.BeautifulSoup(scraper.get(url).content, "html.parser")
+
+    metadata = scraper.get_report_metadata(report_id, url, soup)
+
+    assert metadata.agency_id == expected["agency_id"]
+    assert metadata.investigation_type == expected["investigation_level"]
+    assert metadata.event_type == expected["occurrence_type"]
+
+    summary = metadata.summary
+    assert summary.startswith(expected["summary_start"])
+    assert summary.endswith(expected["summary_end"])
+    assert len(summary) == expected["summary_length"]
+
+
 def test_atsb_safety_issue_scrape(tmpdir):
     """Test scraping ATSB safety issues from the website."""
     # Copy existing files to temporary directory for automatic cleanup
     output_folder = Path(pytest.output_config.get("folder_name"))
     original_output_path = SavedDataFrames.ATSBWebsiteSafetyIssues(output_folder).path
-    original_report_titles = SavedDataFrames.ReportTitles(output_folder).path
+    report_titles_dc = SavedDataFrames.ReportTitles(output_folder)
 
     # Create temporary paths
-    atsb_safety_issues_df = SavedDataFrames.ATSBWebsiteSafetyIssues(Path(str(tmpdir)))
-    temp_output_path = str(atsb_safety_issues_df.path)
-    report_titles_dc = SavedDataFrames.ReportTitles(Path(str(tmpdir)))
+    atsb_safety_issues_dc = SavedDataFrames.ATSBWebsiteSafetyIssues(Path(str(tmpdir)))
 
     # Copy files if they exist
     if original_output_path.exists():
-        shutil.copy2(original_output_path, temp_output_path)
-    if original_report_titles.exists():
-        shutil.copy2(original_report_titles, report_titles_dc.path)
+        shutil.copy2(original_output_path, atsb_safety_issues_dc.path)
+    else:
+        pytest.fail(
+            "Test data file 'atsb_website_safety_issues.pkl' is missing in the test data folder."
+        )
 
     atsb_webscraper = WebsiteScraping.ATSBSafetyIssueScraper(
-        safety_issues_dc=atsb_safety_issues_df,
+        safety_issues_dc=atsb_safety_issues_dc,
         report_titles_dc=report_titles_dc,
-        refresh=True,
     )
 
     atsb_webscraper.extract_safety_issues_from_website()
 
-    output = pd.read_pickle(temp_output_path)
+    output = pd.read_pickle(atsb_safety_issues_dc.path)
 
     assert len(output) >= MINIMUM_SAFETY_ISSUES_COUNT
 

@@ -266,10 +266,14 @@ def extract_report(
 
     extraction_config = ai_extraction_config[agency].copy()
 
-    add_atsb_safety_issues = 2008
     if agency == "ATSB":
         report_year = int(report_id.split("_")[2])
-        if report_year < add_atsb_safety_issues:
+        atsb_mode_add_dates = {
+            Modes.Mode.a: 2008,
+            Modes.Mode.r: 2007,
+            Modes.Mode.m: 2009,
+        }
+        if report_year < atsb_mode_add_dates[Modes.Mode.m]:
             extraction_config["safety_issues"] = True
 
     extracted_data = ai_read_report(

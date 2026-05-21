@@ -66,12 +66,14 @@ include_namespace_packages = true
 [tool.coverage.run]
 omit = ["tests/*"]
 
+# Disable pytest capture so tests emit a single console-style log
 [tool.pytest.ini_options]
 pythonpath = ["."]
-addopts = "-n auto"
-log_cli = true
-log_cli_level = "INFO"
-log_cli_format = "%(asctime)s %(levelname)s %(name)s - %(message)s"
+addopts = "-n auto -s"
+# Disable pytest's live log handler so tests use the centralized engine.Logging
+log_cli = false
+log_cli_level = "DEBUG"
+log_cli_format = "%(levelname).1s %(filename)s - %(message)s"
 log_cli_date_format = "%H:%M:%S"
 
 [tool.uv]

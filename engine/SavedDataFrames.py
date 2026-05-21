@@ -126,7 +126,7 @@ class SavedDataFrame(ABC):
                 msg = f"Row {idx}: {e}"
                 raise ValidationError(msg) from e
 
-    def read(self) -> pd.DataFrame:
+    def read(self, validate_data: bool = True) -> pd.DataFrame:
         """Read the dataframe from disk with validation.
 
         Returns:
@@ -140,7 +140,8 @@ class SavedDataFrame(ABC):
             raise FileNotFoundError(msg)
 
         loaded_df = pd.read_pickle(self.path)
-        self.validate(loaded_df)
+        if validate_data:
+            self.validate(loaded_df)
         logger.debug(f"Read {len(loaded_df)} rows from {self.path}")
         return loaded_df
 
@@ -342,10 +343,8 @@ class ATSBWebsiteReportsTable(SavedDataFrame):
         agency_id: str
         url: str
         occurrence_date: str
-        report_status: str
-        report_release: str
         year: int
-        id: str
+        report_id: str
 
 
 class TAICWebsiteReportsTable(SavedDataFrame):
