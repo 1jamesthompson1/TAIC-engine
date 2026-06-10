@@ -185,17 +185,24 @@ def get_agency_scraper(
         ),
         pytest.param(
             "ATSB",
-            "https://www.atsb.gov.au/publications/investigation_reports/2019/mair/mo-2019-007",
+            "https://www.atsb.gov.au/investigations/mo-2019-007",
             "ATSB_m_2019_007",
             True,
             id="ATSB pass",
         ),
         pytest.param(
             "ATSB",
-            "https://www.atsb.gov.au/publications/investigation_reports/2019/mair/mo-2019-008",
+            "https://www.atsb.gov.au/investigations/mo-2019-008",
             "ATSB_m_2019_008",
             False,
             id="ATSB fail",
+        ),
+        pytest.param(
+            "ATSB",
+            "https://www.atsb.gov.au/investigations/306-mo-2014-001",
+            "ATSB_m_2014_001",
+            True,
+            id="ATSB marine",
         ),
     ],
 )
@@ -221,14 +228,45 @@ def test_report_collection(get_agency_scraper, agency, url, report_id, expected)
 
 
 @pytest.mark.parametrize(
-    "agency, expected_urls",
+    "agency, expected_urls, test_cases",
     [
-        pytest.param("TSB", [54, 25, 20, 13, 19, 10, 15, 10, 13], id="TSB"),
-        pytest.param("TAIC", [11, 12, 3, 28, 8, 4, 12, 3, 5], id="TAIC"),
-        pytest.param("ATSB", [93, 166, 43, 6, 25, 19, 15, 8, 2], id="ATSB"),
+        pytest.param(
+            "TSB",
+            [54, 25, 20, 13, 19, 10, 15, 10, 13],
+            [
+                {
+                    "Occurrence date": pd.Timestamp("2023-07-19"),
+                    "Investigation name": "A23W0082",
+                    "year": 2023,
+                },
+                {
+                    "Occurrence date": pd.Timestamp("2016-09-03"),
+                    "Investigation name": "R16C0065",
+                    "year": 2016,
+                },
+            ],
+            id="TSB",
+        ),
+        pytest.param(
+            "TAIC",
+            [13, 12, 3, 28, 8, 4, 12, 3, 5],
+            [{"id": "MO-2020-204", "year": 2020}, {"id": "RO-2011-104", "year": 2011}],
+            id="TAIC",
+        ),
+        pytest.param(
+            "ATSB",
+            [98, 170, 47, 6, 25, 22, 15, 9, 2],
+            [
+                {
+                    "url": "https://www.atsb.gov.au/investigations/ao-2024-050",
+                    "agency_id": "AO-2024-050",
+                }
+            ],
+            id="ATSB",
+        ),
     ],
 )
-def test_agency_website_scraper(get_agency_scraper, agency, expected_urls):
+def test_agency_website_scraper(get_agency_scraper, agency, expected_urls, test_cases):
     """Test the agency website scraper for correct URL generation."""
     scraper = get_agency_scraper(agency)
     scraper.settings.start_year = 2004
@@ -254,6 +292,29 @@ def test_agency_website_scraper(get_agency_scraper, agency, expected_urls):
             assert len(urls) == expected_len
         except AssertionError:
             errors.append(f"{agency} {mode} {year}: {len(urls)} != {expected_len}")
+
+    # Find out if test cases are in scraper.agency_reports with correct fields
+
+    for test_case in test_cases:
+        if agency == "TSB":
+            matches = scraper.agency_reports.query(
+                "`Occurrence date` == @test_case['Occurrence date'] and "
+                "`Investigation number` == @test_case['Investigation name'] and "
+                "year == @test_case['year']"
+            )
+        elif agency == "TAIC":
+            matches = scraper.agency_reports.query(
+                "id == @test_case['id'] and year == @test_case['year']"
+            )
+        elif agency == "ATSB":
+            matches = scraper.agency_reports.query(
+                "url == @test_case['url'] and agency_id == @test_case['agency_id']"
+            )
+
+        if len(matches) != 1:
+            errors.append(
+                f"{agency} test case {test_case} found {len(matches)} matches, expected 1."
+            )
 
     if errors:
         pytest.fail("\n" + "\n".join(errors))

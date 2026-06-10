@@ -130,6 +130,7 @@ def scrape(output_dir: Path, config: dict, refresh: bool):
     for agency in download_config.get("agencies"):
         match agency:
             case "TSB":
+                continue
                 WebsiteScraping.TSBReportScraper(report_scraping_settings).collect_all()
             case "TAIC":
                 WebsiteScraping.TAICReportScraper(
@@ -137,6 +138,7 @@ def scrape(output_dir: Path, config: dict, refresh: bool):
                     report_scraping_settings,
                 ).collect_all()
             case "ATSB":
+                continue
                 WebsiteScraping.ATSBReportScraper(
                     SavedDataFrames.ATSBWebsiteReportsTable(output_dir),
                     report_scraping_settings,

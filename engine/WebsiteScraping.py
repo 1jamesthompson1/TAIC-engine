@@ -719,8 +719,9 @@ class TAICReportScraper(ReportScraper):
         """
         investigations = self.website_reports_table_dc.read_or_create()
         page_num = 0
+        pbar = tqdm()
         while True:
-            logger.info(f"Processing page {page_num}")
+            pbar.set_description(f"Scraping TAIC, page: {page_num}")
             try:
                 new_content = self.get(
                     f"https://taic.org.nz/inquiries-recommendations?type=investigation&field_jurisdiction[11]=11&field_status[260]=260&sort_by=incident&page={page_num}"
@@ -735,7 +736,7 @@ class TAICReportScraper(ReportScraper):
             results_list = soup.find_all("div", class_="search-results__list")
 
             if not results_list or len(results_list) == 0:
-                logger.info(f"Reached end of pages at page {page_num}, stopping.")
+                tqdm.write(f"Reached end of pages at page {page_num}, stopping.")
                 break
 
             all_reports_on_page = [
@@ -743,9 +744,11 @@ class TAICReportScraper(ReportScraper):
                     "id": report.find("span", class_="card__incident").get_text(
                         strip=True
                     ),
-                    "year": report.find("span", class_="card__date")
-                    .get_text(strip=True)
-                    .split()[-1],
+                    "year": int(
+                        report.find("span", class_="card__date")
+                        .get_text(strip=True)
+                        .split()[-1]
+                    ),
                 }
                 for report in results_list[0].find_all("div", recursive=False)
             ]
@@ -758,16 +761,14 @@ class TAICReportScraper(ReportScraper):
             )
 
             if new_reports.empty:
-                logger.info(f"No new reports found on page {page_num}, stopping.")
+                tqdm.write(f"No new reports found on page {page_num}, stopping.")
                 break
 
             investigations = pd.concat([investigations, new_reports], ignore_index=True)
 
-            logger.info(
-                f"Found {len(all_reports_on_page)} reports, {len(investigations)} total"
-            )
-
             page_num += 1
+            pbar.update(1)
+        pbar.close()
 
         investigations_with_mode = investigations.copy()
 
@@ -873,7 +874,7 @@ class ATSBReportScraper(ReportScraper):
         )
 
     @staticmethod
-    def __parse_custom_divs_into_df(soup: BeautifulSoup) -> pd.DataFrame:
+    def __parse_custom_divs_into_df(soup: BeautifulSoup) -> pd.DataFrame | None:
         """Parses the custom div based table from the investigation search and listing page.
 
         Args:
@@ -881,15 +882,13 @@ class ATSBReportScraper(ReportScraper):
 
         Returns:
             DataFrame of parsed investigation information.
-
-        Raises:
-            ValueError: If the expected container div (ct-list__rows) is missing
-                from the provided BeautifulSoup object.
         """
         table_container = soup.find("div", class_="ct-list__rows")
         if not table_container:
-            msg = "Could not find the expected table container with class 'ct-list__rows' in the provided BeautifulSoup object."
-            raise ValueError(msg)
+            logger.info(
+                "Could not find the expected table container with class 'ct-list__rows' in the provided BeautifulSoup object."
+            )
+            return None
 
         table_cells = table_container.find_all("div", class_="col-xxs-12")
 
@@ -980,8 +979,14 @@ class ATSBReportScraper(ReportScraper):
 
                 page_df = self.__parse_custom_divs_into_df(soup)
 
-                page_df["url"] = page_df["title"].apply(
-                    lambda x: urljoin("https://www.atsb.gov.au", x[1])
+                if page_df is None or page_df.empty:
+                    logger.warning(
+                        f"No investigations found on page {page_num} for mode {mode}, stopping."
+                    )
+                    break
+
+                page_df["url"] = page_df["url"].apply(
+                    lambda x: urljoin("https://www.atsb.gov.au", x)
                 )
 
                 new_investigations = page_df[
