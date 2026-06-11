@@ -21,6 +21,7 @@ from lancedb.embeddings.base import TextEmbeddingFunction
 from lancedb.embeddings.registry import register
 from lancedb.embeddings.utils import TEXT
 from lancedb.pydantic import LanceModel, Vector
+from lancedb.table import Table
 from tqdm import tqdm
 
 from engine.Logging import get_logger
@@ -91,12 +92,11 @@ class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
         msg = f"Unknown model name: {self.name}"
         raise ValueError(msg)
 
-    def compute_query_embeddings(self, query: str, *args, **kwargs) -> list[np.array]:
+    def compute_query_embeddings(self, query: str, **kwargs: object) -> list[np.array]:
         """Compute embeddings for a query.
 
         Args:
             query: The query string to embed.
-            *args: Variable length argument list.
             **kwargs: Arbitrary keyword arguments.
 
         Returns:
@@ -104,12 +104,13 @@ class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
         """
         return self.compute_source_embeddings(query, input_type="query")
 
-    def compute_source_embeddings(self, texts: TEXT, *args, **kwargs) -> list[np.array]:
+    def compute_source_embeddings(
+        self, texts: TEXT, **kwargs: object
+    ) -> list[np.array]:
         """Compute embeddings for source texts.
 
         Args:
             texts: The texts to embed.
-            *args: Variable length argument list.
             **kwargs: Arbitrary keyword arguments.
 
         Returns:
@@ -122,13 +123,12 @@ class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
         return self.generate_embeddings(texts, input_type=input_type)
 
     def generate_embeddings(
-        self, texts: list[str] | np.ndarray, *args, **kwargs
+        self, texts: list[str] | np.ndarray, **kwargs: object
     ) -> list[np.array]:
         """Get the embeddings for the given texts.
 
         Args:
             texts: list[str] or np.ndarray of strings to embed.
-            *args: Variable length argument list.
             **kwargs: Arbitrary keyword arguments including:
                 input_type: Optional input type for embeddings.
                 truncation: Optional boolean to truncate texts.
@@ -247,7 +247,7 @@ class VectorDB:
             msg = f"Existing table {self.table_name} has embedding function {self.current_table_model} which does not match the specified model {model_name}. Please specify a different table name or delete the existing table if you want to use a different embedding model."
             raise ValueError(msg)
 
-    def _get_or_create_table(self):
+    def _get_or_create_table(self) -> Table:
         """Get existing table or create new one.
 
         Returns:
@@ -281,7 +281,7 @@ class VectorDB:
         return table
 
     def tokenize_documents(
-        self, df, document_column_name, tokenization_column_name
+        self, df: pd.DataFrame, document_column_name: str, tokenization_column_name: str
     ) -> pd.DataFrame:
         """Tokenize documents and add token counts to dataframe.
 
@@ -310,7 +310,7 @@ class VectorDB:
         return df
 
     def add_documents(
-        self, documents_df, document_column_name="document"
+        self, documents_df: pd.DataFrame, document_column_name: str = "document"
     ) -> pd.Series | None:
         """Add documents to the vector database with generated embeddings.
 
@@ -397,7 +397,7 @@ class VectorDB:
         ):
             logger.debug(f"Batch {i}: {len(batch)} documents, {token_count} tokens")
 
-        def add_documents_to_db(batch: pd.DataFrame):
+        def add_documents_to_db(batch: pd.DataFrame) -> object:
             pa_table = pa.Table.from_pandas(
                 batch,
                 schema=pa.schema(

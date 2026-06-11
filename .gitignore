@@ -4,6 +4,8 @@ __pycache__
 python/.env
 .env
 
+site/**
+
 # This folder is for various notebooks and stuff I want handy while developing
 workbench/
 

@@ -3,7 +3,9 @@
 import argparse
 import os
 import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from . import (
     Combine,
@@ -30,7 +32,7 @@ SECONDS_IN_MINUTE = 60
 SECONDS_IN_HOUR = 3600
 
 
-def format_duration(seconds):
+def format_duration(seconds: float) -> str:
     """Format duration to show appropriate time units.
 
     Returns:
@@ -48,7 +50,7 @@ def format_duration(seconds):
     return f"{hours}h {minutes}m {remaining_seconds:.1f}s ({seconds:.2f} seconds)"
 
 
-def log_timing_summary(timing_results, total_time):
+def log_timing_summary(timing_results: dict[str, float], total_time: float) -> None:
     """Log the timing summary for the executed steps."""
     logger.info("%s", "=" * 60)
     logger.info("TIMING SUMMARY")
@@ -66,14 +68,20 @@ def log_timing_summary(timing_results, total_time):
     logger.info("%s", "=" * 60)
 
 
-def run_step(step_name, func, timing_results, *args, **kwargs):
+def run_step(
+    step_name: str,
+    func: Callable[..., Any],
+    timing_results: dict[str, float],
+    *args: object,
+    **kwargs: object,
+) -> None:
     """Run a step function and record its timing."""
     start_time = time.time()
     func(*args, **kwargs)
     timing_results[step_name] = time.time() - start_time
 
 
-def download(container: str, output_dir: Path, refresh: bool):
+def download(container: str, output_dir: Path, refresh: bool) -> None:
     """Download the latest engine output from Azure Storage and get generic data.
 
     Args:
@@ -91,7 +99,7 @@ def download(container: str, output_dir: Path, refresh: bool):
     downloader.download_latest_output()
 
 
-def scrape(output_dir: Path, config: dict, refresh: bool):
+def scrape(output_dir: Path, config: dict, refresh: bool) -> None:
     """Scrape reports from websites and extract additional data.
 
     Args:
@@ -130,7 +138,6 @@ def scrape(output_dir: Path, config: dict, refresh: bool):
     for agency in download_config.get("agencies"):
         match agency:
             case "TSB":
-                continue
                 WebsiteScraping.TSBReportScraper(report_scraping_settings).collect_all()
             case "TAIC":
                 WebsiteScraping.TAICReportScraper(
@@ -138,7 +145,6 @@ def scrape(output_dir: Path, config: dict, refresh: bool):
                     report_scraping_settings,
                 ).collect_all()
             case "ATSB":
-                continue
                 WebsiteScraping.ATSBReportScraper(
                     SavedDataFrames.ATSBWebsiteReportsTable(output_dir),
                     report_scraping_settings,
@@ -170,7 +176,7 @@ def scrape(output_dir: Path, config: dict, refresh: bool):
     taic_recs_scraper.extract_recommendations_from_website()
 
 
-def extract(output_dir: Path, config: dict, refresh: bool):
+def extract(output_dir: Path, config: dict, refresh: bool) -> None:
     """Extract report artifacts from PDFs.
 
     Args:
@@ -214,7 +220,7 @@ def extract(output_dir: Path, config: dict, refresh: bool):
     )
 
 
-def embed(output_dir: Path, config: dict, refresh: bool):
+def embed(output_dir: Path, config: dict, refresh: bool) -> None:
     """Embed extracted reports into the vector database.
 
     First step is creating the long dataformat dataframe, then embedding the document text from each row.
@@ -255,7 +261,7 @@ def embed(output_dir: Path, config: dict, refresh: bool):
     )
 
 
-def upload(container_name: str, output_dir: Path, output_config: dict):
+def upload(container_name: str, output_dir: Path, output_config: dict) -> None:
     """Upload the latest engine output artifacts to Azure Storage.
 
     Args:
@@ -273,7 +279,7 @@ def upload(container_name: str, output_dir: Path, output_config: dict):
     uploader.upload_latest_output()
 
 
-def cli():
+def cli() -> None:
     """Main CLI entry point for the engine."""
     parser = argparse.ArgumentParser(
         description="A engine that will download, extract, and summarize PDFs from the marine accident investigation reports. More information can be found here: https://github.com/1jamesthompson1/TAIC-engine/"

@@ -6,7 +6,7 @@ Uses pymupdf4llm for better structure preservation and markdown output.
 
 import logging
 import re
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import Future, ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
@@ -33,7 +33,7 @@ def process_all_pdfs_into_text(
     refresh: bool,
     pdf_storage_manager: PDFStorageManager,
     max_workers: int | None = None,
-):
+) -> None:
     """Convert PDFs to text and save as dataframe.
 
     Args:
@@ -114,7 +114,11 @@ def process_all_pdfs_into_text(
 
 
 def _process_future_result(
-    future, report_id, batch_reports, parsed_reports_df, parsed_reports_dc
+    future: Future,
+    report_id: str,
+    batch_reports: list[dict[str, str]],
+    parsed_reports_df: pd.DataFrame,
+    parsed_reports_dc: ParsedReports,
 ) -> pd.DataFrame:
     """Process the result of a single PDF processing future.
 

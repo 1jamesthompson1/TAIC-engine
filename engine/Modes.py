@@ -1,5 +1,7 @@
 """Mode enumeration for different report types."""
 
+from __future__ import annotations
+
 import re
 from enum import Enum
 
@@ -12,7 +14,7 @@ class Mode(Enum):
     m = 2  # Marine
 
     @classmethod
-    def as_string(cls, mode):
+    def as_string(cls, mode: Mode) -> str | None:
         """Convert mode to human-readable string.
 
         Args:
@@ -30,7 +32,7 @@ class Mode(Enum):
         return None
 
     @classmethod
-    def as_char(cls, mode):
+    def as_char(cls, mode: Mode) -> str:
         """Convert mode to single character.
 
         Args:
@@ -45,7 +47,7 @@ class Mode(Enum):
 all_modes = [Mode.a, Mode.r, Mode.m]
 
 
-def get_report_mode_from_id(report_id: str):
+def get_report_mode_from_id(report_id: str) -> Mode | None:
     """Extract report mode from report ID string.
 
     Args:

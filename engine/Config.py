@@ -30,7 +30,7 @@ class ConfigFile:
 class ConfigReader(ConfigFile):
     """Read configuration from YAML files."""
 
-    def __init__(self, file_path: Path = Path("config.yaml")):
+    def __init__(self, file_path: Path = Path("config.yaml")) -> None:
         """Initialize configuration reader.
 
         Args:
@@ -55,11 +55,11 @@ class ConfigReader(ConfigFile):
 class ConfigWriter(ConfigFile):
     """Write configuration to YAML files."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize configuration writer."""
         super().__init__()
 
-    def write_config(self, config) -> None:
+    def write_config(self, config: dict) -> None:
         """Write configuration to file.
 
         Args:

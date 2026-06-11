@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 class InvalidExtractionConfigError(ValueError):
     """Raised when none of the extraction flags (safety_issues, recommendations, metadata) are True."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the exception with an appropriate error message."""
         super().__init__(
             "At least one of safety_issues, recommendations, or metadata must be True"

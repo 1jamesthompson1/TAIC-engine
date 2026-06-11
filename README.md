@@ -12,6 +12,16 @@ This github repository contains code for a data pipeline that ingests publicly a
 
 There is also a [collection](https://github.com/1jamesthompson1/TAIC-engine/tree/d735c0f3a50f4ef24f1e7198730c984fdb3446c7/notebooks) of jupyter notebooks that show the development process of some of the more complex features in the engine.
 
+## Documentation
+
+A full MkDocs documentation site is available and can be served locally:
+
+```bash
+uv run mkdocs serve
+```
+
+Then open `http://localhost:8000` in your browser.
+
 ## Contributing
 
 Get code and install dependencies:

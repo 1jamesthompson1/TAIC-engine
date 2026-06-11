@@ -4,10 +4,13 @@ This module provides an interface to interact with OpenAI and Azure OpenAI APIs,
 including cost tracking, token management, and support for structured outputs.
 """
 
+from __future__ import annotations
+
 import os
 import warnings
 from dataclasses import dataclass
 from threading import Lock
+from typing import Any
 
 import openai
 import tiktoken
@@ -24,7 +27,7 @@ load_dotenv()
 class ClientNotAvailableError(Exception):
     """Raised when OpenAI/Azure client is not configured."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize ClientNotAvailableError."""
         super().__init__(
             "OpenAI client is not available. Please set either OPENAI_API_KEY or both "
@@ -176,7 +179,7 @@ elif openai_api_key:
 
 def track_api_cost(
     model: str, input_tokens: int, output_tokens: int, cached_tokens: int = 0
-):
+) -> None:
     """Track API costs for monitoring purposes.
 
     Args:
@@ -230,7 +233,7 @@ def track_api_cost(
         _api_costs["by_model"][model]["calls"] += 1
 
 
-def get_api_costs():
+def get_api_costs() -> dict:
     """Get current API cost tracking data.
 
     Returns:
@@ -262,7 +265,7 @@ def get_api_costs():
         }
 
 
-def print_api_cost_summary(costs_data=None):
+def print_api_cost_summary(costs_data: dict | None = None) -> None:
     """Print API cost summary to stdout (used by pytest hook)."""
     costs = costs_data if costs_data is not None else get_api_costs()
 
@@ -313,7 +316,7 @@ def print_api_cost_summary(costs_data=None):
         console.print("")
 
 
-def reset_api_costs():
+def reset_api_costs() -> None:
     """Reset cost tracking (useful for test isolation).
 
     This function resets all accumulated API cost data to zero.
@@ -339,7 +342,7 @@ class BaseAICaller:
     including token counting and query validation.
     """
 
-    def __init__(self, client, model, limit):
+    def __init__(self, client: OpenAI | None, model: str, limit: int) -> None:
         """Initialize the BaseAICaller.
 
         Args:
@@ -352,7 +355,7 @@ class BaseAICaller:
         self.limit = limit
 
     @staticmethod
-    def get_tokens(texts):
+    def get_tokens(texts: list[str]) -> list[int]:
         """Count tokens in the given texts.
 
         Args:
@@ -365,7 +368,7 @@ class BaseAICaller:
         enc = tiktoken.encoding_for_model("gpt-5")
         return [len(enc.encode(text)) for text in texts]
 
-    def check_query_above_limit(self, query):
+    def check_query_above_limit(self, query: str) -> None:
         """Check if a query exceeds the token limit.
 
         Args:
@@ -386,7 +389,7 @@ class OpenAICaller(BaseAICaller):
     outputs, reasoning, and cost tracking.
     """
 
-    def __init__(self, client, model, limit):
+    def __init__(self, client: OpenAI | None, model: str, limit: int) -> None:
         """Initialize the OpenAICaller.
 
         Args:
@@ -398,14 +401,14 @@ class OpenAICaller(BaseAICaller):
 
     def query(  # noqa: PLR0912, PLR0913, PLR0917
         self,
-        system,
-        user,
-        temp,
-        max_tokens=32_000,
-        output_structure=None,
-        reasoning=None,
-        raw_output=False,
-    ):
+        system: str,
+        user: str,
+        temp: float | None,
+        max_tokens: int = 32_000,
+        output_structure: type | None = None,
+        reasoning: str | None = None,
+        raw_output: bool = False,
+    ) -> Any:  # noqa: ANN401
         """Query the OpenAI/Azure OpenAI model.
 
         Args:
@@ -517,7 +520,7 @@ class AICaller:
     Manages multiple model instances and routes queries to the appropriate model.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the AICaller with available models."""
         self.models = {
             name: OpenAICaller(openai_client, definition.api_model, definition.limit)
@@ -525,8 +528,14 @@ class AICaller:
         }
 
     def query(
-        self, system, user, temp=None, model="gpt-4", max_tokens=50_000, **kwargs
-    ):
+        self,
+        system: str,
+        user: str,
+        temp: float | None = None,
+        model: str = "gpt-4",
+        max_tokens: int = 50_000,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> Any:  # noqa: ANN401
         """Query an AI model.
 
         Args:

@@ -49,6 +49,9 @@ dev = [
     "azure-data-tables>=12.7.0",
     "ruff>=0.15.0",
     "pypdf>=6.7.0",
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.25.0",
 ]
 
 [project.urls]
@@ -96,6 +99,7 @@ extend-exclude = ["*.ipynb"]
 [tool.ruff.lint]
 select = [
     "A",
+    "ANN",
     "B",
     "C4",
     "D",
@@ -117,9 +121,12 @@ select = [
     "W",
 ]
 
-ignore = ["E501"]  # Ignore line too long
+ignore = ["E501", "ANN204"]  # Ignore line too long, and missing return type for special methods
 
 preview = true
+
+[tool.ruff.lint.flake8-annotations]
+mypy-init-return = true
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

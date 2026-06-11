@@ -19,7 +19,7 @@ from urllib.parse import urljoin, urlparse
 import hrequests
 import hrequests.exceptions
 import pandas as pd
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -56,7 +56,7 @@ class ReportMetadata:
     url: str
     agency_id: str | None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Return string representation of ReportMetadata.
 
         Returns:
@@ -64,7 +64,7 @@ class ReportMetadata:
         """
         return f"ReportMetadata({self.report_id}, {self.title})"
 
-    def as_report_row(self):
+    def as_report_row(self) -> list:
         """Return values in the order defined by ReportTitles.Row.
 
         Returns:
@@ -94,7 +94,7 @@ class ReportScraperSettings:
     refresh_metadata: bool = False
     scraper_workers: int = 1
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Convert refresh_metadata to ignore_metadata for backward compatibility."""
         self.ignore_metadata = self.refresh_metadata
 
@@ -141,7 +141,7 @@ class WebsiteScraper:
         }
 
     @staticmethod
-    def get_randomized_headers():
+    def get_randomized_headers() -> dict[str, str]:
         """Generate randomized headers to avoid bot detection.
 
         Returns:
@@ -231,8 +231,8 @@ class WebsiteScraper:
         attempts: int = 3,
         wait_min_s: float = 0.5,
         wait_max_s: float = 5.0,
-        **kwargs,
-    ):
+        **kwargs: object,
+    ) -> hrequests.Response:
         """HTTP GET with bounded retries and randomized headers.
 
         All website scrapers should use this instead of calling `hrequests.get` directly.
@@ -258,12 +258,12 @@ class WebsiteScraper:
             retry=retry_if_exception_type(hrequests.exceptions.ClientException),
             reraise=True,
         )
-        def _inner():
+        def _inner() -> hrequests.Response:
             return hrequests.get(url, headers=merged_headers, **kwargs)
 
         return _inner()
 
-    def id_converter(self, agency, agency_id):
+    def id_converter(self, agency: str, agency_id: str | None) -> str | None:
         """Convert agency-specific ID to report ID using the COMPLETE report titles dataframe.
 
         The agency argument is needed as some of the agency IDs are not globally unique
@@ -331,7 +331,7 @@ class ReportScraper(WebsiteScraper, ABC):
         self.agency = agency
         super().__init__(self.settings.report_titles_dc)
 
-    def collect_all(self):
+    def collect_all(self) -> None:
         """Collect reports for all configured modes."""
         logger.welcome(
             f"Downloading report PDFs for {self.agency}",
@@ -378,7 +378,7 @@ class ReportScraper(WebsiteScraper, ABC):
         """
         return f"{self.agency}_{mode.name}_{year}_{report_id}"
 
-    def collect_mode(self, mode):
+    def collect_mode(self, mode: Modes.Mode) -> None:
         """Collect all reports for a specific transportation mode.
 
         Args:
@@ -426,7 +426,7 @@ class ReportScraper(WebsiteScraper, ABC):
         logger.info(f"Total time: {total_time:.2f} seconds")
         logger.info(f"Average time per year: {avg_time:.2f} seconds")
 
-    def collect_year(self, year, mode):
+    def collect_year(self, year: int, mode: Modes.Mode) -> dict:
         """Helper method to collect a year's reports with timing information.
 
         Args:
@@ -461,7 +461,9 @@ class ReportScraper(WebsiteScraper, ABC):
             "duration": duration,
         }
 
-    def collect_report(self, report_id, url, agency_id=None):
+    def collect_report(
+        self, report_id: str, url: str, agency_id: str | None = None
+    ) -> bool:
         """Collect a single report.
 
         Args:
@@ -523,7 +525,7 @@ class ReportScraper(WebsiteScraper, ABC):
         soup: BeautifulSoup,
         base_url: str,
         agency_id: str | None = None,
-    ):
+    ) -> bool | None:
         """Download report directly to PDF storage container.
 
         Args:
@@ -671,7 +673,7 @@ class ReportScraper(WebsiteScraper, ABC):
             The report metadata object containing extracted information.
         """
 
-    def __add_report_metadata_to_df(self, metadata: ReportMetadata):
+    def __add_report_metadata_to_df(self, metadata: ReportMetadata) -> None:
         with self._metadata_file_lock:
             # Check if report_id exists
             existing_idx = self.report_titles_df.index[
@@ -711,7 +713,7 @@ class TAICReportScraper(ReportScraper):
         self.website_reports_table_dc = website_reports_table_dc
         self.agency_reports = self.__get_taic_investigations()
 
-    def __get_taic_investigations(self):
+    def __get_taic_investigations(self) -> pd.DataFrame:
         """TAICs websites provides an investigation table than can be easily read by pandas read_html.
 
         Returns:
@@ -783,7 +785,9 @@ class TAICReportScraper(ReportScraper):
 
         return investigations_with_mode
 
-    def get_report_urls(self, mode, year):
+    def get_report_urls(
+        self, mode: Modes.Mode, year: int
+    ) -> list[tuple[str, str, str | None]]:
         """Get report URLs for a specific mode and year.
 
         Args:
@@ -804,7 +808,9 @@ class TAICReportScraper(ReportScraper):
             .to_list()
         ]
 
-    def get_report_metadata(self, report_id: str, url: str, soup: BeautifulSoup):  # noqa: PLR6301
+    def get_report_metadata(  # noqa: PLR6301
+        self, report_id: str, url: str, soup: BeautifulSoup
+    ) -> ReportMetadata:
         """Extract report metadata from TAIC website.
 
         Args:
@@ -914,7 +920,7 @@ class ATSBReportScraper(ReportScraper):
 
         return pd.DataFrame(investigations)
 
-    def __get_atsb_investigation_table_url(self, mode, page_num):
+    def __get_atsb_investigation_table_url(self, mode: str, page_num: int) -> str:
         """Constructs the URL for the ATSB investigation table based on the mode and page number.
 
         Args:
@@ -934,7 +940,7 @@ class ATSBReportScraper(ReportScraper):
 
         return f"https://www.atsb.gov.au/investigations?atsb_sort=release_date_desc&transport_mode={mode_to_number[mode]}&investigation_number=&keywords=&location=&state=All&investigation_type=457&investigation_status=All&report_status=All&highest_injury_level=All&occurrence_class=All&{dates}&anticipated_completion%5Bmin%5D=&anticipated_completion%5Bmax%5D=&report_release_date%5Bmin%5D=&report_release_date%5Bmax%5D=&page={page_num}"
 
-    def __get_atsb_investigations(self):
+    def __get_atsb_investigations(self) -> pd.DataFrame:
         """ATSBs websites provides an investigation table than can be easily read by pandas read_html.
 
         The only catch is that the aviation goes all the way back to 1960s and so only the first few
@@ -1049,7 +1055,9 @@ class ATSBReportScraper(ReportScraper):
 
         return updated_investigations
 
-    def get_report_urls(self, mode, year):
+    def get_report_urls(
+        self, mode: Modes.Mode, year: int
+    ) -> list[tuple[str, str, str | None]]:
         """Get report URLs for a specific mode and year.
 
         Args:
@@ -1126,7 +1134,7 @@ class ATSBReportScraper(ReportScraper):
         )
 
     @staticmethod
-    def get_summary(soup):
+    def get_summary(soup: BeautifulSoup) -> str | None:
         """Gets the summary from the soup object.
 
         This is a placeholder as ATSB does not have a summary field in the report metadata.
@@ -1209,7 +1217,7 @@ class TSBReportScraper(ReportScraper):
 
         self.agency_reports = self.__get_tsb_investigations()
 
-    def __get_tsb_investigations(self):
+    def __get_tsb_investigations(self) -> pd.DataFrame:
         """The TSB is very well setup and works friendly with the pandas read_html.
 
         Therefore I can just read all of the investigation tables from the TSB website
@@ -1244,7 +1252,9 @@ class TSBReportScraper(ReportScraper):
 
         return merged_modes_df
 
-    def get_report_urls(self, mode, year):
+    def get_report_urls(
+        self, mode: Modes.Mode, year: int
+    ) -> list[tuple[str, str, str | None]]:
         """Get report URLs for a specific mode and year.
 
         Args:
@@ -1267,7 +1277,8 @@ class TSBReportScraper(ReportScraper):
             .to_list()
         ]
 
-    def _extract_title_from_title_block(self, title_block):  # noqa: PLR6301
+    @staticmethod
+    def _extract_title_from_title_block(title_block: Tag) -> tuple[str, str | None]:
         """Extract title information from the title block element.
 
         Args:
@@ -1301,7 +1312,7 @@ class TSBReportScraper(ReportScraper):
         title = ", ".join([*paragraph_text, date_text])
         return title, event_type
 
-    def _extract_investigation_level(self, soup):  # noqa: PLR6301
+    def _extract_investigation_level(self, soup: BeautifulSoup) -> str | None:  # noqa: PLR6301
         """Extract investigation level from soup.
 
         Args:
@@ -1319,7 +1330,7 @@ class TSBReportScraper(ReportScraper):
                 investigation_level = match.group(1)
         return investigation_level
 
-    def _get_investigation_type(self, investigation_level):  # noqa: PLR6301
+    def _get_investigation_type(self, investigation_level: str | None) -> str:  # noqa: PLR6301
         """Get investigation type string from investigation level.
 
         Args:
@@ -1414,7 +1425,10 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
         self.safety_issues_dc = safety_issues_dc
         self.refresh = refresh
 
-    def _process_safety_issues_page(self, html_content, mode, current_page, pbar):  # noqa: PLR6301
+    @staticmethod
+    def _process_safety_issues_page(
+        html_content: str, mode: str, current_page: int, pbar: tqdm
+    ) -> None:
         """Process a single page of safety issues.
 
         Args:
@@ -1473,7 +1487,9 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
 
         return pd.DataFrame(safety_issues)
 
-    def extract_safety_issue_details(self, safety_issue_df):
+    def extract_safety_issue_details(
+        self, safety_issue_df: pd.DataFrame
+    ) -> pd.DataFrame:
         """Extract details for each safety issue by visiting their individual pages.
 
         Args:
@@ -1537,7 +1553,7 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
 
         return pd.concat([already_extracted, new_si], ignore_index=True)
 
-    def _format_and_save_safety_issues(self, safety_issue_df):
+    def _format_and_save_safety_issues(self, safety_issue_df: pd.DataFrame) -> None:
         """Format safety issues and save them to disk.
 
         Args:
@@ -1569,7 +1585,7 @@ Spread across {safety_issue_df["report_id"].nunique()} reports""")
 
         self.safety_issues_dc.save(safety_issue_df)
 
-    def extract_safety_issues_from_website(self):
+    def extract_safety_issues_from_website(self) -> None:
         """Extract all safety issues from ATSB website."""
         if self.refresh:
             safety_issues_df = self.safety_issues_dc.create_empty()
@@ -1687,7 +1703,7 @@ class RecommendationScraper(WebsiteScraper, ABC):
         self.loop_iter = self.LOOP_ITER
         self.agency = self.AGENCY
 
-    def extract_recommendations_from_website(self):
+    def extract_recommendations_from_website(self) -> None:
         """Extract all recommendations from the agency website.
 
         It does this through two passes. The first pass is to read through the recommendation tables. Then it will open up each recommendation page to extract the extra information.
@@ -1761,7 +1777,7 @@ class RecommendationScraper(WebsiteScraper, ABC):
         self.recommendations_dc.save(recommendations_df)
 
     @abstractmethod
-    def extract_recommendation_data(self, url) -> dict:
+    def extract_recommendation_data(self, url: str) -> dict:
         """Goes to the URL and extracts the needed data.
 
         This method must be implemented by subclasses to handle agency-specific
@@ -1775,7 +1791,7 @@ class RecommendationScraper(WebsiteScraper, ABC):
         """
 
     @abstractmethod
-    def process_new_table(self, table) -> pd.DataFrame:
+    def process_new_table(self, table: pd.DataFrame) -> pd.DataFrame:
         """Takes a recently read table and processes it according to agency-specific rules.
 
         This method must be implemented by subclasses to handle agency-specific
@@ -1789,7 +1805,7 @@ class RecommendationScraper(WebsiteScraper, ABC):
         """
 
     @abstractmethod
-    def get_url(self, element) -> str:
+    def get_url(self, element: str | int) -> str:
         """Generates the URL for a given element (page number, mode, etc.).
 
         This method must be implemented by subclasses to handle agency-specific
@@ -1797,7 +1813,7 @@ class RecommendationScraper(WebsiteScraper, ABC):
 
         Parameters
         ----------
-        element : Any
+        element : str | int
             The element used to generate the URL (e.g., page number, mode)
 
         Returns:
@@ -1807,7 +1823,7 @@ class RecommendationScraper(WebsiteScraper, ABC):
         """
 
     @abstractmethod
-    def get_table(self, element) -> pd.DataFrame:
+    def get_table(self, element: str | int) -> pd.DataFrame:
         """Retrieves the recommendation table from the website for a given element.
 
         This method must be implemented by subclasses to handle agency-specific
@@ -1832,7 +1848,7 @@ class TSBRecommendationsScraper(RecommendationScraper):
     LOOP_ITER: ClassVar[list[str]] = ["rail", "marine", "aviation"]
     AGENCY: ClassVar[str] = "TSB"
 
-    def get_url(self, element):
+    def get_url(self, element: str) -> str:
         """Get the URL for a recommendation element.
 
         Args:
@@ -1845,7 +1861,7 @@ class TSBRecommendationsScraper(RecommendationScraper):
             f"{self.base_url}/eng/recommandations-recommendations/{element}/index.html"
         )
 
-    def get_table(self, element):
+    def get_table(self, element: str) -> pd.DataFrame:
         """Get the recommendations table for a specific element.
 
         Args:
@@ -1876,7 +1892,7 @@ class TSBRecommendationsScraper(RecommendationScraper):
             logger.info(f"Multiple tables found on {url}, using the first one")
         return tables[0]
 
-    def extract_recommendation_data(self, url):
+    def extract_recommendation_data(self, url: str) -> dict:
         """Read the webpage and extract recommendation data.
 
         This will read the webpage and extract:
@@ -1941,7 +1957,7 @@ class TSBRecommendationsScraper(RecommendationScraper):
             "recommendation_context": recommendation_context,
         }
 
-    def process_new_table(self, table):
+    def process_new_table(self, table: pd.DataFrame) -> pd.DataFrame:
         """Process a new recommendations table.
 
         Args:
@@ -1994,7 +2010,7 @@ class TAICRecommendationsScraper(RecommendationScraper):
     LOOP_ITER: ClassVar[range] = range(300)
     AGENCY: ClassVar[str] = "TAIC"
 
-    def get_url(self, element):
+    def get_url(self, element: int) -> str:
         """Get the URL for a recommendations page element.
 
         Args:
@@ -2005,7 +2021,7 @@ class TAICRecommendationsScraper(RecommendationScraper):
         """
         return f"{self.base_url}/inquiries-recommendations?type=recommendation&field_recipient_name=All&sort_by=latest&page={element}"
 
-    def get_table(self, element) -> pd.DataFrame:
+    def get_table(self, element: int) -> pd.DataFrame:
         """Get the recommendations table for a specific page.
 
         Args:
@@ -2057,7 +2073,7 @@ class TAICRecommendationsScraper(RecommendationScraper):
 
         return pd.DataFrame(rows, columns=["recommendation_id", "url"])
 
-    def process_new_table(self, table):  # noqa: PLR6301
+    def process_new_table(self, table: pd.DataFrame) -> pd.DataFrame:  # noqa: PLR6301
         """Process a new recommendations table.
 
         Args:
@@ -2068,7 +2084,7 @@ class TAICRecommendationsScraper(RecommendationScraper):
         """
         return table
 
-    def extract_recommendation_data(self, url) -> dict:
+    def extract_recommendation_data(self, url: str) -> dict:
         """Read the actual recommendation page and extract needed data.
 
         This will extract information that is not found in the table:

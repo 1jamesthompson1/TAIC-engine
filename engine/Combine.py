@@ -1,5 +1,7 @@
 """A module that takes in all the individual data outputs of the engine and formats them into a single long dataframe."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Literal
 
@@ -55,7 +57,7 @@ def expand_extracted_report_metadata(extracted_report: pd.DataFrame) -> pd.DataF
         columns=["safety_issues", "recommendations", "sections"]
     )
 
-    def pull_metadata(metadata):
+    def pull_metadata(metadata: dict) -> dict:
         occurrence_metadata = metadata["occurrence"]
         return {
             "location": occurrence_metadata["location"]["standardized_location"],
@@ -145,7 +147,9 @@ def create_document_id(
     return f"{report_id}_{document_type}_{item_id}"
 
 
-def combine_recommendations(atsb_extracted, tsb_scraped, taic_scraped) -> pd.DataFrame:
+def combine_recommendations(
+    atsb_extracted: pd.DataFrame, tsb_scraped: pd.DataFrame, taic_scraped: pd.DataFrame
+) -> pd.DataFrame:
     """Combine the extracted recommendations and scraped recommendations.
 
     Turns into standard format to be enriched with metadata.
@@ -196,7 +200,7 @@ def combine_recommendations(atsb_extracted, tsb_scraped, taic_scraped) -> pd.Dat
 
     final_recs = combined_recs[["report_id", "document_id", "url"]].copy()
 
-    def construct_recommendation_document(row):
+    def construct_recommendation_document(row: pd.Series) -> str:
         document = row["recommendation"]
         if row["recommendation_context"]:
             document += f"\n\n---\n**context**\n{row['recommendation_context']}"
@@ -215,7 +219,9 @@ def combine_recommendations(atsb_extracted, tsb_scraped, taic_scraped) -> pd.Dat
     return final_recs
 
 
-def combine_safety_issues(extracted_si, atsb_scraped_si) -> pd.DataFrame:
+def combine_safety_issues(
+    extracted_si: pd.DataFrame, atsb_scraped_si: pd.DataFrame
+) -> pd.DataFrame:
     """Combine the extracted safety issues and scraped safety issues.
 
     Turns into standard format to be enriched with metadata.
