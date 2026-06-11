@@ -8,7 +8,7 @@ import pytest
 from engine import Combine, SavedDataFrames
 
 
-def test_metadata_expansion():
+def test_metadata_expansion() -> None:
     """Test that the metadata expansion function correctly expands occurrence metadata into columns."""
     extracted_reports = SavedDataFrames.ExtractedReports(
         Path(pytest.output_config["folder_name"])
@@ -47,7 +47,7 @@ def test_metadata_expansion():
                 ), f"Row {row.report_id}: Value '{value}' in column '{col}' should be of type {expected_type}"
 
 
-def test_metadata_combination():
+def test_metadata_combination() -> None:
     """Test that the metadata combination function correctly combines the extracted and scraped metadata, prioritizing scraped event type over extracted accident type."""
     output_path = Path(pytest.output_config["folder_name"])
 
@@ -87,7 +87,7 @@ def test_metadata_combination():
     ), f"Combined metadata should have {len(combined_report_ids)} rows, but got {len(combined_metadata)}"
 
 
-def test_recommendation_combination():
+def test_recommendation_combination() -> None:
     """Test that the recommendation combination function correctly combines the extracted and scraped recommendations, and that the resulting dataframe has the expected columns."""
     atsb_extracted = SavedDataFrames.ExtractedReports(
         Path(pytest.output_config["folder_name"])
@@ -124,7 +124,7 @@ def test_recommendation_combination():
     ), f"Combined recommendations should have {expected_length} rows, but got {len(combined_recs)}"
 
 
-def test_safety_issue_combination():
+def test_safety_issue_combination() -> None:
     """Test that the safety issue combination function correctly combines the extracted and scraped safety issues, and that the resulting dataframe has the expected columns."""
     atsb_scraped_si = SavedDataFrames.ATSBWebsiteSafetyIssues(
         Path(pytest.output_config["folder_name"])
@@ -159,7 +159,7 @@ def test_safety_issue_combination():
     ], "Safety issues from the same report should have unique document IDs"
 
 
-def test_creation_of_long_data_format(tmp_path):
+def test_creation_of_long_data_format(tmp_path: object) -> None:
     """Test that the function to create the long data format correctly combines all the different dataframes into a single long-format dataframe with the expected columns."""
     # For this test we will just check that the function runs and produces a dataframe with the expected columns, since the actual content of the dataframe will depend on the input data and the combination logic which is tested in other tests.
 

@@ -65,7 +65,9 @@ logger = logging.getLogger(__name__)
         ("TAIC_a_2019_006", 73),
     ],
 )
-def test_single_pdf_parsing(stable_pdf_storage_manager, report_id, expected_pages):
+def test_single_pdf_parsing(
+    stable_pdf_storage_manager: object, report_id: str, expected_pages: int
+) -> None:
     """Test that the parsing of the PDF has the write number of pages.
 
     Args:
@@ -85,7 +87,7 @@ def test_single_pdf_parsing(stable_pdf_storage_manager, report_id, expected_page
     ), f"Expected {expected_pages} pages, but found {len(page_numbers)} in {report_id}"
 
 
-def test_handling_of_nonexistent_pdf(stable_pdf_storage_manager):
+def test_handling_of_nonexistent_pdf(stable_pdf_storage_manager: object) -> None:
     """Test that the parser handles a non-existent PDF gracefully."""
     non_existent_report_id = "non_existent_report"
     extracted_text = PDFParsing.pdf_to_text(
@@ -95,7 +97,9 @@ def test_handling_of_nonexistent_pdf(stable_pdf_storage_manager):
     assert extracted_text is None, "Extracted text should be None for non-existent PDF"
 
 
-def test_process_all_pdfs_into_text(tmp_path, stable_pdf_storage_manager):
+def test_process_all_pdfs_into_text(
+    tmp_path: object, stable_pdf_storage_manager: object
+) -> None:
     """Test PDF parsing processor using PDFs from the stable Azure container.
 
     This tests that it can find the reports. Download them, then process them into text and save the results in a dataframe.

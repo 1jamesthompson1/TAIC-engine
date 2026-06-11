@@ -15,14 +15,14 @@ REASONING_LEVELS_COUNT = 3
         pytest.param("gpt-5-mini", "Hello can you respond?", True, id="gpt-5-mini"),
     ],
 )
-def test_ai_caller(model, user, expected_response):
+def test_ai_caller(model: str, user: str, expected_response: bool) -> None:
     """Test basic AI caller functionality with different models."""
     response = ai_caller.query(model=model, system="", user=user, max_tokens=100)
 
     assert isinstance(response, str) == expected_response
 
 
-def test_ai_over_token_limit():
+def test_ai_over_token_limit() -> None:
     """Test that exceeding token limit raises an exception."""
     with pytest.raises(QueryTooLongError):
         ai_caller.query(
@@ -33,7 +33,7 @@ def test_ai_over_token_limit():
         )
 
 
-def test_structured_output():
+def test_structured_output() -> None:
     """Test structured output with pydantic models."""
 
     class CountrySummary(BaseModel):
@@ -59,7 +59,7 @@ def test_structured_output():
         pytest.fail(f"Response validation failed: {e}")
 
 
-def test_varying_reasoning_levels():
+def test_varying_reasoning_levels() -> None:
     """Test that different reasoning levels produce different token counts."""
     reasoning_tokens = []
     for reasoning_level in ["minimal", "low", "high"]:
@@ -91,7 +91,7 @@ def test_varying_reasoning_levels():
         ), "Low reasoning should use fewer tokens than high reasoning"
 
 
-def test_ai_caller_invalid_model():
+def test_ai_caller_invalid_model() -> None:
     """Test that invalid model raises an exception."""
     with pytest.raises(Exception, match="model"):
         ai_caller.query(

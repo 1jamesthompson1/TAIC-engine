@@ -3,6 +3,7 @@
 import contextlib
 import json
 import os
+from collections.abc import Generator
 from pathlib import Path
 
 import dotenv
@@ -12,9 +13,11 @@ from engine import Config, Logging
 from engine.AICaller import get_api_costs, print_api_cost_summary
 from engine.AzureStorage import PDFStorageManager
 
+logger = Logging.get_logger(__name__)
+
 
 @pytest.fixture(scope="session", autouse=True)
-def load_test_config():
+def load_test_config() -> None:
     """Load test configuration and setup logging for the test session.
 
     This fixture runs once per test session and configures:
@@ -43,7 +46,7 @@ def load_test_config():
 
 
 @pytest.fixture(scope="function")
-def test_pdf_storage_manager():
+def test_pdf_storage_manager() -> PDFStorageManager:
     """Create a PDF storage manager for tests.
 
     This fixture is available to all tests in the suite and provides access
@@ -73,7 +76,7 @@ def test_pdf_storage_manager():
 
 
 @pytest.fixture(scope="function")
-def stable_pdf_storage_manager():
+def stable_pdf_storage_manager() -> PDFStorageManager:
     """Create a PDF storage manager for stable test PDFs.
 
     This fixture connects to a separate container with a consistent set of test PDFs
@@ -102,7 +105,7 @@ def stable_pdf_storage_manager():
 
 
 @pytest.fixture(scope="function", autouse=True)
-def cleanup_test_containers():
+def cleanup_test_containers() -> Generator[None, None, None]:
     """Universal cleanup fixture for Azure test containers.
 
     This fixture automatically cleans up Azure storage containers after each test
@@ -111,32 +114,35 @@ def cleanup_test_containers():
 
     NOTE: This does NOT clean up the stable PDF container, which is meant to
     contain consistent test data.
+
     """
+    pdf_storage_manager = PDFStorageManager(
+        os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
+        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
+        pytest.output_config["pdf_container_name"],
+    )
+
+    baseline_blobs: set[str] = set()
+    with contextlib.suppress(Exception):
+        baseline_blobs = set(pdf_storage_manager.list_blobs())
+
     # This runs before each test
     yield
 
     # This runs after each test completes
     try:
-        # Clean up regular PDF container (but NOT the stable one)
-        pdf_storage_manager = PDFStorageManager(
-            os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
-            os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
-            pytest.output_config["pdf_container_name"],
-        )
+        current_blobs = set(pdf_storage_manager.list_blobs())
+        new_blobs = current_blobs - baseline_blobs
 
-        # Get list of all blobs and delete them silently
-        all_blobs = pdf_storage_manager.list_blobs()
-        for blob_name in all_blobs:
+        for blob_name in new_blobs:
             with contextlib.suppress(Exception):
-                # Silently ignore individual deletion failures
                 pdf_storage_manager.delete_blob(blob_name)
+    except Exception as exc:
+        # Don't fail the test run if cleanup fails, but leave a breadcrumb.
+        logger.warning("Post-test PDF cleanup failed: %s", exc)
 
-    except Exception:
-        # Don't fail the test run if cleanup fails
-        pass
 
-
-def pytest_sessionstart(session):
+def pytest_sessionstart(session: pytest.Session) -> None:
     """Called before tests start. Clean up previous cost files."""
     # Only run on master
     if not hasattr(session.config, "workerinput"):
@@ -148,7 +154,7 @@ def pytest_sessionstart(session):
                 os.remove(os.path.join(cache_dir, f))
 
 
-def pytest_sessionfinish(session, exitstatus):
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """Called after whole test run finishes."""
     # If we are in a worker node (xdist)
     if hasattr(session.config, "workerinput"):
@@ -164,7 +170,9 @@ def pytest_sessionfinish(session, exitstatus):
             json.dump(costs, f)
 
 
-def pytest_terminal_summary(terminalreporter, exitstatus, config):
+def pytest_terminal_summary(
+    terminalreporter: pytest.Config, exitstatus: int, config: pytest.Config
+) -> None:
     """Aggregate and print costs from all workers (or just main process if not using xdist)."""
     # Only run on master
     if not hasattr(config, "workerinput"):

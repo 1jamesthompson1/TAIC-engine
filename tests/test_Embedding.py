@@ -11,11 +11,13 @@ import pytest
 from engine import Embedding, SavedDataFrames
 
 
-def test_basic_embedding(tmp_path):
+def test_basic_embedding(tmp_path: object) -> None:
     """Test the embedding pipeline using the saved dataframe flow."""
-    generated_embeddings = []
+    generated_embeddings: list[list[float]] = []
 
-    def mock_generate_embeddings(self, texts, *args, **kwargs):
+    def mock_generate_embeddings(
+        self: object, texts: object, *args: object, **kwargs: object
+    ) -> list[list[float]]:
         if isinstance(texts, np.ndarray):
             if texts.dtype != object:
                 msg = "AzureAIEmbeddingFunction only supports input of strings for numpy arrays."

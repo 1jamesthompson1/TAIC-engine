@@ -96,7 +96,7 @@ def _parse_occurrence_local_datetime(value: str) -> datetime | None:
         return None
 
 
-def _canonical_sort_key(value):
+def _canonical_sort_key(value: object) -> str:
     """Build a stable sort key for list item comparison.
 
     Returns:
@@ -105,7 +105,7 @@ def _canonical_sort_key(value):
     return json.dumps(value, sort_keys=True, default=str)
 
 
-def _list_item_sort_key(path: str, value):
+def _list_item_sort_key(path: str, value: object) -> tuple | str:
     """Choose stable item keys so list comparison is less order-sensitive.
 
     Returns:
@@ -140,7 +140,7 @@ def _normalize_metadata_path(path: str) -> str:
     return re.sub(r"\[\d+\]", "[]", path)
 
 
-def _unwrap_optional_annotation(annotation):
+def _unwrap_optional_annotation(annotation: object) -> object:
     """Remove None from optional annotations when present.
 
     Returns:
@@ -237,15 +237,15 @@ def _should_use_exact_match(
 
 def _compare_metadata_values(  # noqa: PLR0911, PLR0912, PLR0913, PLR0915
     path: str,
-    actual,
-    expected,
+    actual: object,
+    expected: object,
     failures: list[str],
     *,
     occurrence_local_datetime_path: str = "occurrence.occurrence_datetime.local_datetime",
     datetime_tolerance_minutes: int = 30,
     metadata_weak_string_similarity_threshold: float = 0.25,
     float_relative_tolerance: float = 0.03,
-):
+) -> None:
     """Recursively compare metadata with simple string thresholds.
 
     Args:
@@ -395,7 +395,7 @@ def load_json_test_data(filename: str) -> list | dict:
         return json.load(f)
 
 
-def load_safety_issue_test_cases():
+def load_safety_issue_test_cases() -> list:
     """Load safety issue test cases and convert to parametrize format.
 
     Returns:
@@ -410,7 +410,7 @@ def load_safety_issue_test_cases():
     return params
 
 
-def load_recommendation_test_cases():
+def load_recommendation_test_cases() -> list:
     """Load recommendation test cases and convert to parametrize format.
 
     Returns:
@@ -425,14 +425,14 @@ def load_recommendation_test_cases():
     return params
 
 
-def load_metadata_test_cases():
+def load_metadata_test_cases() -> list:
     """Load metadata test cases and convert to parametrize format.
 
     Returns:
         list: List of pytest.param objects with proper test IDs.
 
     Raises:
-        ValueError: If a metadata test case has an unknown report mode.
+        ValueError: If a test case has an unknown mode or missing taxonomy.
     """
     test_cases = load_json_test_data("metadata_test_cases.json")
     taxonomy_dict = load_event_type_taxonomy(Path("data/event_types.csv"))
@@ -490,7 +490,7 @@ class TestAIExtraction:
         report_id: str,
         expected: list[SafetyIssueItem],
         agency_id_lookup: dict[str, str],
-    ):
+    ) -> None:
         """Test the extraction of safety issues from a report.
 
         Test both TSB and TAIC as well as pre 2008 ATSb reports.
@@ -578,7 +578,7 @@ class TestAIExtraction:
         agency_id_lookup: dict[str, str],
         recommendation_similarity_threshold: float = 0.95,
         context_similarity_threshold: float = 0.3,  # Only weak match is needed
-    ):
+    ) -> None:
         """Test the recommendation extraction of ATSB.
 
         Args:
@@ -678,7 +678,7 @@ class TestAIExtraction:
         report_id: str,
         expected: BaseModel,
         agency_id_lookup: dict[str, str],
-    ):
+    ) -> None:
         """Test the extraction of metadata from a report.
 
         Tests occurrence metadata, aircraft details, pilot information,
@@ -751,7 +751,7 @@ _chunking_params = [
     "report_id, num_sections",
     _chunking_params,
 )
-def test_chunking_into_section(report_id, num_sections):
+def test_chunking_into_section(report_id: str, num_sections: int) -> None:
     """Test that does a basic sanity check on the chunking of a report into sections."""
     report_text = get_report_text(report_id)
 
@@ -764,7 +764,7 @@ def test_chunking_into_section(report_id, num_sections):
     assert all({"text", "section"}.issubset(section) for section in sections)
 
 
-def test_parallel_extraction(tmp_path):
+def test_parallel_extraction(tmp_path: object) -> None:
     """Test that we can extract from multiple reports in parallel without issues."""
     ids = {
         "ATSB_a_2000_157": {"si": 7, "recs": 8, "sections": 193},
@@ -829,9 +829,9 @@ def test_parallel_extraction(tmp_path):
 
 
 def test_process_handle_already_processed(
-    tmp_path,
+    tmp_path: object,
     expected_new_report_count: int = 2,
-):
+) -> None:
     """Test that process_reports_parallel only processes new reports and skips already processed ones.
 
     Args:

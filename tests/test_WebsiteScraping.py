@@ -49,7 +49,7 @@ def _test_website_connectivity(
         return True
 
 
-def test_website_connectivity():
+def test_website_connectivity() -> None:
     """Test connectivity to all three website sources.
 
     This test verifies that the system can reach TAIC, TSB, and ATSB websites.
@@ -82,7 +82,9 @@ def test_website_connectivity():
 
 
 @pytest.fixture(scope="function")
-def report_scraping_settings(tmpdir, test_pdf_storage_manager):
+def report_scraping_settings(
+    tmpdir: object, test_pdf_storage_manager: object
+) -> WebsiteScraping.ReportScraperSettings:
     """Create report scraping settings for tests.
 
     Returns:
@@ -102,7 +104,7 @@ def report_scraping_settings(tmpdir, test_pdf_storage_manager):
 
 @pytest.fixture(scope="function")
 def get_agency_scraper(
-    tmpdir, report_scraping_settings
+    tmpdir: object, report_scraping_settings: object
 ) -> WebsiteScraping.ReportScraper:
     """Fixture that returns a function to create agency scrapers with their own temp directories.
 
@@ -206,7 +208,9 @@ def get_agency_scraper(
         ),
     ],
 )
-def test_report_collection(get_agency_scraper, agency, url, report_id, expected):
+def test_report_collection(
+    get_agency_scraper: object, agency: str, url: str, report_id: str, expected: bool
+) -> None:
     """Test collecting a single report from each agency."""
     scraper = get_agency_scraper(agency)
 
@@ -266,7 +270,9 @@ def test_report_collection(get_agency_scraper, agency, url, report_id, expected)
         ),
     ],
 )
-def test_agency_website_scraper(get_agency_scraper, agency, expected_urls, test_cases):
+def test_agency_website_scraper(
+    get_agency_scraper: object, agency: str, expected_urls: list, test_cases: list
+) -> None:
     """Test the agency website scraper for correct URL generation."""
     scraper = get_agency_scraper(agency)
     scraper.settings.start_year = 2004
@@ -329,8 +335,8 @@ def test_agency_website_scraper(get_agency_scraper, agency, expected_urls, test_
     ],
 )
 def test_agency_website_scraper_collecting_all_reports(
-    get_agency_scraper, agency, expected_count
-):
+    get_agency_scraper: object, agency: str, expected_count: int
+) -> None:
     """Test collecting all reports for an agency."""
     scraper = get_agency_scraper(agency)
     scraper.settings.refresh = True
@@ -344,7 +350,9 @@ def test_agency_website_scraper_collecting_all_reports(
     # Mock collect_report to simulate successful PDF upload
     with patch.object(scraper, "collect_report", return_value=True) as mock_download:
 
-        def mock_download_side_effect(report_id, url, agency_id=None):
+        def mock_download_side_effect(
+            report_id: str, url: str, agency_id: str | None = None
+        ) -> bool:
             # Simulate successful PDF upload
             uploaded_pdfs.append(report_id)
             return True
@@ -402,7 +410,9 @@ def test_agency_website_scraper_collecting_all_reports(
         ),
     ],
 )
-def test_atsb_report_metadata_scrape(get_agency_scraper, url, report_id, expected):
+def test_atsb_report_metadata_scrape(
+    get_agency_scraper: object, url: str, report_id: str, expected: dict
+) -> None:
     """Test the scraping logic of the ATSB report page."""
     scraper = get_agency_scraper("ATSB")
 
@@ -420,7 +430,7 @@ def test_atsb_report_metadata_scrape(get_agency_scraper, url, report_id, expecte
     assert len(summary) == expected["summary_length"]
 
 
-def test_atsb_safety_issue_scrape(tmpdir):
+def test_atsb_safety_issue_scrape(tmpdir: object) -> None:
     """Test scraping ATSB safety issues from the website."""
     # Copy existing files to temporary directory for automatic cleanup
     output_folder = Path(pytest.output_config.get("folder_name"))
@@ -475,13 +485,13 @@ def test_atsb_safety_issue_scrape(tmpdir):
     ],
 )
 def test_recommendation_listing(  # noqa: PLR0913, PLR0917
-    tmpdir,
-    request,
-    site,
-    scraper_cls,
-    table_arg,
-    expected_min_rows,
-):
+    tmpdir: object,
+    request: object,
+    site: str,
+    scraper_cls: type,
+    table_arg: object,
+    expected_min_rows: int,
+) -> None:
     """Smoke test: fetch one recommendations listing page and ensure it yields entries.
 
     Uses the real websites but is designed to be quick (one HTTP request per case).
@@ -531,8 +541,13 @@ def test_recommendation_listing(  # noqa: PLR0913, PLR0917
     ],
 )
 def test_recommendation_page(  # noqa: PLR0913, PLR0917
-    tmpdir, request, site, scraper_cls, url, required_fields
-):
+    tmpdir: object,
+    request: object,
+    site: str,
+    scraper_cls: type,
+    url: str,
+    required_fields: list,
+) -> None:
     """Smoke test: extract fields from one recommendation page.
 
     Uses the real websites but is designed to be quick (one HTTP request per case).

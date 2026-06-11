@@ -16,7 +16,7 @@ from engine.AzureStorage import (
 EXPECTED_FILE_COUNT = 9
 
 
-def test_upload_outputs():
+def test_upload_outputs() -> None:
     """Test uploading outputs to Azure storage."""
     uploader = EngineOutputUploader(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
@@ -36,7 +36,7 @@ def test_upload_outputs():
     assert len(blobs) > 0
 
 
-def test_download_outputs(tmpdir):
+def test_download_outputs(tmpdir: object) -> None:
     """Test downloading outputs from Azure storage."""
     downloader = EngineOutputDownloader(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
@@ -51,7 +51,7 @@ def test_download_outputs(tmpdir):
     assert sum(downloaded_files) == EXPECTED_FILE_COUNT
 
 
-def test_upload_pdf_to_pdf_container(test_pdf_storage_manager):
+def test_upload_pdf_to_pdf_container(test_pdf_storage_manager: object) -> None:
     """Upload a small fake PDF to the test PDF container and verify it exists."""
     report_id = f"TEST_UPLOAD_{uuid.uuid4().hex[:8]}"
     pdf_bytes = b"%PDF-1.4\n%Fake PDF for tests\n%%EOF"

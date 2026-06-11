@@ -18,7 +18,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "nil",
-        "who_may_benefit": "Aerodrome operators, aircraft owners and all pilots may benefit from reading this report."
+        "who_may_benefit": "Aerodrome operators, aircraft owners and all pilots may benefit from reading this report.",
+        "report_publication_date": "2025-05-08"
       },
       "aircraft": [
         {
@@ -101,7 +102,8 @@
         "fatalities": 0,
         "injuries": 1,
         "damage_description": "substantial damage: propellers both damaged; fuselage panels and skins penetrated; engine mounts fractured; nacelles distorted.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2021-04-14"
       },
       "aircraft": [
         {
@@ -159,7 +161,8 @@
         "fatalities": 0,
         "injuries": 5,
         "damage_description": "substantial damage: nose bulkhead distorted; nose landing gear displaced rearward.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2022-11-24"
       },
       "aircraft": [
         {
@@ -217,7 +220,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "nil",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2018-10-04"
       },
       "aircraft": []
     }
@@ -241,7 +245,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "nil",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2016-08-25"
       },
       "aircraft": [
         {
@@ -299,7 +304,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "nil",
-        "who_may_benefit": "All aviation participants may benefit from the findings and recommendations in this report."
+        "who_may_benefit": "All aviation participants may benefit from the findings and recommendations in this report.",
+        "report_publication_date": "2025-12-12"
       },
       "aircraft": [
         {
@@ -390,7 +396,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "nil",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2013-03-06"
       },
       "aircraft": []
     }
@@ -414,7 +421,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "serious damage: helicopter rolled over on landing.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2012-05-24"
       },
       "aircraft": [
         {
@@ -464,7 +472,8 @@
         "fatalities": 0,
         "injuries": 3,
         "damage_description": "substantial damage: helicopter fuel exhaustion and collision with terrain.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2018-08-02"
       },
       "aircraft": [
         {
@@ -514,7 +523,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "nil",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2025-10-02"
       },
       "aircraft": [
         {
@@ -564,7 +574,8 @@
         "fatalities": 5,
         "injuries": 3,
         "damage_description": "damage: hull damaged; machinery and electrical systems lost.",
-        "who_may_benefit": "All mariners, maritime regulatory agencies, industry stakeholders, recreational boaters, lifejacket manufacturers and their consumers, and agencies and operators involved in search and rescue operations."
+        "who_may_benefit": "All mariners, maritime regulatory agencies, industry stakeholders, recreational boaters, lifejacket manufacturers and their consumers, and agencies and operators involved in search and rescue operations.",
+        "report_publication_date": "2025-04-03"
       },
       "vessels": [
         {
@@ -606,7 +617,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "minor damage: cracked cylinder liner in generator 2; generators and associated machinery required repair",
-        "who_may_benefit": "All ship owners and operators (including ship managers), port state [8], and flag state [9] regulators, classification societies, insurance providers and deck and engineering officers may benefit from the findings of this inquiry."
+        "who_may_benefit": "All ship owners and operators (including ship managers), port state [8], and flag state [9] regulators, classification societies, insurance providers and deck and engineering officers may benefit from the findings of this inquiry.",
+        "report_publication_date": "2025-06-06"
       },
       "vessels": [
         {
@@ -648,7 +660,8 @@
         "fatalities": 1,
         "injuries": 0,
         "damage_description": "substantial damage: Adonis capsized, later sank and was eventually scrapped; Wolli's port bow push-plate was damaged.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2013-02-08"
       },
       "vessels": [
         {
@@ -724,7 +737,8 @@
         "fatalities": 0,
         "injuries": 1,
         "damage_description": "damage: 50 containers lost overboard; 63 containers damaged and remaining on board; vessel structure damaged.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2022-12-16"
       },
       "vessels": [
         {
@@ -766,7 +780,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "minor damage: grounded on uncharted shoals on two occasions; hull minor paint loss and shell plate deformation after first grounding.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2006-03-13"
       },
       "vessels": [
         {
@@ -808,7 +823,8 @@
         "fatalities": 2,
         "injuries": 0,
         "damage_description": "capsized: vessel capsized and sank.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2023-11-22"
       },
       "vessels": [
         {
@@ -850,7 +866,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "fire damage: 15 containers fire damaged; no structural damage to vessel.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2003-01-28"
       },
       "vessels": [
         {
@@ -892,7 +909,8 @@
         "fatalities": 1,
         "injuries": 0,
         "damage_description": "destroyed: aircraft destroyed by impact forces and severe post-crash fire.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2010-01-19"
       },
       "aircraft": [
         {
@@ -942,7 +960,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "derailment: 30 hopper cars derailed; 27 cars breached with potash release.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2023-01-05"
       },
       "trains": [
         {
@@ -977,7 +996,8 @@
         "fatalities": 1,
         "injuries": 1,
         "damage_description": "damage: tank car derailed; five dangerous-goods tank cars damaged; truck tractor destroyed by impact and fire; track about 2060 feet damaged.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2006-03-07"
       },
       "trains": [
         {
@@ -1012,7 +1032,8 @@
         "fatalities": 0,
         "injuries": 1,
         "damage_description": "nil",
-        "who_may_benefit": "Rail operators and operational staff involved in shunting activities may benefit from this report."
+        "who_may_benefit": "Rail operators and operational staff involved in shunting activities may benefit from this report.",
+        "report_publication_date": "2022-09-22"
       },
       "trains": [
         {
@@ -1047,7 +1068,8 @@
         "fatalities": 1,
         "injuries": 0,
         "damage_description": "moderate and extensive damage: locomotive front and cowcatcher damaged; diesel fuel tank punctured; truck driving unit destroyed; truck engine torn from mountings; semi-trailer skid plate and hydraulic hoses severely damaged.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2016-06-23"
       },
       "trains": [
         {
@@ -1082,7 +1104,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "significant damage: tamper equipment significant damage.",
-        "who_may_benefit": "Organisations and anyone responsible for managing or working within a safety-critical environment may benefit from the findings and recommendations in this report."
+        "who_may_benefit": "Organisations and anyone responsible for managing or working within a safety-critical environment may benefit from the findings and recommendations in this report.",
+        "report_publication_date": "2025-06-27"
       },
       "trains": [
         {
@@ -1117,7 +1140,8 @@
         "fatalities": 0,
         "injuries": 0,
         "damage_description": "damage: Alexandra Bridge damaged; tipping trailer damaged; train no damage.",
-        "who_may_benefit": null
+        "who_may_benefit": null,
+        "report_publication_date": "2022-12-07"
       },
       "trains": [
         {
@@ -1152,7 +1176,8 @@
         "fatalities": 0,
         "injuries": 1,
         "damage_description": "minor and substantial damage: locomotive minor damage; level crossing equipment minor damage; dual cab utility substantially damaged.",
-        "who_may_benefit": "All local councils and track managers."
+        "who_may_benefit": "All local councils and track managers.",
+        "report_publication_date": "2014-02-05"
       },
       "trains": [
         {
