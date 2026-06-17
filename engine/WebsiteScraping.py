@@ -44,6 +44,17 @@ logger = get_logger(__name__)
 
 
 @dataclass
+class ReportUrlData:
+    """Holds URL and date data scraped from the listing page for a single report."""
+
+    id: str
+    url: str
+    agency_id: str | None
+    occurrence_date: str | None = None
+    publication_date: str | None = None
+
+
+@dataclass
 class ReportMetadata:
     """Small data class to hold the metadata so that it can be passed around easily between the functions."""
 
@@ -55,6 +66,8 @@ class ReportMetadata:
     misc: dict
     url: str
     agency_id: str | None
+    occurrence_date: str | None = None
+    publication_date: str | None = None
 
     def __repr__(self) -> str:
         """Return string representation of ReportMetadata.
@@ -349,9 +362,7 @@ class ReportScraper(WebsiteScraper, ABC):
             self.collect_mode(mode)
 
     @abstractmethod
-    def get_report_urls(
-        self, mode: Modes.Mode, year: int
-    ) -> list[tuple[str, str, str | None]]:
+    def get_report_urls(self, mode: Modes.Mode, year: int) -> list[ReportUrlData]:
         """Retrieves all the potential report urls and ids for a given mode and year.
 
         This method must be implemented by subclasses to handle agency-specific
@@ -362,7 +373,7 @@ class ReportScraper(WebsiteScraper, ABC):
             year: The year to search for reports.
 
         Returns:
-            List of tuples containing (report_id, report_url, agency_id).
+            List of ReportUrlData objects.
         """
 
     def get_report_id(self, mode: Modes.Mode, year: int, report_id: str) -> str:
@@ -440,11 +451,11 @@ class ReportScraper(WebsiteScraper, ABC):
 
         number_for_year = 0
         report_urls = self.get_report_urls(mode, year)
-        for report_id, url, agency_id in report_urls:
-            if report_id in self.settings.ignored_report_ids:
+        for report_url_data in report_urls:
+            if report_url_data.id in self.settings.ignored_report_ids:
                 continue
 
-            outcome = self.collect_report(report_id, url, agency_id)
+            outcome = self.collect_report(report_url_data)
 
             if outcome:
                 number_for_year += 1
@@ -461,19 +472,21 @@ class ReportScraper(WebsiteScraper, ABC):
             "duration": duration,
         }
 
-    def collect_report(
-        self, report_id: str, url: str, agency_id: str | None = None
-    ) -> bool:
+    def collect_report(self, report_data: ReportUrlData) -> bool:
         """Collect a single report.
 
         Args:
-            report_id: The unique identifier for the report.
-            url: The URL of the report page.
-            agency_id: Optional agency-specific identifier.
+            report_data: ReportUrlData containing id, url, agency_id, and dates.
 
         Returns:
             True if report was successfully collected, False otherwise.
         """
+        url = report_data.url
+        report_id = report_data.id
+        agency_id = report_data.agency_id
+        occurrence_date = report_data.occurrence_date
+        publication_date = report_data.publication_date
+
         if (
             not self.settings.ignore_metadata
             and self.report_titles_df.query(f"report_id == '{report_id}'").shape[0] > 0
@@ -511,9 +524,10 @@ class ReportScraper(WebsiteScraper, ABC):
             or self.settings.ignore_metadata
             or self.settings.refresh
         ):
-            self.__add_report_metadata_to_df(
-                self.get_report_metadata(report_id, url, soup)
+            metadata = self.get_report_metadata(
+                report_id, url, occurrence_date, publication_date, soup
             )
+            self.__add_report_metadata_to_df(metadata)
         elif outcome is None:
             outcome = True
 
@@ -657,7 +671,12 @@ class ReportScraper(WebsiteScraper, ABC):
 
     @abstractmethod
     def get_report_metadata(
-        self, report_id: str, url: str, soup: BeautifulSoup
+        self,
+        report_id: str,
+        url: str,
+        occurrence_date: str | None,
+        publication_date: str | None,
+        soup: BeautifulSoup,
     ) -> ReportMetadata:
         """Gets the investigation webpage and scrapes extra information about the report.
 
@@ -667,6 +686,8 @@ class ReportScraper(WebsiteScraper, ABC):
         Args:
             report_id: The identifier of the report.
             url: The URL of the report page.
+            occurrence_date: The date of the occurrence.
+            publication_date: The date of publication.
             soup: The BeautifulSoup object for the page.
 
         Returns:
@@ -722,6 +743,18 @@ class TAICReportScraper(ReportScraper):
         investigations = self.website_reports_table_dc.read_or_create()
         page_num = 0
         pbar = tqdm()
+
+        def extract_date(report: BeautifulSoup, label: str) -> str | None:
+            date_type = report.find(
+                "span", class_="date-type", string=lambda s: s and s.startswith(label)
+            )
+            if date_type:
+                time_tag = date_type.find_next_sibling(
+                    "span", class_="date-value"
+                ).find("time")
+                return time_tag["datetime"][:10] if time_tag else None
+            return None
+
         while True:
             pbar.set_description(f"Scraping TAIC, page: {page_num}")
             try:
@@ -751,6 +784,8 @@ class TAICReportScraper(ReportScraper):
                         .get_text(strip=True)
                         .split()[-1]
                     ),
+                    "occurrence_date": extract_date(report, "Incident date"),
+                    "publication_date": extract_date(report, "Publish date"),
                 }
                 for report in results_list[0].find_all("div", recursive=False)
             ]
@@ -785,9 +820,7 @@ class TAICReportScraper(ReportScraper):
 
         return investigations_with_mode
 
-    def get_report_urls(
-        self, mode: Modes.Mode, year: int
-    ) -> list[tuple[str, str, str | None]]:
+    def get_report_urls(self, mode: Modes.Mode, year: int) -> list[ReportUrlData]:
         """Get report URLs for a specific mode and year.
 
         Args:
@@ -795,27 +828,36 @@ class TAICReportScraper(ReportScraper):
             year: The year to get reports for.
 
         Returns:
-            List of tuples (report_id, url, taic_id).
+            List of ReportUrlData objects.
         """
         return [
-            (
-                self.get_report_id(mode, year, taic_id[-3:]),
-                f"https://www.taic.org.nz/inquiry/{taic_id}",
-                taic_id,  # This is the agency_id for TAIC
+            ReportUrlData(
+                id=self.get_report_id(mode, year, row["id"][-3:]),
+                url=f"https://www.taic.org.nz/inquiry/{row['id']}",
+                agency_id=row["id"],
+                occurrence_date=row["occurrence_date"],
+                publication_date=row["publication_date"],
             )
-            for taic_id in self.agency_reports.loc[mode]
-            .query(f"year == {year}")["id"]
-            .to_list()
+            for row in self.agency_reports.loc[mode]
+            .query(f"year == {year}")
+            .to_dict("records")
         ]
 
     def get_report_metadata(  # noqa: PLR6301
-        self, report_id: str, url: str, soup: BeautifulSoup
+        self,
+        report_id: str,
+        url: str,
+        occurrence_date: str | None,
+        publication_date: str | None,
+        soup: BeautifulSoup,
     ) -> ReportMetadata:
         """Extract report metadata from TAIC website.
 
         Args:
             report_id: The standardized report identifier.
             url: The URL of the report page.
+            occurrence_date: The date of the occurrence.
+            publication_date: The date of publication.
             soup: BeautifulSoup object of the report page.
 
         Returns:
@@ -853,6 +895,8 @@ class TAICReportScraper(ReportScraper):
             investigation_type="full",
             agency_id=agency_id,
             summary=summary,
+            occurrence_date=occurrence_date,
+            publication_date=publication_date,
             misc={},
         )
 
@@ -905,7 +949,9 @@ class ATSBReportScraper(ReportScraper):
             agency_id = title_link.text.strip()
             url = title_link["href"]
 
-            date = cell.find("time", class_="ct-timestamp__start").text.strip()
+            date_raw = cell.find("time", class_="ct-timestamp__start").text.strip()
+            date_parsed = pd.to_datetime(date_raw, format="%d %b %Y", errors="coerce")
+            date = date_parsed.strftime("%Y-%m-%d") if pd.notna(date_parsed) else None
 
             title = cell.find("div", class_="ct-promo-card__summary").text.strip()
 
@@ -1055,9 +1101,7 @@ class ATSBReportScraper(ReportScraper):
 
         return updated_investigations
 
-    def get_report_urls(
-        self, mode: Modes.Mode, year: int
-    ) -> list[tuple[str, str, str | None]]:
+    def get_report_urls(self, mode: Modes.Mode, year: int) -> list[ReportUrlData]:
         """Get report URLs for a specific mode and year.
 
         Args:
@@ -1065,29 +1109,37 @@ class ATSBReportScraper(ReportScraper):
             year: The year to get reports for.
 
         Returns:
-            List of tuples (report_id, url, atsb_id).
+            List of ReportUrlData objects.
         """
         return [
-            (self.get_report_id(mode, year, str(atsb_id)[-3:]), url, str(atsb_id))
-            for atsb_id, url in self.agency_reports.loc[mode]
+            ReportUrlData(
+                id=self.get_report_id(mode, year, str(row["agency_id"])[-3:]),
+                url=row["url"],
+                agency_id=row["agency_id"],
+                occurrence_date=None,
+                publication_date=None,
+            )
+            for row in self.agency_reports.loc[mode]
             .query(f"year == {year}")
-            .dropna(subset=["url"])[
-                [
-                    "agency_id",
-                    "url",
-                ]
-            ]
-            .to_records(index=False)
+            .dropna(subset=["url"])
+            .to_dict("records")
         ]
 
     def get_report_metadata(
-        self, report_id: str, url: str, soup: BeautifulSoup
+        self,
+        report_id: str,
+        url: str,
+        occurrence_date: str | None,
+        publication_date: str | None,
+        soup: BeautifulSoup,
     ) -> ReportMetadata:
         """Extract report metadata from ATSB website.
 
         Args:
             report_id: The standardized report identifier.
             url: The URL of the report page.
+            occurrence_date: The date of the occurrence.
+            publication_date: The date of publication.
             soup: BeautifulSoup object of the report page.
 
         Returns:
@@ -1122,6 +1174,28 @@ class ATSBReportScraper(ReportScraper):
 
         agency_id = table_dict.get("Investigation number")
 
+        raw_date = table_dict.get("Report release date")
+        parsed_date = (
+            pd.to_datetime(raw_date, dayfirst=True, errors="coerce")
+            if raw_date
+            else pd.NaT
+        )
+        publication_date = (
+            parsed_date.strftime("%Y-%m-%d") if pd.notna(parsed_date) else None
+        )
+
+        occurrence_date = table_dict.get("Occurrence date")
+        parsed_occurrence_date = (
+            pd.to_datetime(occurrence_date, dayfirst=True, errors="coerce")
+            if occurrence_date
+            else pd.NaT
+        )
+        occurrence_date = (
+            parsed_occurrence_date.strftime("%Y-%m-%d")
+            if pd.notna(parsed_occurrence_date)
+            else None
+        )
+
         return ReportMetadata(
             url=url,
             report_id=report_id,
@@ -1130,6 +1204,8 @@ class ATSBReportScraper(ReportScraper):
             event_type=event_type,
             agency_id=agency_id,
             summary=summary,
+            occurrence_date=occurrence_date,
+            publication_date=publication_date,
             misc={"investigation_level": investigation_level},
         )
 
@@ -1247,14 +1323,15 @@ class TSBReportScraper(ReportScraper):
         merged_modes_df["Occurrence date"] = pd.to_datetime(
             merged_modes_df["Occurrence date"], format="%Y-%m-%d", errors="coerce"
         )
+        merged_modes_df["Report release date"] = pd.to_datetime(
+            merged_modes_df["Report release date"], format="%Y-%m-%d", errors="coerce"
+        )
 
         merged_modes_df["year"] = merged_modes_df["Occurrence date"].dt.year
 
         return merged_modes_df
 
-    def get_report_urls(
-        self, mode: Modes.Mode, year: int
-    ) -> list[tuple[str, str, str | None]]:
+    def get_report_urls(self, mode: Modes.Mode, year: int) -> list[ReportUrlData]:
         """Get report URLs for a specific mode and year.
 
         Args:
@@ -1262,19 +1339,23 @@ class TSBReportScraper(ReportScraper):
             year: The year to get reports for.
 
         Returns:
-            List of tuples (report_id, url, tsb_id).
+            List of ReportUrlData objects.
         """
         return [
-            (
-                self.get_report_id(mode, year, tsb_id[-5:]),
-                f"https://www.tsb.gc.ca/eng/rapports-reports/{Modes.Mode.as_string(mode)}/{year}/{tsb_id}/{tsb_id}.html".lower(),
-                tsb_id,  # This is the agency_id for TSB
+            ReportUrlData(
+                id=self.get_report_id(mode, year, row["Investigation number"][-5:]),
+                url=f"https://www.tsb.gc.ca/eng/rapports-reports/{Modes.Mode.as_string(mode)}/{year}/{row['Investigation number']}/{row['Investigation number']}.html".lower(),
+                agency_id=row["Investigation number"],
+                occurrence_date=row["Occurrence date"].strftime("%Y-%m-%d")
+                if pd.notna(row["Occurrence date"])
+                else None,
+                publication_date=row["Report release date"].strftime("%Y-%m-%d")
+                if pd.notna(row["Report release date"])
+                else None,
             )
-            for tsb_id in self.agency_reports.loc[mode]
-            .query(f"year == {year} & `Investigation status` == 'Completed'")[
-                "Investigation number"
-            ]
-            .to_list()
+            for row in self.agency_reports.loc[mode]
+            .query(f"year == {year} & `Investigation status` == 'Completed'")
+            .to_dict("records")
         ]
 
     @staticmethod
@@ -1346,13 +1427,20 @@ class TSBReportScraper(ReportScraper):
         return "short"
 
     def get_report_metadata(
-        self, report_id: str, url: str, soup: BeautifulSoup
+        self,
+        report_id: str,
+        url: str,
+        occurrence_date: str | None,
+        publication_date: str | None,
+        soup: BeautifulSoup,
     ) -> ReportMetadata:
         """Extract report metadata from TSB website.
 
         Args:
             report_id: The standardized report identifier.
             url: The URL of the report page.
+            occurrence_date: The date of the occurrence.
+            publication_date: The date of publication.
             soup: BeautifulSoup object of the report page.
 
         Returns:
@@ -1383,6 +1471,8 @@ class TSBReportScraper(ReportScraper):
                 summary=None,
                 misc={},
                 agency_id=None,
+                occurrence_date=occurrence_date,
+                publication_date=publication_date,
             )
 
         title, event_type = self._extract_title_from_title_block(title_block)
@@ -1402,6 +1492,8 @@ class TSBReportScraper(ReportScraper):
             agency_id=agency_id,
             summary=None,  # TSB does not include summary text. However the press releases provide a summary of sorts.
             misc={"investigation_class": investigation_level},
+            occurrence_date=occurrence_date,
+            publication_date=publication_date,
         )
 
 

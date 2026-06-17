@@ -16,6 +16,7 @@ To use this in other test files, you can copy the cleanup_test_pdf_container fix
 import itertools
 import shutil
 import socket
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -24,6 +25,7 @@ import pandas as pd
 import pytest
 
 from engine import Modes, SavedDataFrames, WebsiteScraping
+from engine.WebsiteScraping import ReportUrlData
 
 MINIMUM_SAFETY_ISSUES_COUNT = 388
 
@@ -161,7 +163,11 @@ def get_agency_scraper(
             "TSB",
             "https://www.tsb.gc.ca/eng/rapports-reports/marine/2020/m20c0101/m20c0101.html",
             "TSB_m_2020_c01010",
-            True,
+            {
+                "success": True,
+                "occurrence_date": "2020-05-12",
+                "publication_date": "2021-07-30",
+            },
             id="TSB pass",
         ),
         pytest.param(
@@ -175,7 +181,11 @@ def get_agency_scraper(
             "TAIC",
             "https://www.taic.org.nz/inquiry/mo-2021-205",
             "TAIC_m_2021_205",
-            True,
+            {
+                "success": True,
+                "occurrence_date": "2021-12-10",
+                "publication_date": "2023-04-27",
+            },
             id="TAIC pass",
         ),
         pytest.param(
@@ -186,10 +196,36 @@ def get_agency_scraper(
             id="TAIC fail",
         ),
         pytest.param(
+            "TAIC",
+            "https://www.taic.org.nz/inquiry/ao-2000-001",
+            "TAIC_a_2000_001",
+            {
+                "success": True,
+                "occurrence_date": "2000-01-18",
+                "publication_date": "2000-03-15",
+            },
+            id="TAIC old aviation",
+        ),
+        pytest.param(
+            "TAIC",
+            "https://www.taic.org.nz/inquiry/ro-2025-103",
+            "TAIC_r_2025_103",
+            {
+                "success": True,
+                "occurrence_date": "2025-02-01",
+                "publication_date": "2026-06-05",
+            },
+            id="TAIC new rail 2025",
+        ),
+        pytest.param(
             "ATSB",
             "https://www.atsb.gov.au/investigations/mo-2019-007",
             "ATSB_m_2019_007",
-            True,
+            {
+                "success": True,
+                "occurrence_date": "2019-06-22",
+                "publication_date": "2020-06-26",
+            },
             id="ATSB pass",
         ),
         pytest.param(
@@ -203,13 +239,43 @@ def get_agency_scraper(
             "ATSB",
             "https://www.atsb.gov.au/investigations/306-mo-2014-001",
             "ATSB_m_2014_001",
-            True,
+            {
+                "success": True,
+                "occurrence_date": "2014-02-01",
+                "publication_date": "2015-01-23",
+            },
             id="ATSB marine",
+        ),
+        pytest.param(
+            "ATSB",
+            "https://www.atsb.gov.au/investigations/ao-2007-038",
+            "ATSB_a_2007_038",
+            {
+                "success": True,
+                "occurrence_date": "2007-08-27",
+                "publication_date": "2009-06-01",
+            },
+            id="ATSB old aviation",
+        ),
+        pytest.param(
+            "ATSB",
+            "https://www.atsb.gov.au/investigations/ao-2025-052",
+            "ATSB_a_2025_052",
+            {
+                "success": True,
+                "occurrence_date": "2025-08-22",
+                "publication_date": "2026-05-08",
+            },
+            id="ATSB new aviation 2025",
         ),
     ],
 )
 def test_report_collection(
-    get_agency_scraper: object, agency: str, url: str, report_id: str, expected: bool
+    get_agency_scraper: object,
+    agency: str,
+    url: str,
+    report_id: str,
+    expected: bool | dict,
 ) -> None:
     """Test collecting a single report from each agency."""
     scraper = get_agency_scraper(agency)
@@ -226,9 +292,33 @@ def test_report_collection(
             scraper.settings.pdf_storage_manager, "upload_pdf", return_value=True
         ),
     ):
-        result = scraper.collect_report(report_id, url)
+        report_data = ReportUrlData(
+            id=report_id,
+            url=url,
+            agency_id=None,
+            occurrence_date=expected.get("occurrence_date")
+            if isinstance(expected, dict)
+            else None,
+            publication_date=expected.get("publication_date")
+            if isinstance(expected, dict)
+            else None,
+        )
+        result = scraper.collect_report(report_data)
 
-    assert result == expected
+    if isinstance(expected, dict):
+        assert result == expected["success"]
+        if "occurrence_date" in expected or "publication_date" in expected:
+            rows = scraper.report_titles_df[
+                scraper.report_titles_df["report_id"] == report_id
+            ]
+            assert len(rows) == 1, f"Report {report_id} not found in report_titles_df"
+            row = rows.iloc[0]
+            if "occurrence_date" in expected:
+                assert row["occurrence_date"] == expected["occurrence_date"]
+            if "publication_date" in expected:
+                assert row["publication_date"] == expected["publication_date"]
+    else:
+        assert result == expected
 
 
 @pytest.mark.parametrize(
@@ -253,7 +343,7 @@ def test_report_collection(
         ),
         pytest.param(
             "TAIC",
-            [13, 12, 3, 28, 8, 4, 12, 3, 5],
+            [13, 9, 3, 27, 8, 4, 11, 3, 4],
             [{"id": "MO-2020-204", "year": 2020}, {"id": "RO-2011-104", "year": 2011}],
             id="TAIC",
         ),
@@ -350,11 +440,9 @@ def test_agency_website_scraper_collecting_all_reports(
     # Mock collect_report to simulate successful PDF upload
     with patch.object(scraper, "collect_report", return_value=True) as mock_download:
 
-        def mock_download_side_effect(
-            report_id: str, url: str, agency_id: str | None = None
-        ) -> bool:
+        def mock_download_side_effect(report_data: ReportUrlData) -> bool:
             # Simulate successful PDF upload
-            uploaded_pdfs.append(report_id)
+            uploaded_pdfs.append(report_data.id)
             return True
 
         mock_download.side_effect = mock_download_side_effect
@@ -379,6 +467,8 @@ def test_agency_website_scraper_collecting_all_reports(
                 "investigation_level": "short",
                 "occurrence_type": "Engine failure or malfunction, Missed approach",
                 "agency_id": "AO-2025-052",
+                "occurrence_date": "2025-08-22",
+                "publication_date": "2026-05-08",
             },
             id="ATSB standard full report",
         ),
@@ -392,6 +482,8 @@ def test_agency_website_scraper_collecting_all_reports(
                 "investigation_level": "full",
                 "occurrence_type": "Loss of separation",
                 "agency_id": "AO-2007-038",
+                "occurrence_date": "2007-08-27",
+                "publication_date": "2009-06-01",
             },
             id="ATSB old report with single H2 Summary",
         ),
@@ -405,24 +497,31 @@ def test_agency_website_scraper_collecting_all_reports(
                 "investigation_level": "full",
                 "occurrence_type": "Propeller/rotor malfunction",
                 "agency_id": "AO-2017-032",
+                "occurrence_date": "2017-03-17",
+                "publication_date": "2018-10-10",
             },
             id="ATSB report with preliminary report treated as summary",
         ),
     ],
 )
 def test_atsb_report_metadata_scrape(
-    get_agency_scraper: object, url: str, report_id: str, expected: dict
+    get_agency_scraper: Callable[[str], WebsiteScraping.ReportScraper],
+    url: str,
+    report_id: str,
+    expected: dict,
 ) -> None:
     """Test the scraping logic of the ATSB report page."""
     scraper = get_agency_scraper("ATSB")
 
     soup = bs4.BeautifulSoup(scraper.get(url).content, "html.parser")
 
-    metadata = scraper.get_report_metadata(report_id, url, soup)
+    metadata = scraper.get_report_metadata(report_id, url, None, None, soup)
 
     assert metadata.agency_id == expected["agency_id"]
     assert metadata.investigation_type == expected["investigation_level"]
     assert metadata.event_type == expected["occurrence_type"]
+    assert metadata.occurrence_date == expected["occurrence_date"]
+    assert metadata.publication_date == expected["publication_date"]
 
     summary = metadata.summary
     assert summary.startswith(expected["summary_start"])

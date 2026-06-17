@@ -97,11 +97,6 @@ class OccurrenceLocation(BaseModel):
 class OccurrenceMetadata(BaseModel):
     """Represents common metadata extracted from an accident occurrence report (all modes)."""
 
-    report_publication_date: str = Field(
-        description="The date when the report was published, in ISO 8601 format (YYYY-MM-DD). This should be the publication date of the report and not the occurrence date.",
-        pattern=r"^\d{4}-\d{2}-\d{2}$",
-    )
-
     occurrence_datetime: OccurrenceDateTime = Field(
         description="Structured occurrence datetime with local time, UTC offset, and timezone source as stated in the report."
     )

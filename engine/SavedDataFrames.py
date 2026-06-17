@@ -257,6 +257,8 @@ class ReportTitles(SavedDataFrame):
         misc: dict = Field(default_factory=dict)
         url: str
         agency_id: str
+        occurrence_date: str | None = None
+        publication_date: str | None = None
 
 
 class ATSBWebsiteSafetyIssues(SavedDataFrame):
@@ -360,6 +362,8 @@ class TAICWebsiteReportsTable(SavedDataFrame):
 
         id: str
         year: int
+        occurrence_date: datetime
+        publication_date: datetime
 
 
 class VectorDBDocumentIDs(SavedDataFrame):
