@@ -200,11 +200,11 @@ def get_agency_scraper(
             "https://www.taic.org.nz/inquiry/ao-2000-001",
             "TAIC_a_2000_001",
             {
-                "success": True,
+                "success": False,
                 "occurrence_date": "2000-01-18",
                 "publication_date": "2000-03-15",
             },
-            id="TAIC old aviation",
+            id="TAIC old aviation fail as no pdf",
         ),
         pytest.param(
             "TAIC",
@@ -265,13 +265,14 @@ def get_agency_scraper(
                 "success": True,
                 "occurrence_date": "2025-08-22",
                 "publication_date": "2026-05-08",
+                "agency_id": "AO-2025-052",
             },
             id="ATSB new aviation 2025",
         ),
     ],
 )
 def test_report_collection(
-    get_agency_scraper: object,
+    get_agency_scraper: Callable[[str], WebsiteScraping.ReportScraper],
     agency: str,
     url: str,
     report_id: str,
@@ -295,7 +296,7 @@ def test_report_collection(
         report_data = ReportUrlData(
             id=report_id,
             url=url,
-            agency_id=None,
+            agency_id=expected.get("agency_id") if isinstance(expected, dict) else None,
             occurrence_date=expected.get("occurrence_date")
             if isinstance(expected, dict)
             else None,

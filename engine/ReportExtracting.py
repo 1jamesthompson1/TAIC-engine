@@ -84,7 +84,7 @@ def load_event_type_taxonomy(
             entries.append(
                 {
                     "event_type": event_type,
-                    "description": str(row.get("description", "")).strip(),
+                    "description": str(row["description"].strip()),
                 }
             )
             seen_event_types.add(event_type)

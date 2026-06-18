@@ -1,35 +1,24 @@
 """Tests for report extraction functionality.
 
-This module contains comprehensive tests for the ReportExtracting module,
+This module contains tests for the ReportExtracting module,
 including tests for safety issue extraction, recommendation extraction,
 report chunking, and parallel processing of multiple reports.
-
-This is the key test module for validating that the AI extraction works.
 """
 
 import json
 import math
 import re
-from datetime import datetime
 from difflib import SequenceMatcher
 from pathlib import Path
-from types import UnionType
-from typing import Literal, Union, get_args, get_origin
 from unittest.mock import patch
 
 import pandas as pd
 import pytest
-from pydantic import BaseModel
 
-from engine import Logging, Modes
+from engine import Modes
 from engine.ExtractionModels import (
-    AircraftMetadata,
-    OccurrenceMetadata,
     RecommendationItem,
     SafetyIssueItem,
-    TrainMetadata,
-    VesselMetadata,
-    _build_metadata_model_for_mode,  # noqa: PLC2701
 )
 from engine.ReportExtracting import (
     ai_read_report,
@@ -38,8 +27,6 @@ from engine.ReportExtracting import (
     process_reports_parallel,
 )
 from engine.SavedDataFrames import ExtractedReports, ParsedReports, ReportTitles
-
-logging = Logging.get_logger(__name__)
 
 
 def _output_dir_from_pytest() -> Path:
@@ -58,329 +45,6 @@ def _ai_extraction_config_from_pytest() -> dict:
         dict: AI extraction configuration by agency.
     """
     return pytest.config["engine"]["extraction"]["ai_extraction_config"]  # type: ignore[attr-defined]
-
-
-@pytest.fixture(scope="function")
-def agency_id_lookup() -> dict[str, str]:
-    """Load agency IDs keyed by report_id from test report titles data.
-
-    Returns:
-        dict[str, str]: Mapping from report ID to agency ID.
-    """
-    report_titles = ReportTitles(_output_dir_from_pytest()).read()
-    if report_titles.empty:
-        return {}
-
-    titles = report_titles[["report_id", "agency_id"]].drop_duplicates(
-        subset=["report_id"], keep="last"
-    )
-    return {
-        str(row["report_id"]): str(row["agency_id"])
-        for _, row in titles.iterrows()
-        if row["agency_id"] is not None
-    }
-
-
-def _parse_occurrence_local_datetime(value: str) -> datetime | None:
-    """Parse occurrence local datetime in model format.
-
-    Returns:
-        datetime | None: Parsed datetime when valid, otherwise None.
-    """
-    if not isinstance(value, str) or not value.strip():
-        return None
-
-    try:
-        return datetime.strptime(value.strip(), "%Y-%m-%dT%H:%M")
-    except ValueError:
-        return None
-
-
-def _canonical_sort_key(value: object) -> str:
-    """Build a stable sort key for list item comparison.
-
-    Returns:
-        str: Canonical JSON string representation used for sorting.
-    """
-    return json.dumps(value, sort_keys=True, default=str)
-
-
-def _list_item_sort_key(path: str, value: object) -> tuple | str:
-    """Choose stable item keys so list comparison is less order-sensitive.
-
-    Returns:
-        tuple | str: A deterministic sort key.
-    """
-    if not isinstance(value, dict):
-        return _canonical_sort_key(value)
-
-    if path == "aircraft":
-        return str(value.get("registration") or value.get("model") or "")
-    if path.endswith(".pilots"):
-        return (
-            int(value.get("age") or -1),
-            str(value.get("responsibility") or ""),
-            int(value.get("total_flying_experience") or -1),
-            str(value.get("role") or value.get("rank") or ""),
-        )
-    if path == "trains":
-        return str(value.get("train_number") or value.get("operator") or "")
-    if path == "vessels":
-        return str(value.get("vessel_name") or value.get("port_of_registry") or "")
-
-    return _canonical_sort_key(value)
-
-
-def _normalize_metadata_path(path: str) -> str:
-    """Normalize list indices in metadata paths.
-
-    Returns:
-        str: Path with list indices replaced by [].
-    """
-    return re.sub(r"\[\d+\]", "[]", path)
-
-
-def _unwrap_optional_annotation(annotation: object) -> object:
-    """Remove None from optional annotations when present.
-
-    Returns:
-        object: Annotation without the optional None wrapper when possible.
-    """
-    origin = get_origin(annotation)
-    if origin not in {Union, UnionType}:
-        return annotation
-
-    non_none_args = [arg for arg in get_args(annotation) if arg is not type(None)]
-    if len(non_none_args) == 1:
-        return non_none_args[0]
-    return annotation
-
-
-def _collect_literal_string_paths(
-    model_cls: type[BaseModel], prefix: str = ""
-) -> set[str]:
-    """Walk a Pydantic model and collect paths for Literal-backed fields.
-
-    Returns:
-        set[str]: Normalized metadata paths for literal-backed fields.
-    """
-    literal_paths = set()
-
-    for field_name, field_info in model_cls.model_fields.items():
-        path = f"{prefix}.{field_name}" if prefix else field_name
-        annotation = _unwrap_optional_annotation(field_info.annotation)
-        origin = get_origin(annotation)
-
-        if origin is Literal:
-            literal_values = [
-                value for value in get_args(annotation) if value is not None
-            ]
-            if literal_values:
-                literal_paths.add(path)
-            continue
-
-        if origin is list:
-            item_annotation = _unwrap_optional_annotation(get_args(annotation)[0])
-            if isinstance(item_annotation, type) and issubclass(
-                item_annotation, BaseModel
-            ):
-                literal_paths.update(
-                    _collect_literal_string_paths(item_annotation, f"{path}[]")
-                )
-            continue
-
-        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
-            literal_paths.update(_collect_literal_string_paths(annotation, path))
-
-    return literal_paths
-
-
-def _get_all_literal_paths() -> set[str]:
-    """Collect all literal paths from all vehicle types (aircraft, trains, vessels).
-
-    Returns:
-        set[str]: All literal paths across all three vehicle type hierarchies.
-    """
-    all_paths = set()
-    all_paths.update(_collect_literal_string_paths(AircraftMetadata, "aircraft[]"))
-    all_paths.update(_collect_literal_string_paths(TrainMetadata, "trains[]"))
-    all_paths.update(_collect_literal_string_paths(VesselMetadata, "vessels[]"))
-    all_paths.update(_collect_literal_string_paths(OccurrenceMetadata, "occurrence"))
-    return all_paths
-
-
-LITERAL_PATH_PATTERNS = _get_all_literal_paths()
-
-
-def _should_use_exact_match(
-    path: str,
-    exact_match_paths: set[str] | None = None,
-) -> bool:
-    """Determine whether a metadata path should use exact comparison.
-
-    Args:
-        path: The metadata path to check.
-        exact_match_paths: Set of paths that should use exact matching. Defaults to
-            standard ATSB occurrence metadata paths.
-
-    Returns:
-        bool: True when the path maps to a literal-backed or strict field.
-    """
-    if exact_match_paths is None:
-        exact_match_paths = {
-            "occurrence.occurrence_datetime.time_zone",
-            "occurrence.occurrence_type",
-        }
-    normalized_path = _normalize_metadata_path(path)
-    return normalized_path in LITERAL_PATH_PATTERNS or path in exact_match_paths
-
-
-def _compare_metadata_values(  # noqa: PLR0911, PLR0912, PLR0913, PLR0915
-    path: str,
-    actual: object,
-    expected: object,
-    failures: list[str],
-    *,
-    occurrence_local_datetime_path: str = "occurrence.occurrence_datetime.local_datetime",
-    datetime_tolerance_minutes: int = 30,
-    metadata_weak_string_similarity_threshold: float = 0.25,
-    float_relative_tolerance: float = 0.03,
-) -> None:
-    """Recursively compare metadata with simple string thresholds.
-
-    Args:
-        path: The current metadata path being compared.
-        actual: The actual metadata value extracted.
-        expected: The expected metadata value from the test case.
-        failures: List to accumulate comparison failures.
-        occurrence_local_datetime_path: Path to the occurrence datetime field.
-        datetime_tolerance_minutes: Tolerance in minutes for datetime comparisons.
-        metadata_weak_string_similarity_threshold: Minimum similarity for string comparisons.
-        float_relative_tolerance: Relative tolerance for float comparisons.
-    """
-    if isinstance(expected, dict):
-        if not isinstance(actual, dict):
-            failures.append(
-                f"{path} type mismatch: expected dict, got {type(actual).__name__}"
-            )
-            return
-
-        expected_keys = set(expected)
-        actual_keys = set(actual)
-        missing = sorted(expected_keys - actual_keys)
-        extra = sorted(actual_keys - expected_keys)
-
-        for key in missing:
-            failures.append(f"{path}.{key} missing in extracted metadata")
-        for key in extra:
-            failures.append(f"{path}.{key} unexpected in extracted metadata")
-
-        for key in sorted(expected_keys & actual_keys):
-            next_path = f"{path}.{key}" if path else key
-            _compare_metadata_values(next_path, actual[key], expected[key], failures)
-        return
-
-    if isinstance(expected, list):
-        if not isinstance(actual, list):
-            failures.append(
-                f"{path} type mismatch: expected list, got {type(actual).__name__}"
-            )
-            return
-
-        if len(actual) != len(expected):
-            failures.append(
-                f"{path} length mismatch: expected {len(expected)}, got {len(actual)}"
-            )
-
-        actual_sorted = sorted(actual, key=lambda item: _list_item_sort_key(path, item))
-        expected_sorted = sorted(
-            expected, key=lambda item: _list_item_sort_key(path, item)
-        )
-        for idx, (actual_item, expected_item) in enumerate(
-            zip(actual_sorted, expected_sorted, strict=False)
-        ):
-            _compare_metadata_values(
-                f"{path}[{idx}]", actual_item, expected_item, failures
-            )
-        return
-
-    if isinstance(expected, str):
-        if not isinstance(actual, str):
-            failures.append(
-                f"{path} type mismatch: expected str, got {type(actual).__name__}"
-            )
-            return
-
-        if path == occurrence_local_datetime_path:
-            actual_dt = _parse_occurrence_local_datetime(actual)
-            expected_dt = _parse_occurrence_local_datetime(expected)
-
-            # Keep failures readable when either value is malformed.
-            if actual_dt is None or expected_dt is None:
-                if actual != expected:
-                    failures.append(
-                        f"{path} mismatch: expected {expected!r}, got {actual!r}"
-                    )
-                return
-
-            delta_minutes = abs((actual_dt - expected_dt).total_seconds()) / 60
-            if delta_minutes > datetime_tolerance_minutes:
-                failures.append(
-                    f"{path} mismatch: delta {delta_minutes:.1f} minutes exceeds "
-                    f"{datetime_tolerance_minutes} minutes (expected {expected!r}, got {actual!r})"
-                )
-            return
-
-        if _should_use_exact_match(path):
-            if actual.lower() != expected.lower():
-                failures.append(
-                    f"{path} mismatch: expected {expected!r}, got {actual!r}"
-                )
-            return
-
-        similarity = SequenceMatcher(
-            None,
-            actual,
-            expected,
-        ).ratio()
-        if similarity < metadata_weak_string_similarity_threshold:
-            failures.append(
-                f"{path} similarity {similarity:.2f} < {metadata_weak_string_similarity_threshold}: "
-                f"expected {expected!r}, got {actual!r}"
-            )
-        return
-
-    if isinstance(expected, bool):
-        if actual is not expected:
-            failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
-        return
-
-    if isinstance(expected, int) and not isinstance(expected, bool):
-        if actual != expected:
-            failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
-        return
-
-    if isinstance(expected, float):
-        if not isinstance(actual, int | float):
-            failures.append(
-                f"{path} type mismatch: expected float, got {type(actual).__name__}"
-            )
-            return
-
-        if not math.isclose(
-            float(actual),
-            expected,
-            rel_tol=float_relative_tolerance,
-            abs_tol=0.0,
-        ):
-            failures.append(
-                f"{path} mismatch: expected {expected!r}, got {actual!r} "
-                f"(tol: +/- {float_relative_tolerance * 100:.1f}%)"
-            )
-        return
-
-    if actual != expected:
-        failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
 
 
 # Test data loading functions
@@ -421,34 +85,6 @@ def load_recommendation_test_cases() -> list:
     for case in test_cases:
         report_id = case["report_id"]
         expected = [RecommendationItem(**item) for item in case["expected"]]
-        params.append(pytest.param(report_id, expected, id=f"{report_id}_{case['id']}"))
-    return params
-
-
-def load_metadata_test_cases() -> list:
-    """Load metadata test cases and convert to parametrize format.
-
-    Returns:
-        list: List of pytest.param objects with proper test IDs.
-
-    Raises:
-        ValueError: If a test case has an unknown mode or missing taxonomy.
-    """
-    test_cases = load_json_test_data("metadata_test_cases.json")
-    taxonomy_dict = load_event_type_taxonomy(Path("data/event_types.csv"))
-
-    params = []
-    for case in test_cases:
-        report_id = case["report_id"]
-        mode = Modes.get_report_mode_from_id(report_id)
-        if mode is None:
-            msg = f"Unknown mode for report_id '{report_id}' in metadata test data"
-            raise ValueError(msg)
-        metadata_model = _build_metadata_model_for_mode(mode, taxonomy_dict)
-
-        # Construct expected metadata using mode-specific model
-        # Pass raw expected data dict; Pydantic will construct the correct type
-        expected = metadata_model.model_validate(case["expected"])
         params.append(pytest.param(report_id, expected, id=f"{report_id}_{case['id']}"))
     return params
 
@@ -669,74 +305,182 @@ class TestAIExtraction:
         # Report all failures at once
         assert not failures, "\n".join(failures)
 
-    @pytest.mark.parametrize(
-        "report_id, expected",
-        load_metadata_test_cases(),
+
+_full_extraction_reports = [
+    "TAIC_a_2015_009",
+    "TAIC_r_2021_101",
+    "ATSB_m_2022_007",
+    "TSB_a_2023_W0096",
+]
+
+
+def _load_test_case_for_report(filename: str, report_id: str) -> dict | list | None:
+    """Load a test case from a JSON file for a specific report_id.
+
+    Args:
+        filename: JSON filename in tests/data directory.
+        report_id: The report ID to find.
+
+    Returns:
+        The 'expected' value from the matching test case, or None if not found.
+    """
+    test_cases = load_json_test_data(filename)
+    for case in test_cases:
+        if case["report_id"] == report_id:
+            return case["expected"]
+    return None
+
+
+@pytest.mark.parametrize("report_id", _full_extraction_reports)
+def test_full_extraction(  # noqa: PLR0912, PLR0914, PLR0915
+    report_id: str,
+    agency_id_lookup: dict[str, str],
+) -> None:
+    """Test full extraction (safety issues + recommendations + metadata) all at once.
+
+    Loads expected values from the saved extracted_reports.pkl and compares
+    the results of ai_read_report with all extraction flags enabled.
+
+    Args:
+        report_id: The unique identifier for the report.
+        agency_id_lookup: Report ID to agency ID mapping.
+    """
+    # Hear to prevent circular import issues.
+    from test_MetadataExtraction import (  # noqa: PLC0415
+        _compare_metadata_values,  # noqa: PLC2701
     )
-    def test_metadata_extraction(  # noqa: PLR6301
-        self,
-        report_id: str,
-        expected: BaseModel,
-        agency_id_lookup: dict[str, str],
-    ) -> None:
-        """Test the extraction of metadata from a report.
 
-        Tests occurrence metadata, aircraft details, pilot information,
-        train details, and vessel information as applicable.
+    report_text = get_report_text(report_id)
+    agency_id = agency_id_lookup.get(report_id)
+    report_mode = Modes.get_report_mode_from_id(report_id)
+    event_type_taxonomy_by_mode = load_event_type_taxonomy(Path("data/event_types.csv"))
 
-        Args:
-            report_id (str): The unique identifier for the report.
-            expected (BaseModel): The expected metadata structure (mode-specific model).
-            agency_id_lookup (dict[str, str]): Report ID to agency ID mapping.
+    # Load expected data from JSON test case files
+    si_expected = _load_test_case_for_report("safety_issue_test_cases.json", report_id)
+    recs_expected = _load_test_case_for_report(
+        "recommendation_test_cases.json", report_id
+    )
+    meta_expected = _load_test_case_for_report("metadata_test_cases.json", report_id)
+    expected_safety_issues = (
+        [SafetyIssueItem(**item) for item in si_expected] if si_expected else []
+    )
+    expected_recommendations = (
+        [RecommendationItem(**item) for item in recs_expected] if recs_expected else []
+    )
+    expected_metadata = meta_expected or {}
 
-        """
-        report_text = get_report_text(report_id)
-        agency_id = agency_id_lookup.get(report_id)
-        report_mode = Modes.get_report_mode_from_id(report_id)
-        event_type_taxonomy_by_mode = load_event_type_taxonomy(
-            Path("data/event_types.csv")
+    # Run full extraction
+    extracted_data = ai_read_report(
+        agency_name=report_id.split("_", maxsplit=1)[0],
+        report_text=report_text,
+        safety_issues=True,
+        recommendations=True,
+        metadata=True,
+        report_mode=report_mode,
+        event_type_taxonomy_by_mode=event_type_taxonomy_by_mode,
+        report_id=report_id,
+        agency_id=agency_id,
+    )
+
+    failures = []
+
+    # ---- Compare safety issues ----
+    extracted_safety_issues = getattr(extracted_data, "safety_issues", [])
+
+    if expected_safety_issues:
+        expecting_inferred = any(
+            item.quality == "inferred" for item in expected_safety_issues
         )
-
-        extracted_data = ai_read_report(
-            agency_name=report_id.split("_", maxsplit=1)[0],
-            report_text=report_text,
-            safety_issues=False,
-            recommendations=False,
-            metadata=True,
-            report_mode=report_mode,
-            event_type_taxonomy_by_mode=event_type_taxonomy_by_mode,
-            report_id=report_id,
-            agency_id=agency_id,
-        )
-
-        extracted = getattr(extracted_data, "metadata", None)
-        if extracted is None:
-            pytest.fail("Metadata extraction failed - metadata is None")
-
-        failures = []
-
-        extracted_payload = extracted.model_dump(mode="json")
-        expected_payload = expected.model_dump(mode="json")
-        _compare_metadata_values("", extracted_payload, expected_payload, failures)
-
-        # Verify that at least one mode-specific item is extracted for the report type
-        # Air acidents are ommited due to the presence of ATC only reports.
-        is_rail = "r_" in report_id
-        is_marine = "m_" in report_id
-
-        if is_rail and len(extracted.trains) == 0:
-            failures.append("Rail accident should have train metadata")
-        if is_marine and len(extracted.vessels) == 0:
-            failures.append("Marine accident should have vessel metadata")
-
-        # Report all failures at once
-        if len(failures) > 2:  # noqa: PLR2004
-            assert not failures, "\n".join(failures)
-        elif len(failures) > 0:
-            logging.warning(
-                f"{len(failures)} minor metadata mismatches for report {report_id}:\n"
-                + "\n".join(failures)
+        if expecting_inferred:
+            max_allowed = math.ceil(len(expected_safety_issues) * 1.2)
+            if (
+                len(extracted_safety_issues) < len(expected_safety_issues)
+                or len(extracted_safety_issues) > max_allowed
+            ):
+                failures.append(
+                    f"safety_issues count mismatch (inferred): expected between {len(expected_safety_issues)} and {max_allowed}, got {len(extracted_safety_issues)}"
+                )
+        elif len(extracted_safety_issues) != len(expected_safety_issues):
+            failures.append(
+                f"safety_issues count mismatch: expected {len(expected_safety_issues)}, got {len(extracted_safety_issues)}"
             )
+
+        threshold = 0.4 if expecting_inferred else 0.95
+        if not (
+            expecting_inferred
+            and all(item.quality == "inferred" for item in extracted_safety_issues)
+        ) and not (
+            not expecting_inferred
+            and all(item.quality == "exact" for item in extracted_safety_issues)
+        ):
+            failures.append(
+                f"safety_issues quality mismatch: expected all {expected_safety_issues[0].quality}, got qualities {[item.quality for item in extracted_safety_issues]}"
+            )
+
+        for expected_item in expected_safety_issues:
+            current_best = (None, 0)
+            for extracted_item in extracted_safety_issues:
+                similarity = SequenceMatcher(
+                    None,
+                    extracted_item.safety_issue.lower(),
+                    expected_item.safety_issue.lower(),
+                ).ratio()
+                if similarity > current_best[1]:
+                    current_best = (extracted_item, similarity)
+            if current_best[1] < threshold:
+                failures.append(
+                    f"safety_issue mismatch: expected {expected_item.safety_issue!r}, best match similarity {current_best[1]:.2f} < {threshold}"
+                )
+
+    # ---- Compare recommendations ----
+    extracted_recommendations = getattr(extracted_data, "recommendations", [])
+
+    if expected_recommendations:
+        expected_ids = {r.recommendation_id for r in expected_recommendations}
+        extracted_ids = {r.recommendation_id for r in extracted_recommendations}
+        missing_ids = expected_ids - extracted_ids
+        unexpected_ids = extracted_ids - expected_ids
+        if missing_ids:
+            failures.append(f"Missing recommendation IDs: {missing_ids}")
+        if unexpected_ids:
+            failures.append(f"Unexpected recommendation IDs: {unexpected_ids}")
+
+        for idx, expected_item in enumerate(expected_recommendations):
+            extracted_item = next(
+                (
+                    r
+                    for r in extracted_recommendations
+                    if r.recommendation_id == expected_item.recommendation_id
+                ),
+                None,
+            )
+            if not extracted_item:
+                continue
+            if extracted_item.recipient != expected_item.recipient:
+                failures.append(
+                    f"recommendation {idx} ({expected_item.recommendation_id}): recipient mismatch"
+                )
+            similarity = SequenceMatcher(
+                None,
+                extracted_item.recommendation.lower(),
+                expected_item.recommendation.lower(),
+            ).ratio()
+            if similarity < 0.95:  # noqa: PLR2004
+                failures.append(
+                    f"recommendation {idx} ({expected_item.recommendation_id}): text similarity {similarity:.2f} < 0.95"
+                )
+
+    # ---- Compare metadata ----
+    extracted_metadata = getattr(extracted_data, "metadata", None)
+    if extracted_metadata is None:
+        failures.append("metadata extraction returned None")
+    elif expected_metadata:
+        extracted_payload = extracted_metadata.model_dump(mode="json")
+        _compare_metadata_values(
+            "metadata", extracted_payload, expected_metadata, failures
+        )
+
+    assert not failures, "\n".join(failures)
 
 
 _chunking_params = [

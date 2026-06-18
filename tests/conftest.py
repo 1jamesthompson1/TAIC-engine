@@ -12,6 +12,7 @@ import pytest
 from engine import Config, Logging
 from engine.AICaller import get_api_costs, print_api_cost_summary
 from engine.AzureStorage import PDFStorageManager
+from engine.SavedDataFrames import ReportTitles
 
 logger = Logging.get_logger(__name__)
 
@@ -140,6 +141,29 @@ def cleanup_test_containers() -> Generator[None, None, None]:
     except Exception as exc:
         # Don't fail the test run if cleanup fails, but leave a breadcrumb.
         logger.warning("Post-test PDF cleanup failed: %s", exc)
+
+
+@pytest.fixture(scope="function")
+def agency_id_lookup() -> dict[str, str]:
+    """Load agency IDs keyed by report_id from test report titles data.
+
+    Returns:
+        dict[str, str]: Mapping from report ID to agency ID.
+    """
+    from test_ReportExtracting import _output_dir_from_pytest  # noqa: PLC0415, PLC2701
+
+    report_titles = ReportTitles(_output_dir_from_pytest()).read()
+    if report_titles.empty:
+        return {}
+
+    titles = report_titles[["report_id", "agency_id"]].drop_duplicates(
+        subset=["report_id"], keep="last"
+    )
+    return {
+        str(row["report_id"]): str(row["agency_id"])
+        for _, row in titles.iterrows()
+        if row["agency_id"] is not None
+    }
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:

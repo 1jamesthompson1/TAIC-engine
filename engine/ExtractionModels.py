@@ -61,7 +61,7 @@ class OccurrenceDateTime(BaseModel):
     """Represents occurrence datetime with timezone as separate fields."""
 
     local_datetime: str = Field(
-        description="Local occurrence datetime as ISO 8601 without timezone (YYYY-MM-DDTHH:MM). Time is required and should come from the report text, not be invented. It should be the time that the accident sequence begins (i.e when boat starts to sink). Use the most accurate time found in the report.",
+        description="Local occurrence datetime as ISO 8601 without timezone (YYYY-MM-DDTHH:MM). Time is required and should come from the report text, not be invented. It should be the time that the accident sequence begins (i.e when boat starts to sink). Use the most accurate time found in the report which is normally in the history/narrative/factual information section.",
         pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$",
     )
     time_zone: str = Field(
@@ -106,9 +106,8 @@ class OccurrenceMetadata(BaseModel):
 
     occurrence_type: str | None = Field(
         default=None,
-        description=(
-            "Type or classification of the occurrence (e.g., collision, derailment, ditching). Use the closest explicit classification from the report and align to taxonomy values when constrained by mode."
-        ),
+        # Intentionally blank description to be overridden in mode-specific metadata models with the specific taxonomy for that mode.
+        description="",
     )
     total_persons_involved: int | None = Field(
         default=None,
@@ -118,7 +117,7 @@ class OccurrenceMetadata(BaseModel):
         description="The number of fatalities resulting from the occurrence. Use 0 to indicate no fatalities. People who are considered missing (i.e not found by time of publication) should be counted as fatalities.",
     )
     injuries: int = Field(
-        description="The number of persons injured in the occurrence. Use 0 to indicate no injuries.",
+        description="The number of persons injured (non-fatal) in the occurrence. Use 0 to indicate no injuries. Do not count fatalities here - they go in the separate 'fatalities' field.",
     )
 
     damage_description: Literal["nil"] | str = Field(
@@ -318,7 +317,7 @@ class TrainMetadata(BaseModel):
         default=None,
         description=(
             "Length of the train in meters as a numeric value only "
-            "(for example, 130.0). Do not include unit text."
+            "(for example, 130.0). Do not include unit text. Carefully search the report for any information about the length of the train. If the report does not provide any information about the length of the train then leave this field as None."
         ),
     )
     weight: float | None = Field(
@@ -602,7 +601,7 @@ def build_extraction_output_model(
         fields["metadata"] = (
             _build_metadata_model_for_mode(report_mode, event_type_taxonomy_by_mode),
             Field(
-                description="Metadata extracted from the report including occurrence details and vehicle/vessel/personnel information.",
+                description="Type or classification of the occurrence (e.g., collision, derailment, ditching). You should use the most precise category available in the supplied taxonomy.",
             ),
         )
 

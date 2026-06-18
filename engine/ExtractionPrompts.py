@@ -152,8 +152,14 @@ Vessel propulsion extraction instructions:
 - For vessels with sails (sail ships, sailing vessels, etc.), ALWAYS use 'wind' as the propulsion type, regardless of whether they have auxiliary engines (diesel, etc.)
 - For vessels with multiple propulsion types, extract only the PRIMARY propulsion type
 - Example: A sail training ship with auxiliary diesel engines should be classified as propulsion='wind', not 'diesel'
-- The primary propulsion for a sailing vessel is wind/sail, even if auxiliary engines are mentioned in the report"""
+- The primary propulsion for a sailing vessel is wind/sail, even if auxiliary engines are mentioned in the report
 
+Occurrence type hierarchy rule:
+When assigning occurrence_type, you MUST follow this hierarchy:
+- If the occurrence has a consequence/outcome event (e.g., collision with terrain, forced landing) caused by a contributing factor (e.g., fuel starvation, loss of control), you MUST assign the CONSEQUENCE/OUTCOME event type, NOT the contributing factor.
+- Example:
+  * Fuel starvation that causes a forced landing → "Forced / Precautionary landing", NOT "Fuel related"
+"""
         if event_type_taxonomy:
             event_types_list = "\n".join(
                 f"- {entry['event_type']}: {entry['description']}"

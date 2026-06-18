@@ -212,7 +212,7 @@
           "description": "Hamilton Aerodrome",
           "standardized_location": "Hamilton aerodrome, Hamilton, Waikato, New Zealand"
         },
-        "occurrence_type": "ANSP operational error",
+        "occurrence_type": "Aircraft separation",
         "total_persons_involved": 5,
         "fatalities": 0,
         "injuries": 0,
@@ -837,7 +837,7 @@
     "expected": {
       "occurrence": {
         "occurrence_datetime": {
-          "local_datetime": "2001-03-22T14:00",
+          "local_datetime": "2001-03-22T16:00",
           "time_zone": "UTC-04:00",
           "time_zone_source": "explicit_in_report"
         },
@@ -1008,7 +1008,7 @@
           "standardized_location": "On board the Aratere, Interislander ferry terminal, Wellington, New Zealand"
         },
         "occurrence_type": "Safeworking Rule or Procedure Breach",
-        "total_persons_involved": 3,
+        "total_persons_involved": 2,
         "fatalities": 0,
         "injuries": 1,
         "damage_description": "nil",
@@ -1018,8 +1018,8 @@
         {
           "train_type": "shunt",
           "train_number": "DSG 3210 / EUF24",
-          "length": null,
-          "weight": null,
+          "length": 12.5,
+          "weight": 56.0,
           "classification": "yard/shunting",
           "year_manufactured": null,
           "operator": "KiwiRail",

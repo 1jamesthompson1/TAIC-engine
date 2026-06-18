@@ -51,7 +51,7 @@ Communications,aviation,"Communication failure, misunderstanding, or loss affect
 Crew and Cabin Safety,aviation,"Occurrence involving crew/cabin safety procedures, injury risk, or cabin operations."
 "Fire, fumes & smoke",aviation,"Presence of fire, smoke, or fumes in or around the aircraft impacting safety."
 Flight preparation / Navigation,aviation,Pre-flight planning or navigation execution issue contributing to the event.
-Fuel related,aviation,"Fuel quantity, quality, management, contamination, or supply issue affecting operations. Fuel starvation which cause other events (such as dithcings, forced landings, Terrain collisions etc.) should be included in their respective categories."
+Fuel related,aviation,"Fuel quantity, quality, management, contamination, or supply issue affecting operations. Fuel starvation which cause other events (such as ditching, forced landings, Terrain collisions etc.) should be included in their respective categories."
 Ground operations,aviation,"Occurrence during taxi, pushback, towing, ramp, or apron activities."
 Ground proximity alerts / warnings,aviation,Triggered terrain/obstacle proximity alerts or warnings indicating reduced terrain clearance margin.
 Miscellaneous,aviation,Aviation occurrence not fitting any other listed category.
