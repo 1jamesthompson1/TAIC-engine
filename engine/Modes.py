@@ -1,4 +1,18 @@
-"""Mode enumeration for different report types."""
+"""Mode enumeration for different report types.
+
+Examples:
+    >>> Mode.as_string(Mode.a)
+    'Aviation'
+    >>> Mode.r.name
+    'r'
+    >>> Mode.m.value
+    2
+
+    >>> Mode['a']
+    Mode.a
+    >>> Mode[2]
+    Mode.m
+"""
 
 from __future__ import annotations
 
@@ -30,18 +44,6 @@ class Mode(Enum):
         if mode == cls.m:
             return "Marine"
         return None
-
-    @classmethod
-    def as_char(cls, mode: Mode) -> str:
-        """Convert mode to single character.
-
-        Args:
-            mode: The mode to convert.
-
-        Returns:
-            Single character representation of the mode ('a', 'r', or 'm').
-        """
-        return Mode.as_string(mode).lower()[0]
 
 
 all_modes = [Mode.a, Mode.r, Mode.m]

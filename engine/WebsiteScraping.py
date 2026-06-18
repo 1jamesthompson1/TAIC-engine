@@ -810,7 +810,7 @@ class TAICReportScraper(ReportScraper):
         investigations_with_mode = investigations.copy()
 
         investigations_with_mode = investigations_with_mode.set_index(
-            investigations_with_mode["id"].map(lambda x: Modes.Mode[x[0].lower()]),
+            investigations_with_mode["id"].map(lambda x: Modes.Mode[x[0].lower()].name),
             inplace=False,
         )
         investigations_with_mode.index.name = None
@@ -838,7 +838,7 @@ class TAICReportScraper(ReportScraper):
                 occurrence_date=row["occurrence_date"],
                 publication_date=row["publication_date"],
             )
-            for row in self.agency_reports.loc[mode]
+            for row in self.agency_reports.loc[mode.name]
             .query(f"year == {year}")
             .to_dict("records")
         ]
@@ -1047,9 +1047,7 @@ class ATSBReportScraper(ReportScraper):
 
                 new_investigations.loc[:, "year"] = pd.to_datetime(
                     new_investigations["occurrence_date"].to_list(),
-                    format="%d %b %Y",
-                    errors="coerce",
-                ).year.map(int)
+                ).year
 
                 new_investigations = new_investigations.query(
                     f"year >= {self.settings.start_year}"
@@ -1088,9 +1086,10 @@ class ATSBReportScraper(ReportScraper):
         if len(dfs) == 0:
             return investigations
 
-        new_investigations = pd.concat(
-            dfs, axis=0, keys=self.settings.modes
-        ).reset_index(level=1, drop=True)
+        mode_keys = [m.name for m in self.settings.modes]
+        new_investigations = pd.concat(dfs, axis=0, keys=mode_keys).reset_index(
+            level=1, drop=True
+        )
 
         updated_investigations = pd.concat(
             [investigations, new_investigations],
@@ -1119,7 +1118,7 @@ class ATSBReportScraper(ReportScraper):
                 occurrence_date=None,
                 publication_date=None,
             )
-            for row in self.agency_reports.loc[mode]
+            for row in self.agency_reports.loc[mode.name]
             .query(f"year == {year}")
             .dropna(subset=["url"])
             .to_dict("records")
