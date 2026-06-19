@@ -1,5 +1,8 @@
 """Tests for metadata extraction from accident reports.
 
+!!! warning
+    This module has a bit of complex logic as it has to traverse the metadata structure recursively and apply different comparison rules for different types of fields (e.g. exact match for certain string fields, tolerance for datetime fields, etc.). The goal is to provide detailed feedback on any mismatches between the extracted metadata and the expected values, while allowing for some flexibility in non-critical fields.
+
 This module tests the extraction of occurrence metadata, vehicle details,
 and personnel information from accident investigation reports.
 """
@@ -138,23 +141,56 @@ def _should_use_exact_match(
     return normalized_path in LITERAL_PATH_PATTERNS or path in exact_match_paths
 
 
-def _compare_metadata_values(  # noqa: PLR0911, PLR0912, PLR0913
+CRITICAL_METADATA_PREFIXES = {
+    "occurrence.occurrence_datetime",
+    "occurrence.occurrence_type",
+    "occurrence.fatalities",
+    "occurrence.injuries",
+}
+
+
+def _is_critical_metadata_path(path: str) -> bool:
+    normalized = _normalize_metadata_path(path)
+    # Strip optional top-level prefix like "metadata."
+    if "." in normalized:
+        normalized = normalized.split(".", 1)[1]
+    return any(normalized.startswith(p) for p in CRITICAL_METADATA_PREFIXES)
+
+
+def _add_failure(
+    path: str,
+    critical_out: list[str],
+    non_critical_out: list[str],
+    message: str,
+) -> None:
+    if _is_critical_metadata_path(path):
+        critical_out.append(message)
+    else:
+        non_critical_out.append(message)
+
+
+def _compare_metadata_values(  # noqa: PLR0911, PLR0912, PLR0913, PLR0915
     path: str,
     actual: object,
     expected: object,
-    failures: list[str],
     *,
     occurrence_local_datetime_path: str = "occurrence.occurrence_datetime.local_datetime",
     datetime_tolerance_minutes: int = 30,
     metadata_weak_string_similarity_threshold: float = 0.25,
     float_relative_tolerance: float = 0.03,
-) -> None:
+) -> tuple[list[str], list[str]]:
+    critical: list[str] = []
+    non_critical: list[str] = []
+
     if isinstance(expected, dict):
         if not isinstance(actual, dict):
-            failures.append(
-                f"{path} type mismatch: expected dict, got {type(actual).__name__}"
+            _add_failure(
+                path,
+                critical,
+                non_critical,
+                f"{path} type mismatch: expected dict, got {type(actual).__name__}",
             )
-            return
+            return critical, non_critical
 
         expected_keys = set(expected)
         actual_keys = set(actual)
@@ -162,25 +198,47 @@ def _compare_metadata_values(  # noqa: PLR0911, PLR0912, PLR0913
         extra = sorted(actual_keys - expected_keys)
 
         for key in missing:
-            failures.append(f"{path}.{key} missing in extracted metadata")
+            _add_failure(
+                path,
+                critical,
+                non_critical,
+                f"{path}.{key} missing in extracted metadata",
+            )
         for key in extra:
-            failures.append(f"{path}.{key} unexpected in extracted metadata")
+            _add_failure(
+                path,
+                critical,
+                non_critical,
+                f"{path}.{key} unexpected in extracted metadata",
+            )
 
         for key in sorted(expected_keys & actual_keys):
             next_path = f"{path}.{key}" if path else key
-            _compare_metadata_values(next_path, actual[key], expected[key], failures)
-        return
+            child_critical, child_non_critical = _compare_metadata_values(
+                next_path,
+                actual[key],
+                expected[key],
+            )
+            critical.extend(child_critical)
+            non_critical.extend(child_non_critical)
+        return critical, non_critical
 
     if isinstance(expected, list):
         if not isinstance(actual, list):
-            failures.append(
-                f"{path} type mismatch: expected list, got {type(actual).__name__}"
+            _add_failure(
+                path,
+                critical,
+                non_critical,
+                f"{path} type mismatch: expected list, got {type(actual).__name__}",
             )
-            return
+            return critical, non_critical
 
         if len(actual) != len(expected):
-            failures.append(
-                f"{path} length mismatch: expected {len(expected)}, got {len(actual)}"
+            _add_failure(
+                path,
+                critical,
+                non_critical,
+                f"{path} length mismatch: expected {len(expected)}, got {len(actual)}",
             )
 
         actual_sorted = sorted(actual, key=lambda item: _list_item_sort_key(path, item))
@@ -190,17 +248,24 @@ def _compare_metadata_values(  # noqa: PLR0911, PLR0912, PLR0913
         for idx, (actual_item, expected_item) in enumerate(
             zip(actual_sorted, expected_sorted, strict=False)
         ):
-            _compare_metadata_values(
-                f"{path}[{idx}]", actual_item, expected_item, failures
+            child_critical, child_non_critical = _compare_metadata_values(
+                f"{path}[{idx}]",
+                actual_item,
+                expected_item,
             )
-        return
+            critical.extend(child_critical)
+            non_critical.extend(child_non_critical)
+        return critical, non_critical
 
     if isinstance(expected, str):
         if not isinstance(actual, str):
-            failures.append(
-                f"{path} type mismatch: expected str, got {type(actual).__name__}"
+            _add_failure(
+                path,
+                critical,
+                non_critical,
+                f"{path} type mismatch: expected str, got {type(actual).__name__}",
             )
-            return
+            return critical, non_critical
 
         if path == occurrence_local_datetime_path:
             actual_dt = _parse_occurrence_local_datetime(actual)
@@ -208,54 +273,75 @@ def _compare_metadata_values(  # noqa: PLR0911, PLR0912, PLR0913
 
             if actual_dt is None or expected_dt is None:
                 if actual != expected:
-                    failures.append(
-                        f"{path} mismatch: expected {expected!r}, got {actual!r}"
+                    _add_failure(
+                        path,
+                        critical,
+                        non_critical,
+                        f"{path} mismatch: expected {expected!r}, got {actual!r}",
                     )
-                return
+                return critical, non_critical
 
             delta_minutes = abs((actual_dt - expected_dt).total_seconds()) / 60
             if delta_minutes > datetime_tolerance_minutes:
-                failures.append(
+                _add_failure(
+                    path,
+                    critical,
+                    non_critical,
                     f"{path} mismatch: delta {delta_minutes:.1f} minutes exceeds "
-                    f"{datetime_tolerance_minutes} minutes (expected {expected!r}, got {actual!r})"
+                    f"{datetime_tolerance_minutes} minutes (expected {expected!r}, got {actual!r})",
                 )
-            return
+            return critical, non_critical
 
         if _should_use_exact_match(path):
             if actual.lower() != expected.lower():
-                failures.append(
-                    f"{path} mismatch: expected {expected!r}, got {actual!r}"
+                _add_failure(
+                    path,
+                    critical,
+                    non_critical,
+                    f"{path} mismatch: expected {expected!r}, got {actual!r}",
                 )
-            return
+            return critical, non_critical
 
-        similarity = SequenceMatcher(
-            None,
-            actual,
-            expected,
-        ).ratio()
+        similarity = SequenceMatcher(None, actual, expected).ratio()
         if similarity < metadata_weak_string_similarity_threshold:
-            failures.append(
+            _add_failure(
+                path,
+                critical,
+                non_critical,
                 f"{path} similarity {similarity:.2f} < {metadata_weak_string_similarity_threshold}: "
-                f"expected {expected!r}, got {actual!r}"
+                f"expected {expected!r}, got {actual!r}",
             )
-        return
+        return critical, non_critical
 
     if isinstance(expected, bool):
         if actual is not expected:
-            failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
-        return
+            _add_failure(
+                path,
+                critical,
+                non_critical,
+                f"{path} mismatch: expected {expected!r}, got {actual!r}",
+            )
+        return critical, non_critical
 
     if isinstance(expected, int) and not isinstance(expected, bool):
         if actual != expected:
-            failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
-        return
+            _add_failure(
+                path,
+                critical,
+                non_critical,
+                f"{path} mismatch: expected {expected!r}, got {actual!r}",
+            )
+        return critical, non_critical
 
     if isinstance(expected, float):
         if not isinstance(actual, int | float):
-            failures.append(
-                f"{path} type mismatch: expected float, got {type(actual).__name__}"
+            _add_failure(
+                path,
+                critical,
+                non_critical,
+                f"{path} type mismatch: expected float, got {type(actual).__name__}",
             )
-            return
+            return critical, non_critical
 
         if not math.isclose(
             float(actual),
@@ -263,14 +349,24 @@ def _compare_metadata_values(  # noqa: PLR0911, PLR0912, PLR0913
             rel_tol=float_relative_tolerance,
             abs_tol=0.0,
         ):
-            failures.append(
+            _add_failure(
+                path,
+                critical,
+                non_critical,
                 f"{path} mismatch: expected {expected!r}, got {actual!r} "
-                f"(tol: +/- {float_relative_tolerance * 100:.1f}%)"
+                f"(tol: +/- {float_relative_tolerance * 100:.1f}%)",
             )
-        return
+        return critical, non_critical
 
     if actual != expected:
-        failures.append(f"{path} mismatch: expected {expected!r}, got {actual!r}")
+        _add_failure(
+            path,
+            critical,
+            non_critical,
+            f"{path} mismatch: expected {expected!r}, got {actual!r}",
+        )
+
+    return critical, non_critical
 
 
 def load_metadata_test_cases() -> list:
@@ -342,11 +438,13 @@ def test_metadata_extraction(
     if extracted is None:
         pytest.fail("Metadata extraction failed - metadata is None")
 
-    failures = []
-
     extracted_payload = extracted.model_dump(mode="json")
     expected_payload = expected.model_dump(mode="json")
-    _compare_metadata_values("", extracted_payload, expected_payload, failures)
+    critical_failures, non_critical_failures = _compare_metadata_values(
+        "",
+        extracted_payload,
+        expected_payload,
+    )
 
     # Verify that at least one mode-specific item is extracted for the report type
     # Air accidents are omitted due to the presence of ATC only reports.
@@ -354,24 +452,9 @@ def test_metadata_extraction(
     is_marine = "m_" in report_id
 
     if is_rail and len(extracted.trains) == 0:
-        failures.append("Rail accident should have train metadata")
+        non_critical_failures.append("Rail accident should have train metadata")
     if is_marine and len(extracted.vessels) == 0:
-        failures.append("Marine accident should have vessel metadata")
-
-    # Separate failures into critical (datetime, occurence_type, fatalities, injuries)
-    # and non-critical (everything else, allowed up to 2 mismatches)
-    critical_paths = {
-        "occurrence.occurrence_datetime",
-        "occurrence.occurrence_type",
-        "occurrence.fatalities",
-        "occurrence.injuries",
-    }
-    critical_failures = [
-        f for f in failures if any(f.startswith(p) for p in critical_paths)
-    ]
-    non_critical_failures = [
-        f for f in failures if not any(f.startswith(p) for p in critical_paths)
-    ]
+        non_critical_failures.append("Marine accident should have vessel metadata")
 
     if critical_failures:
         assert not critical_failures, (

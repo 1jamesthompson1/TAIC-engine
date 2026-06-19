@@ -186,5 +186,36 @@
     "id": "previous recommendation listed yet not present in report text",
     "report_id": "ATSB_a_2007_018",
     "expected": []
+  },
+
+  {
+    "id": "additional recommendations for full text extraction",
+    "report_id": "TAIC_a_2015_009",
+    "expected": [
+      {
+        "recommendation": "On 23 August 2018 the Commission is therefore recommending that the Director of Civil Aviation raise public awareness of the VFR traffic around the Hamilton area and work closely with aerodrome safety groups to resolve congestion hazards and traffic flow routes into and out of the zone. (020/18)",
+        "recommendation_id": "020/18",
+        "recipient": "Director of Civil Aviation",
+        "recommendation_context": "The CAA has conducted public consultations to address safety issues with the Hamilton zone and promulgated changes. These changes have focused on problems within the zone but have also created new hazards outside the zone. The high VFR traffic volumes around Hamilton create a risk of mid-air collisions near the common entry routes to the zone that local operators cannot manage effectively without CAA involvement. One suggestion from the local users to manage this risk is for the CAA to publish a 'Good Aviation Practice' booklet that explains the best practice for VFR entry to and exit from the zone.\n\nOn 12 September 2018, Civil Aviation Authority replied:\n\nThe CAA in its acceptance of final recommendation 020/18, will carry out the following:\n\n1 The ongoing proactive liaison will continue with the user group for the purposes of supporting active airspace risk mitigation.\n\n2 In the longer term, a GAP booklet that will focus on the airspace in and around Hamilton will be compiled with a publishing date envisaged by August 2020.",
+        "made": "2018-08-23"
+      },
+      {
+        "recommendation": "On 23 August 2018 the Commission is therefore recommending that the Chief Executive Officer of Airways review the current practices of aerodrome control at Hamilton to ensure that the level of ATC service is consistent with CAA rules and the aerodrome safety system. (021/18)",
+        "recommendation_id": "021/18",
+        "recipient": "Chief Executive Officer of Airways Corporation of New Zealand Limited",
+        "recommendation_context": "The situation where some aerodrome controllers at the Hamilton ATC unit have been 'over-controlling' by providing VFR pilots with excessive and unnecessary traffic information was described by the CAA in a 2013 report. Evidence of it still occurring was found during this inquiry in 2015 and it was still being raised as a safety issue through the aerodrome safety system and CAA notifications in 2017. It presents an ongoing safety risk to the high number of trainee pilots based in Hamilton.\n\nOn 6 September 2018, Airways replied:\n\nAirways wishes to confirm that it will implement the final recommendation of the Transport Accident Investigation Commission pertaining to the Hamilton ATC unit. Much has already been done by way of changes made to the Hamilton airspace to reduce potential conflictions and the need for traffic information, however the following additional actions along with a proposed timeline will be undertaken.\n\n1 A senior Performance Coach to conduct an independent live observations audit of current traffic information provision practice. This audit will also include:\n• A review of national and local unit training and operational guidance material to ensure it adequately sets expectations of the required performance outcome.\n• Measure current traffic information provision compliance against regulatory expectations.\n• Canvasing local users for evidence of specific areas of non-compliance\n• Making recommendations where necessary that would ensure compliance and best practice expectations are meet.\n31 October 2018 Hamilton\n\n2 Conduct a program of remote random radio telephone sampling of unit transmissions to measure actual performance against expectations. This sampling will include at least 3 sets of at least 10 transmissions each month for a period of 3 months. Feedback supplied to unit and improvement action plan agreed where necessary.\n31 December 2018 Hamilton\n\n3 A review of Radio Telephone performance (including the provision of Traffic Information) to be included as a standard agenda item for the quarterly Hamilton Safety Sub Committee Meetings for a period of 6 months. Where deficiencies in performance are identified a plan is to be agreed by the committee that will address area of deficiency at the root cause level to ensure best practice is achieved by ATC and Pilots alike.\n31 March 2019\n\n4 Report summary compiled of actions 1-3 above including relevant evidence for the CEO Airways to satisfy the Commission that actions have been completed and that best practice in relation to the provision of Traffic Information is in place at Hamilton.\n30 April 2019\n\nI [Airways] will advise you when these actions have been completed in accordance with your requirements.",
+        "made": "2018-08-23"
+      }
+    ]
+  },
+  {
+    "id": "No recommendations expected",
+    "report_id": "TSB_a_2023_W0096",
+    "expected": []
+  },
+  {
+    "id": "TAIC extra for full test",
+    "report_id": "TAIC_r_2021_101",
+    "expected": []
   }
 ]

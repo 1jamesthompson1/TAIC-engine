@@ -100,7 +100,7 @@
       {
         "safety_issue": "The standard of team resource management in the Hamilton ATC tower did not match good industry practice.",
         "quality": "exact",
-        "safety_issue_id": "SI 6.1"
+        "safety_issue_id": null
       },
       {
         "safety_issue": "Changes in the size and shape of the Hamilton zone have shifted some VFR traffic congestion to prominent points outside the zone, and likely increased the risk of collision in those areas.",
@@ -110,7 +110,7 @@
       {
         "safety_issue": "Some aerodrome controllers are 'over-controlling' VFR traffic in and around the zone, which is unnecessarily congesting the radio frequencies and risks causing difficulties for inexperienced pilots and those for whom English is their second language.",
         "quality": "exact",
-        "safety_issue_id": "SI 6.3"
+        "safety_issue_id": null
       }
     ]
   },
@@ -122,6 +122,37 @@
         "safety_issue": "The number of wagons loaded on the Aratere's outer tracks at the time of the accident exceeded the limits that would have put them in a position to be safely accommodated without presenting difficulty when coupling.",
         "quality": "exact",
         "safety_issue_id": null
+      }
+    ]
+  },
+  {
+    "id": "ATSB extra si for full report extraction",
+    "report_id": "ATSB_m_2022_007",
+    "expected": [
+      {
+        "safety_issue": "The Pilbara Ports Authority's port user guidelines and procedures did not reflect the best practice escort towage guidance detailed in the port's draft escort towage strategy and business continuity plan. The detail of these improved towage practices, designed to reduce the risk of channel blockages, were also not integrated into the Port Hedland Pilots' safety management system and were consequently, inconsistently applied by pilots.",
+        "safety_issue_id": "MO-2022-007-SI-01",
+        "quality": "exact"
+      },
+      {
+        "safety_issue": "The Pilbara Ports Authority's port user guidelines and procedures did not reflect the best practice escort towage guidance detailed in the port's draft escort towage strategy and business continuity plan. The details of these improved towage practices, designed to reduce the risk of channel blockages, were also not integrated into the Port Hedland Pilots' safety management system and were, consequently, inconsistently applied by pilots.",
+        "safety_issue_id": "MO-2022-007-SI-02",
+        "quality": "exact"
+      },
+      {
+        "safety_issue": "Although Hagen Oldendorff's steering and rudder angle indicator systems complied with the applicable rules and regulations, neither the SOLAS regulations, nor the rules of the ship's responsible classification society, Lloyd's Register, mandated protection of the ship's rudder angle indication systems against a single point of failure in electrical power supply, nor did they require installation of audible or visual alerts to notify the bridge team of a power failure affecting the indicators.",
+        "safety_issue_id": "MO-2022-007-SI-03",
+        "quality": "exact"
+      },
+      {
+        "safety_issue": "Although Hagen Oldendorff's steering and rudder angle indicator systems complied with the applicable rules and regulations, neither the SOLAS regulations, nor the rules of the ship's responsible classification society, Lloyd's Register, mandated protection of the ship's rudder angle indication systems against a single point of failure in electrical power supply, nor did they require installation of audible or visual alerts to notify the bridge team of a power failure affecting the indicators.",
+        "safety_issue_id": "MO-2022-007-SI-04",
+        "quality": "exact"
+      },
+      {
+        "safety_issue": "Although Hagen Oldendorff's steering and rudder angle indicator systems complied with the applicable rules and regulations, neither the SOLAS regulations, nor the rules of the ship's responsible classification society, Lloyd's Register, mandated protection of the ship's rudder angle indication systems against a single point of failure in electrical power supply, nor did they require installation of audible or visual alerts to notify the bridge team of a power failure affecting the indicators.",
+        "safety_issue_id": "MO-2022-007-SI-05",
+        "quality": "exact"
       }
     ]
   }

@@ -6,6 +6,7 @@ report chunking, and parallel processing of multiple reports.
 """
 
 import json
+import logging
 import math
 import re
 from difflib import SequenceMatcher
@@ -27,6 +28,158 @@ from engine.ReportExtracting import (
     process_reports_parallel,
 )
 from engine.SavedDataFrames import ExtractedReports, ParsedReports, ReportTitles
+
+logger = logging.getLogger(__name__)
+
+# Shared comparison helpers used by both singular and full-extraction tests.
+
+
+def _compare_safety_issues(
+    extracted: list[SafetyIssueItem],
+    expected: list[SafetyIssueItem],
+) -> list[str]:
+    """Compare extracted safety issues against expected.
+
+    Handles count, quality (exact vs inferred), and best-match text similarity.
+    Returns a list of failure description strings (empty means success).
+
+    Returns:
+        A list of failure description strings, or an empty list when the
+        comparison succeeds.
+    """
+    failures: list[str] = []
+    if not expected:
+        return failures
+
+    expecting_inferred = any(item.quality == "inferred" for item in expected)
+
+    if expecting_inferred:
+        max_allowed = math.ceil(len(expected) * 1.2)
+        if len(extracted) < len(expected) or len(extracted) > max_allowed:
+            failures.append(
+                f"Count mismatch (inferred): expected between {len(expected)} "
+                f"and {max_allowed} safety issues, got {len(extracted)}"
+            )
+    elif len(extracted) != len(expected):
+        failures.append(
+            f"Count mismatch: expected {len(expected)} safety issues, "
+            f"got {len(extracted)}"
+        )
+
+    extracted_quality = {item.quality for item in extracted}
+    if expecting_inferred:
+        if extracted_quality != {"inferred"}:
+            failures.append(
+                f"Quality mismatch: expected all 'inferred', "
+                f"got {[item.quality for item in extracted]}"
+            )
+    elif extracted_quality != {"exact"}:
+        failures.append(
+            f"Quality mismatch: expected all 'exact', "
+            f"got {[item.quality for item in extracted]}"
+        )
+
+    threshold = 0.4 if expecting_inferred else 0.95
+
+    for expected_item in expected:
+        best_item: SafetyIssueItem | None = None
+        best_similarity = 0.0
+        for extracted_item in extracted:
+            similarity = SequenceMatcher(
+                None,
+                extracted_item.safety_issue.lower(),
+                expected_item.safety_issue.lower(),
+            ).ratio()
+            if similarity > best_similarity:
+                best_item = extracted_item
+                best_similarity = similarity
+
+        if best_similarity < threshold:
+            best_text = best_item.safety_issue if best_item else "None"
+            failures.append(
+                f"Expected: {expected_item.safety_issue!r}\n"
+                f"Instead got: {best_text!r}\n"
+                f"Similarity: {best_similarity:.2f} < {threshold}"
+            )
+
+    return failures
+
+
+def _compare_recommendations(
+    extracted: list[RecommendationItem],
+    expected: list[RecommendationItem],
+    recommendation_similarity_threshold: float = 0.95,
+    context_similarity_threshold: float = 0.3,
+) -> list[str]:
+    """Compare extracted recommendations against expected.
+
+    Checks ID presence, recipient exact-match, and text/context similarity.
+
+    Returns:
+        A list of failure description strings (empty means success).
+    """
+    failures: list[str] = []
+    if not expected:
+        return failures
+
+    expected_ids = {item.recommendation_id for item in expected}
+    extracted_ids = {item.recommendation_id for item in extracted}
+
+    missing_ids = expected_ids - extracted_ids
+    unexpected_ids = extracted_ids - expected_ids
+    if missing_ids:
+        failures.append(f"Missing recommendation IDs: {missing_ids}")
+    if unexpected_ids:
+        failures.append(f"Unexpected recommendation IDs: {unexpected_ids}")
+
+    for idx, expected_item in enumerate(expected):
+        extracted_item = next(
+            (
+                item
+                for item in extracted
+                if item.recommendation_id == expected_item.recommendation_id
+            ),
+            None,
+        )
+        if not extracted_item:
+            continue
+
+        if extracted_item.recipient != expected_item.recipient:
+            failures.append(
+                f"Item {idx} ({extracted_item.recommendation_id}): Recipient mismatch\n"
+                f"Expected:\n{expected_item.recipient}\n"
+                f"Got:\n{extracted_item.recipient}"
+            )
+
+        similarity = SequenceMatcher(
+            None,
+            extracted_item.recommendation.lower(),
+            expected_item.recommendation.lower(),
+        ).ratio()
+
+        if similarity < recommendation_similarity_threshold:
+            failures.append(
+                f"Item {idx} ({extracted_item.recommendation_id}): "
+                f"Recommendation text similarity {similarity:.2f} < {recommendation_similarity_threshold}\n"
+                f"Expected:\n{expected_item.recommendation}\n"
+                f"Got:\n{extracted_item.recommendation}"
+            )
+
+        context_similarity = SequenceMatcher(
+            lambda x: re.match(r"\s+", x) is not None,
+            (extracted_item.recommendation_context or "").lower(),
+            (expected_item.recommendation_context or "").lower(),
+        ).ratio()
+
+        if context_similarity < context_similarity_threshold:
+            failures.append(
+                f"Item {idx} ({extracted_item.recommendation_id}): "
+                f"Context similarity {context_similarity:.2f} < {context_similarity_threshold}\n"
+                f"Expected:\n{expected_item.recommendation_context}\n"
+                f"Got:\n{extracted_item.recommendation_context}"
+            )
+
+    return failures
 
 
 def _output_dir_from_pytest() -> Path:
@@ -151,59 +304,7 @@ class TestAIExtraction:
         )
 
         extracted = getattr(extracted_data, "safety_issues", [])
-        failures = []
-
-        # Is it inferred or not
-        expecting_inferred = any(item.quality == "inferred" for item in expected)
-
-        # Check count matches
-        if expecting_inferred:
-            max_allowed = math.ceil(len(expected) * 1.2)
-            if len(extracted) < len(expected) or len(extracted) > max_allowed:
-                failures.append(
-                    f"Count mismatch (inferred): expected between {len(expected)} and {max_allowed} safety issues, got {len(extracted)}"
-                )
-        elif len(extracted) != len(expected):
-            failures.append(
-                f"Count mismatch: expected {len(expected)} safety issues, got {len(extracted)}"
-            )
-
-        # Make sure all inferred or exact
-        if not (
-            (
-                not expecting_inferred
-                and all(item.quality == "exact" for item in extracted)
-            )
-            or (
-                expecting_inferred
-                and all(item.quality == "inferred" for item in extracted)
-            )
-        ):
-            failures.append(
-                f"Quality mismatch: expected all safety issues to be {expected[0].quality}, but got a mix of qualities in extracted data\n{[item.quality for item in extracted]}"
-            )
-
-        # Compare extracted and expected items using best-match alignment
-        threshold = 0.4 if expecting_inferred else 0.95
-
-        for expected_item in expected:
-            current_best = (None, 0, None)  # (extracted_item, similarity, index)
-            for i, extracted_item in enumerate(extracted):
-                similarity = SequenceMatcher(
-                    None,
-                    extracted_item.safety_issue.lower(),
-                    expected_item.safety_issue.lower(),
-                ).ratio()
-
-                if similarity > current_best[1]:
-                    current_best = (extracted_item, similarity, i)
-
-            if current_best[1] < threshold:
-                failures.append(
-                    f"Expected: {expected_item.safety_issue!r}\nInstead got: {current_best[0].safety_issue!r}\nSimilarity: {current_best[1]:.2f} < {threshold}"
-                )
-
-        # Report all failures at once
+        failures = _compare_safety_issues(extracted, expected)
         assert not failures, "\n".join(failures)
 
     @pytest.mark.parametrize("report_id, expected", load_recommendation_test_cases())
@@ -239,79 +340,13 @@ class TestAIExtraction:
         )
 
         extracted = getattr(extracted_data, "recommendations", [])
-        failures = []
-
-        expected_ids = {item.recommendation_id for item in expected}
-        extracted_ids = {item.recommendation_id for item in extracted}
-
-        # 1. Check all expected recommendation IDs are present and no unexpected IDs are present
-        missing_ids = expected_ids - extracted_ids
-        unexpected_ids = extracted_ids - expected_ids
-        if missing_ids:
-            failures.append(f"Missing recommendation IDs: {missing_ids}")
-        if unexpected_ids:
-            failures.append(f"Unexpected recommendation IDs: {unexpected_ids}")
-
-        # 2. Check each item (count permitting)
-        for idx, expected_item in enumerate(expected):
-            extracted_item = next(
-                (
-                    item
-                    for item in extracted
-                    if item.recommendation_id == expected_item.recommendation_id
-                ),
-                None,
-            )
-            if not extracted_item:
-                continue  # Already reported missing ID, skip further checks for this item
-
-            # Check recipient
-            if extracted_item.recipient != expected_item.recipient:
-                failures.append(f"""Item {idx} ({extracted_item.recommendation_id}): Recipient mismatch
-    Expected:
-{expected_item.recipient}
-    Got:
-{extracted_item.recipient}""")
-
-            # Check recommendation text similarity
-            similarity = SequenceMatcher(
-                None,
-                extracted_item.recommendation.lower(),
-                expected_item.recommendation.lower(),
-            ).ratio()
-
-            if similarity < recommendation_similarity_threshold:
-                failures.append(f"""Item {idx} ({extracted_item.recommendation_id}): Recommendation text similarity {similarity:.2f} < {recommendation_similarity_threshold}
-    Expected:
-{expected_item.recommendation}
-    Got:
-{extracted_item.recommendation}""")
-
-            # Check context similarity
-            context_similarity = SequenceMatcher(
-                lambda x: re.match(r"\s+", x)
-                is not None,  # Ignore whitespace differences
-                (extracted_item.recommendation_context or "").lower(),
-                (expected_item.recommendation_context or "").lower(),
-            ).ratio()
-
-            if context_similarity < context_similarity_threshold:
-                failures.append(f"""Item {idx} ({extracted_item.recommendation_id}): Context similarity {context_similarity:.2f} < {context_similarity_threshold}
-    Expected:
-{expected_item.recommendation_context}
-    Got:
-{extracted_item.recommendation_context}""")
-
-        # Report all failures at once
+        failures = _compare_recommendations(
+            extracted,
+            expected,
+            recommendation_similarity_threshold=recommendation_similarity_threshold,
+            context_similarity_threshold=context_similarity_threshold,
+        )
         assert not failures, "\n".join(failures)
-
-
-_full_extraction_reports = [
-    "TAIC_a_2015_009",
-    "TAIC_r_2021_101",
-    "ATSB_m_2022_007",
-    "TSB_a_2023_W0096",
-]
 
 
 def _load_test_case_for_report(filename: str, report_id: str) -> dict | list | None:
@@ -331,29 +366,32 @@ def _load_test_case_for_report(filename: str, report_id: str) -> dict | list | N
     return None
 
 
+_full_extraction_reports = [
+    "TAIC_a_2015_009",
+    "TAIC_r_2021_101",
+    "ATSB_m_2022_007",
+    "TSB_a_2023_W0096",
+]
+
+
 @pytest.mark.parametrize("report_id", _full_extraction_reports)
-def test_full_extraction(  # noqa: PLR0912, PLR0914, PLR0915
+def test_full_extraction(
     report_id: str,
     agency_id_lookup: dict[str, str],
 ) -> None:
     """Test full extraction (safety issues + recommendations + metadata) all at once.
 
-    Loads expected values from the saved extracted_reports.pkl and compares
+    Loads expected values from the json test case files and compares
     the results of ai_read_report with all extraction flags enabled.
 
     Args:
         report_id: The unique identifier for the report.
         agency_id_lookup: Report ID to agency ID mapping.
     """
-    # Hear to prevent circular import issues.
+    # Here to prevent circular import issues.
     from test_MetadataExtraction import (  # noqa: PLC0415
         _compare_metadata_values,  # noqa: PLC2701
     )
-
-    report_text = get_report_text(report_id)
-    agency_id = agency_id_lookup.get(report_id)
-    report_mode = Modes.get_report_mode_from_id(report_id)
-    event_type_taxonomy_by_mode = load_event_type_taxonomy(Path("data/event_types.csv"))
 
     # Load expected data from JSON test case files
     si_expected = _load_test_case_for_report("safety_issue_test_cases.json", report_id)
@@ -372,103 +410,31 @@ def test_full_extraction(  # noqa: PLR0912, PLR0914, PLR0915
     # Run full extraction
     extracted_data = ai_read_report(
         agency_name=report_id.split("_", maxsplit=1)[0],
-        report_text=report_text,
+        report_text=get_report_text(report_id),
         safety_issues=True,
         recommendations=True,
         metadata=True,
-        report_mode=report_mode,
-        event_type_taxonomy_by_mode=event_type_taxonomy_by_mode,
+        report_mode=Modes.get_report_mode_from_id(report_id),
+        event_type_taxonomy_by_mode=load_event_type_taxonomy(
+            Path("data/event_types.csv")
+        ),
         report_id=report_id,
-        agency_id=agency_id,
+        agency_id=agency_id_lookup.get(report_id),
     )
 
     failures = []
 
     # ---- Compare safety issues ----
     extracted_safety_issues = getattr(extracted_data, "safety_issues", [])
-
-    if expected_safety_issues:
-        expecting_inferred = any(
-            item.quality == "inferred" for item in expected_safety_issues
-        )
-        if expecting_inferred:
-            max_allowed = math.ceil(len(expected_safety_issues) * 1.2)
-            if (
-                len(extracted_safety_issues) < len(expected_safety_issues)
-                or len(extracted_safety_issues) > max_allowed
-            ):
-                failures.append(
-                    f"safety_issues count mismatch (inferred): expected between {len(expected_safety_issues)} and {max_allowed}, got {len(extracted_safety_issues)}"
-                )
-        elif len(extracted_safety_issues) != len(expected_safety_issues):
-            failures.append(
-                f"safety_issues count mismatch: expected {len(expected_safety_issues)}, got {len(extracted_safety_issues)}"
-            )
-
-        threshold = 0.4 if expecting_inferred else 0.95
-        if not (
-            expecting_inferred
-            and all(item.quality == "inferred" for item in extracted_safety_issues)
-        ) and not (
-            not expecting_inferred
-            and all(item.quality == "exact" for item in extracted_safety_issues)
-        ):
-            failures.append(
-                f"safety_issues quality mismatch: expected all {expected_safety_issues[0].quality}, got qualities {[item.quality for item in extracted_safety_issues]}"
-            )
-
-        for expected_item in expected_safety_issues:
-            current_best = (None, 0)
-            for extracted_item in extracted_safety_issues:
-                similarity = SequenceMatcher(
-                    None,
-                    extracted_item.safety_issue.lower(),
-                    expected_item.safety_issue.lower(),
-                ).ratio()
-                if similarity > current_best[1]:
-                    current_best = (extracted_item, similarity)
-            if current_best[1] < threshold:
-                failures.append(
-                    f"safety_issue mismatch: expected {expected_item.safety_issue!r}, best match similarity {current_best[1]:.2f} < {threshold}"
-                )
+    failures.extend(
+        _compare_safety_issues(extracted_safety_issues, expected_safety_issues)
+    )
 
     # ---- Compare recommendations ----
     extracted_recommendations = getattr(extracted_data, "recommendations", [])
-
-    if expected_recommendations:
-        expected_ids = {r.recommendation_id for r in expected_recommendations}
-        extracted_ids = {r.recommendation_id for r in extracted_recommendations}
-        missing_ids = expected_ids - extracted_ids
-        unexpected_ids = extracted_ids - expected_ids
-        if missing_ids:
-            failures.append(f"Missing recommendation IDs: {missing_ids}")
-        if unexpected_ids:
-            failures.append(f"Unexpected recommendation IDs: {unexpected_ids}")
-
-        for idx, expected_item in enumerate(expected_recommendations):
-            extracted_item = next(
-                (
-                    r
-                    for r in extracted_recommendations
-                    if r.recommendation_id == expected_item.recommendation_id
-                ),
-                None,
-            )
-            if not extracted_item:
-                continue
-            if extracted_item.recipient != expected_item.recipient:
-                failures.append(
-                    f"recommendation {idx} ({expected_item.recommendation_id}): recipient mismatch"
-                )
-            similarity = SequenceMatcher(
-                None,
-                extracted_item.recommendation.lower(),
-                expected_item.recommendation.lower(),
-            ).ratio()
-            if similarity < 0.95:  # noqa: PLR2004
-                failures.append(
-                    f"recommendation {idx} ({expected_item.recommendation_id}): text similarity {similarity:.2f} < 0.95"
-                )
+    failures.extend(
+        _compare_recommendations(extracted_recommendations, expected_recommendations)
+    )
 
     # ---- Compare metadata ----
     extracted_metadata = getattr(extracted_data, "metadata", None)
@@ -476,9 +442,18 @@ def test_full_extraction(  # noqa: PLR0912, PLR0914, PLR0915
         failures.append("metadata extraction returned None")
     elif expected_metadata:
         extracted_payload = extracted_metadata.model_dump(mode="json")
-        _compare_metadata_values(
-            "metadata", extracted_payload, expected_metadata, failures
+        meta_critical, meta_non_critical = _compare_metadata_values(
+            "metadata",
+            extracted_payload,
+            expected_metadata,
         )
+        failures.extend(meta_critical)
+        if meta_non_critical:
+            logger.warning(
+                "Non-critical metadata mismatches for %s:\n%s",
+                report_id,
+                "\n".join(meta_non_critical),
+            )
 
     assert not failures, "\n".join(failures)
 

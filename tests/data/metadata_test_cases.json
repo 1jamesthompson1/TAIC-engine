@@ -1167,5 +1167,163 @@
         }
       ]
     }
+  },
+  {
+    "id": "TSB Diamond DA20-C1 collision with terrain at Beaverhill Lake",
+    "report_id": "TSB_a_2023_W0096",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2023-08-11T18:06",
+          "time_zone": "UTC-06:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "surface of Beaverhill Lake, 20 nautical miles east of the Cooking Lake Aerodrome, Alberta",
+          "standardized_location": "surface of Beaverhill Lake, unknown, Alberta, Canada"
+        },
+        "occurrence_type": "Terrain collisions",
+        "total_persons_involved": 2,
+        "fatalities": 2,
+        "injuries": 0,
+        "damage_description": "destroyed: aircraft destroyed by impact forces; main landing gear and nose gear collapsed; left wing sheared from the fuselage; fuel tank fractured; approximately 16 U.S. gallons of fuel leaked at the accident site; no post-impact fire.",
+        "who_may_benefit": null
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Aeroplane",
+          "registration": "C-FRZG",
+          "make": "Diamond Aircraft Industries",
+          "model": "DA20-C1",
+          "number_of_engines": 1,
+          "type_of_engines": "piston",
+          "year_manufactured": 2023,
+          "operator": "Cooking Lake Aviation Academy Inc.",
+          "flight_type": "training",
+          "persons_on_board_total": 2,
+          "persons_on_board_crew": 2,
+          "persons_on_board_passengers": 0,
+          "damage": "destroyed",
+          "pilots": [
+            {
+              "role": "Instructor",
+              "responsibility": "Pilot monitoring",
+              "licence": "Commercial Pilot Licence (Aeroplane)",
+              "age": null,
+              "total_flying_experience": 671,
+              "experience_on_type": 139
+            },
+            {
+              "role": "Student Pilot",
+              "responsibility": "Pilot flying",
+              "licence": null,
+              "age": null,
+              "total_flying_experience": 11,
+              "experience_on_type": 9
+            }
+          ]
+        } 
+      ]
+    }
+  },
+  {
+    "id": "Extra ATSB for full extraction",
+    "report_id": "ATSB_m_2022_007",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2022-04-09T01:40",
+          "time_zone": "UTC+08:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Port Hedland, Western Australia",
+          "standardized_location": "western side of Port Hedland channel, Port Hedland, Western Australia, Australia"
+        },
+        "occurrence_type": "Grounding/stranding",
+        "total_persons_involved": 21,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "substantial damage: port bottom shell plating breached; transverse bulkhead between number 1 and 2 port double-bottom tanks failed; extensive impact damage along port side hull; several structural frames and internal strength members buckled or fractured",
+        "who_may_benefit": null
+      },
+      "vessels": [
+        {
+          "vessel_name": "Hagen Oldendorff",
+          "vessel_type": "bulk carrier",
+          "classification": "Lloyd's Register",
+          "length": 299.95,
+          "breadth": 50.0,
+          "gross_tonnage": 107549.0,
+          "manufacturer": "Cosco Shipping Heavy Industry (Yangzhou, China)",
+          "year_built": 2020,
+          "propulsion": "diesel",
+          "total_power": 15131.0,
+          "service_speed": 14.5,
+          "owner_operator": "CL Marina; managed and operated by Wah Kwong Ship Management Hong Kong",
+          "port_of_registry": "Liberia"
+        },
+        {
+          "vessel_name": "RT Clerke",
+          "vessel_type": "tug",
+          "classification": null,
+          "length": null,
+          "breadth": null,
+          "gross_tonnage": null,
+          "manufacturer": null,
+          "year_built": null,
+          "propulsion": "diesel",
+          "total_power": 5295.0,
+          "service_speed": null,
+          "owner_operator": null,
+          "port_of_registry": null
+        },
+        {
+          "vessel_name": "RT Atlantis",
+          "vessel_type": "tug",
+          "classification": null,
+          "length": null,
+          "breadth": null,
+          "gross_tonnage": null,
+          "manufacturer": null,
+          "year_built": null,
+          "propulsion": "diesel",
+          "total_power": 5295.0,
+          "service_speed": null,
+          "owner_operator": null,
+          "port_of_registry": null
+        },
+        {
+          "vessel_name": "RT Inspiration",
+          "vessel_type": "tug",
+          "classification": null,
+          "length": null,
+          "breadth": null,
+          "gross_tonnage": null,
+          "manufacturer": null,
+          "year_built": null,
+          "propulsion": "diesel",
+          "total_power": 4962.0,
+          "service_speed": null,
+          "owner_operator": null,
+          "port_of_registry": null
+        },
+        {
+          "vessel_name": "RT Darwin",
+          "vessel_type": "tug",
+          "classification": null,
+          "length": null,
+          "breadth": null,
+          "gross_tonnage": null,
+          "manufacturer": null,
+          "year_built": null,
+          "propulsion": "diesel",
+          "total_power": 4962.0,
+          "service_speed": null,
+          "owner_operator": null,
+          "port_of_registry": null
+        }
+      ]
+    }
   }
 ]

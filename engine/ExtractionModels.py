@@ -16,11 +16,11 @@ class SafetyIssueItem(BaseModel):
 
     safety_issue: str = Field(
         ...,
-        description="The text of the actual safety issue (e.g ignore 'safety issue -').",
+        description="The text of the actual safety issue (e.g ignore 'safety issue -'). This should be copied verbatim from the report text. If multiple wording of the safety issue is found, then the version that is found in a 'safety issue' like section of the report is considered the most authoritative version of the safety issue.",
     )
     safety_issue_id: str | None = Field(
         default=None,
-        description="The unique identifier for the safety issue if it exists in the report (sometimes called 'id', 'number'). If none is given then return None.",
+        description="The unique identifier for the safety issue if it exists in the report (sometimes called 'id', 'number'). This is usually an id that will be used in some external database. The section number is not a safety issue id. If none is given then return None.",
     )
     quality: Literal["exact", "inferred"] = Field(
         ...,
@@ -37,7 +37,7 @@ class RecommendationItem(BaseModel):
 
     recommendation: str = Field(
         ...,
-        description="The text of the recommendation made by the agency in the report. Copy the recommendation verbatim.",
+        description="The text of the recommendation made by the agency in the report. It usually starts with something like 'On ...', which should be included. Copy the recommendation verbatim.",
     )
     recommendation_id: str | None = Field(
         default=None,
@@ -45,7 +45,7 @@ class RecommendationItem(BaseModel):
     )
     recipient: str | None = Field(
         default=None,
-        description="The recipient of the recommendation. I.e who the recommendation was addressed to. Avoid using acronyms or abbreviations if the full name of the recipient is given in the report. If no recipient is given then return None.",
+        description="The recipient of the recommendation. I.e who the recommendation was addressed to. Avoid using acronyms or abbreviations and prefer to use the fully qualified name (i.e the complete name of company that would be most unambiguous outside the context of this particular report, this might require you using information from other parts of the report). If no recipient is given then return None.",
     )
     recommendation_context: str | None = Field(
         default=None,
