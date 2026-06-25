@@ -37,6 +37,7 @@ dependencies = [
     "langchain-text-splitters>=1.1.0",
     "pymupdf-layout",
     "pymupdf4llm",
+    "marimo>=0.23.10",
 ]
 
 [dependency-groups]

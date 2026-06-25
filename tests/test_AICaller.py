@@ -17,7 +17,7 @@ REASONING_LEVELS_COUNT = 3
 )
 def test_ai_caller(model: str, user: str, expected_response: bool) -> None:
     """Test basic AI caller functionality with different models."""
-    response = ai_caller.query(model=model, system="", user=user, max_tokens=100)
+    response = ai_caller.query(model=model, system="", user=user, max_tokens=1000)
 
     assert isinstance(response, str) == expected_response
 

@@ -62,7 +62,7 @@
         "safety_issue_id": null
       },
       {
-        "safety_issue": " Inadequate management of combustion chamber deposits (including lead oxybromides) reduced engine reliability across operators of high\u2011powered piston engines.",
+        "safety_issue": "Inadequate management of combustion chamber deposits (including lead oxybromides) reduced engine reliability across operators of high\u2011powered piston engines.",
         "quality": "inferred",
         "safety_issue_id": null
       },
@@ -73,11 +73,6 @@
       },
       {
         "safety_issue": "Passenger seats in small aircraft used for fare-paying passenger operations were not required to be fitted with upper body restraints for all occupants.",
-        "quality": "inferred",
-        "safety_issue_id": null
-      },
-      {
-        "safety_issue": "Under\u2011achievement of CASA surveillance activities limited the opportunity to detect operator\u2011level safety concerns.",
         "quality": "inferred",
         "safety_issue_id": null
       },

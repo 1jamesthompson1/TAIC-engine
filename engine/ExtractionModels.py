@@ -16,7 +16,7 @@ class SafetyIssueItem(BaseModel):
 
     safety_issue: str = Field(
         ...,
-        description="The text of the actual safety issue (e.g ignore 'safety issue -'). This should be copied verbatim from the report text. If multiple wording of the safety issue is found, then the version that is found in a 'safety issue' like section of the report is considered the most authoritative version of the safety issue.",
+        description="The text of the actual safety issue (e.g ignore 'safety issue -'). This should be copied verbatim from the report text.",
     )
     safety_issue_id: str | None = Field(
         default=None,
@@ -25,9 +25,7 @@ class SafetyIssueItem(BaseModel):
     quality: Literal["exact", "inferred"] = Field(
         ...,
         description=(
-            "Whether the safety issue is an exact safety issue "
-            "(i.e a verbatim safety issue) or an inferred safety issue "
-            "(i.e implied in the report)."
+            "Whether the safety issue is an exact safety issue (i.e a verbatim safety issue) or an inferred safety issue (i.e implied in the report). Only use exact when the report explicitly states a safety issue."
         ),
     )
 
@@ -111,7 +109,7 @@ class OccurrenceMetadata(BaseModel):
     )
     total_persons_involved: int | None = Field(
         default=None,
-        description="The total number of persons involved in the occurrence. This should be the total number of people that are involved and/or could of been harmed in the occurrence regardless of if they are on board a vehicle or not. Only use None in the situation where the report does not provide any information at all.",
+        description="The total number of persons involved in the occurrence. This should be the total number of people that are involved and/or could of been harmed in the occurrence regardless of if they are on board a vehicle or not. This might be the total number of people on board a flight, the total number of people on board a ship, or the total number of people at the scene of a ground-based occurrence. Only use None in the situation where the report does not provide any information at all.",
     )
     fatalities: int = Field(
         description="The number of fatalities resulting from the occurrence. Use 0 to indicate no fatalities. People who are considered missing (i.e not found by time of publication) should be counted as fatalities.",

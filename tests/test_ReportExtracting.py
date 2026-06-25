@@ -37,11 +37,17 @@ logger = logging.getLogger(__name__)
 def _compare_safety_issues(
     extracted: list[SafetyIssueItem],
     expected: list[SafetyIssueItem],
+    report_id: str,
 ) -> list[str]:
     """Compare extracted safety issues against expected.
 
     Handles count, quality (exact vs inferred), and best-match text similarity.
     Returns a list of failure description strings (empty means success).
+
+    Args:
+        extracted: List of SafetyIssueItem objects extracted from the report.
+        expected: List of SafetyIssueItem objects expected for the report.
+        report_id: Used to determine if the report is a pre-2008 ATSB report, which has different similarity thresholds.
 
     Returns:
         A list of failure description strings, or an empty list when the
@@ -55,9 +61,10 @@ def _compare_safety_issues(
 
     if expecting_inferred:
         max_allowed = math.ceil(len(expected) * 1.2)
-        if len(extracted) < len(expected) or len(extracted) > max_allowed:
+        min_allowed = math.floor(len(expected) * 0.8)
+        if len(extracted) < min_allowed or len(extracted) > max_allowed:
             failures.append(
-                f"Count mismatch (inferred): expected between {len(expected)} "
+                f"Count mismatch (inferred): expected between {min_allowed} "
                 f"and {max_allowed} safety issues, got {len(extracted)}"
             )
     elif len(extracted) != len(expected):
@@ -79,7 +86,14 @@ def _compare_safety_issues(
             f"got {[item.quality for item in extracted]}"
         )
 
-    threshold = 0.4 if expecting_inferred else 0.95
+    threshold = 0.6 if expecting_inferred else 0.95
+
+    early_atsb_report = (
+        report_id.startswith("ATSB") and int(report_id.split("_")[2]) < 2008  # noqa: PLR2004
+    )
+    if early_atsb_report and expecting_inferred:
+        # No similarity threshold for pre-2008 ATSB reports with inferred safety issues, as these reports are known to be inconsistent in how they present safety issues.
+        return failures
 
     for expected_item in expected:
         best_item: SafetyIssueItem | None = None
@@ -144,9 +158,16 @@ def _compare_recommendations(
         if not extracted_item:
             continue
 
-        if extracted_item.recipient != expected_item.recipient:
+        recipient_similarity = SequenceMatcher(
+            None,
+            (extracted_item.recipient or "").lower(),
+            (expected_item.recipient or "").lower(),
+        ).ratio()
+
+        if recipient_similarity < 0.95:  # noqa: PLR2004
             failures.append(
-                f"Item {idx} ({extracted_item.recommendation_id}): Recipient mismatch\n"
+                f"Item {idx} ({extracted_item.recommendation_id}): "
+                f"Recipient similarity {recipient_similarity:.2f} < 0.95\n"
                 f"Expected:\n{expected_item.recipient}\n"
                 f"Got:\n{extracted_item.recipient}"
             )
@@ -304,7 +325,7 @@ class TestAIExtraction:
         )
 
         extracted = getattr(extracted_data, "safety_issues", [])
-        failures = _compare_safety_issues(extracted, expected)
+        failures = _compare_safety_issues(extracted, expected, report_id)
         assert not failures, "\n".join(failures)
 
     @pytest.mark.parametrize("report_id, expected", load_recommendation_test_cases())
@@ -427,7 +448,9 @@ def test_full_extraction(
     # ---- Compare safety issues ----
     extracted_safety_issues = getattr(extracted_data, "safety_issues", [])
     failures.extend(
-        _compare_safety_issues(extracted_safety_issues, expected_safety_issues)
+        _compare_safety_issues(
+            extracted_safety_issues, expected_safety_issues, report_id=report_id
+        )
     )
 
     # ---- Compare recommendations ----

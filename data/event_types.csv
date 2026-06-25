@@ -74,7 +74,7 @@ Proceed Authority Exceeded,rail,Train movement exceeds the limits of movement au
 Railway network security,rail,Security-related occurrence affecting rail network safety or operations.
 Rolling stock Irregularity,rail,"Defect or irregular condition in locomotives, wagons, carriages, or other rolling stock."
 Runaway,rail,Uncontrolled rail vehicle movement without intended braking/control.
-Safeworking Rule or Procedure Breach,rail,Non-compliance with safeworking rules or procedural protections. This should be used if it caused or nearly caused an occurrence.
+Safeworking Rule or Procedure Breach,rail,Non-compliance with safeworking rules or procedural protections. This should be used if it caused or nearly caused an occurrence. I.e in situations where some procedure that was designed to prevent and accident was ignored.
 Signalling And Other Proceed Authority System Irregularities,rail,Irregularity in signaling or movement-authority systems used to protect train movements.
 Signals Passed at Danger,rail,Train passes a stop signal without authority.
 "Slip, Trip or Fall",rail,"Person sustains or risks injury due to slipping, tripping, or falling in rail environment."

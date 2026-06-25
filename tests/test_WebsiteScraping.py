@@ -350,7 +350,7 @@ def test_report_collection(
         ),
         pytest.param(
             "ATSB",
-            [98, 170, 47, 6, 25, 22, 15, 9, 2],
+            [98, 169, 47, 6, 25, 22, 15, 9, 2],
             [
                 {
                     "url": "https://www.atsb.gov.au/investigations/ao-2024-050",

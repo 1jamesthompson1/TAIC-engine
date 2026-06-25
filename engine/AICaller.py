@@ -132,7 +132,7 @@ MODEL_REGISTRY: dict[str, ModelDefinition] = {
     "gpt-4": ModelDefinition(
         api_model="gpt-4o",
         limit=128_000,
-        pricing={"input": 5.00, "cached_input": 0.50, "output": 15.00},
+        pricing={"input": 2.50, "cached_input": 1.25, "output": 10.00},
     ),
     "gpt-5-mini": ModelDefinition(
         api_model="gpt-5-mini",
@@ -148,7 +148,7 @@ MODEL_REGISTRY: dict[str, ModelDefinition] = {
     "gpt-5.4-nano": ModelDefinition(
         api_model="gpt-5.4-nano",
         limit=400_000,
-        pricing={"input": 0.2, "cached_input": 0.02, "output": 1.25},
+        pricing={"input": 0.20, "cached_input": 0.02, "output": 1.25},
     ),
     # Works well yet costs more. Limited reasoning
     "gpt-5.1-chat": ModelDefinition(

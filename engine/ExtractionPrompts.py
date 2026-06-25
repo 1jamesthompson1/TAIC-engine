@@ -118,10 +118,26 @@ Thank you for your help in extracting this information.
         return "\n\n".join(parts)
 
     def _safety_issues_prompt(self) -> str:
-        prompt = """Safety issue extraction instructions:
-Please only respond with safety issues that are quite clearly stated ("exact" safety issues) or implied ("inferred" safety issues) in the report. Each report will only contain one type of safety issue. If exact safety issues are stated then only respond with those. If no exact safety issues are stated then respond with inferred safety issues.
+        """Builds the safety issues extraction instructions based on the agency name.
 
-If the report conatins a phrase like "No safety issues were identified" or "No safety issues were found" then respond with an empty list of safety issues."""
+        For TAIC it is trying to extract exact safety issues.
+        For TSB it is going to treat all findings as to risk as safety issues
+        For ATSB it is going to infer safety issues from the report test.
+
+        Returns:
+            The safety issues extraction instructions string.
+        """
+        prompt = """Safety issue extraction instructions:
+Please only respond with safety issues that are quite clearly stated ("exact" safety issues) or implied ("inferred" safety issues) in the report. Each report will only contain one type of safety issue. If exact safety issues are stated then only respond with those. If no exact safety issues are stated then respond with inferred safety issues. Exact safety issues are ones that explicitly state safety issues, for example "Safety issue: ...". For exact safety issues if there are multippoe that are simliar yet have different ids then you need to include them all.
+
+If the report conatins a phrase like "No safety issues were identified" or "No safety issues were found" then respond with an empty list of safety issues.
+
+For reference here are some examples of some safety issues.
+
+"The maintenance provider did not have a robust quality assurance process to ensure maintenance activities were being completed and documented in accordance with their approved maintenance procedures. This increased the risk of maintenance errors not being identified and rectified"
+
+"The safe navigation bridge procedures described in the operator's safety management system were not adequately implemented by the bridge team. As a result, the risk mitigations inherent to those safe navigation procedures were absent, which allowed minor hazards to escalate and have serious consequences"
+"""
 
         if self.agency_name == "TAIC":
             prompt += """
