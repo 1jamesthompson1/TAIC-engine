@@ -1,24 +1,27 @@
 # Report Processing
 
-How TAIC Report Engine processes individual investigation reports.
+How TAIC Report Engine processes individual investigation reports. This is all conducted in the `engine.ReportExtracting` module. It is done with a single API request to a state of the art LLM which reads the report text and produces a structured output. This may include safety issues and/or recommendations, along with metadata about the occurrence and involved vehicles/personnel.
 
-## Report Structure
+## Extraction quality
 
-Investigation reports typically contain:
+!!! Important
 
-- **Synopsis** — Brief overview of the occurrence
-- **Factual Information** — Detailed findings
-- **Analysis** — Examination of contributing factors
-- **Findings** — Determined causes and contributing factors
-- **Safety Issues** — Identified hazards
-- **Recommendations** — Safety recommendations
-- **Safety Actions** — Actions already taken
+    The AI extraction is not perfect. There are no guarantees that it is perfect. However different types of data come with different levels of confidence.
 
-## Extraction Output Model
+There are two types of extraction quality:
 
-The AI extraction produces a single structured output per report via `ExtractedReport` (dynamically built by `build_extraction_output_model`). Depending on the pipeline configuration, it includes some or all of the following:
+- **Confident** - The extracted data is expected to be accurate and is tested on being exactly correct.
+- **Best effort** - The extracted data is expected to be mostly accurate, however the testing is more lenient and allows for some errors.
+
+In each of the following sections it is stated whether the extraction is *confident* or *best effort*.
+
+## Extraction items
+
+Three different types of items are extracted from reports: [safety issues](#safety-issues), [recommendations](#recommendations), and [metadata](#metadata). Each of these items is extracted with different levels of confidence, as described in the following sections.
 
 ### Safety Issues
+
+*See the [`SafetyIssueItem`](../api/extractionmodels.md#engine.ExtractionModels.SafetyIssueItem) Pydantic model for the full definition.*
 
 Each safety issue has:
 
@@ -36,7 +39,16 @@ Each safety issue has:
 }
 ```
 
+Safety issues are extracted from TAIC reports with *confident* quality, most of these will be exact safety issues.
+
+Safety issues are extracted from TSB reports with *confident* quality however note that they are all treated as inferred safety issues, as TSB reports do not explicitly label safety issues (instead we are treating 'findings as to risk' as safety issues).
+
+All ATSB reports after 2008 do not have safety issues extracted from reports and instead are scraped directly from the ATSB website. Pre to 2008 ATSB reports have safety issues extracted from the report with *best effort* quality, as these reports are known to be inconsistent in how they present safety issues.
+
+
 ### Recommendations
+
+*See the [`RecommendationItem`](../api/extractionmodels.md#engine.ExtractionModels.RecommendationItem) Pydantic model for the full definition.*
 
 Each recommendation has:
 
@@ -58,19 +70,29 @@ Each recommendation has:
 }
 ```
 
-### Occurrence Metadata
+For TSB and TAIC reports, recommendations are not extracted by AI and are instead scraped directly from the respective websites.
+
+For ATSB reports, recommendations are extracted from the report with *confident* quality. However the recommendation_context, made, and recipient fields are extracted with *best effort* quality, as these fields are not always present in the report.
+
+### Metadata
+
+Metadata is extracted from all the reports. There are two sorts of metadata [occurrence metadata](#occurrence-metadata) and [mode-specific vehicle/personnel metadata](#mode-specific-vehicle-metadata).
+
+#### Occurrence Metadata
+
+*See the [`OccurrenceMetadata`](../api/extractionmodels.md#engine.ExtractionModels.OccurrenceMetadata) Pydantic model for the full definition.*
 
 Structured metadata about the occurrence itself:
 
 | Field | Type | Description |
 |---|---|---|
-| `occurrence_datetime` | object | Local datetime + UTC offset + timezone source |
-| `location` | object | Raw description + standardized 4-part location |
+| `occurrence_datetime` | `OccurrenceDateTime` | Local datetime + UTC offset + timezone source |
+| `location` | `OccurrenceLocation` | Raw description + standardized 4-part location |
 | `occurrence_type` | `str \| None` | Type/classification (mode-specific taxonomy) |
 | `total_persons_involved` | `int \| None` | Total persons involved |
 | `fatalities` | `int` | Number of fatalities (0 if none) |
 | `injuries` | `int` | Number of injuries (0 if none) |
-| `damage_description` | `str` | Summary of damage to equipment/property |
+| `damage_description` | `Literal["nil"] \| str` | Summary of damage to equipment/property. Use `"nil"` for no damage |
 | `who_may_benefit` | `str \| None` | Explicit "who may benefit" text if present |
 
 ```json
@@ -90,13 +112,17 @@ Structured metadata about the occurrence itself:
 }
 ```
 
-### Mode-Specific Vehicle Metadata
+For all reports the only items that are extracted with *confident* quality is the fatalities, injuries, occurrence_datetime, and occurrence_type fields. All other fields are extracted with *best effort* quality.
 
-Depending on the report mode, additional vehicle/personnel metadata is extracted:
+#### Mode-Specific Vehicle Metadata
+
+Depending on the report mode, additional vehicle/personnel metadata is extracted. Note that all of this data is extracted with *best effort* quality, as the categories are not always well defined.
 
 **Aviation** — `aircraft: list[AircraftMetadata]`
 
-Each aircraft includes: type, registration, make, model, number of engines, engine type, year manufactured, operator, flight type, persons on board (total/crew/passengers), damage, and a list of pilots with their role, licence, age, and experience.
+*See the [`AircraftMetadata`](../api/extractionmodels.md#engine.ExtractionModels.AircraftMetadata) and [`PilotMetadata`](../api/extractionmodels.md#engine.ExtractionModels.PilotMetadata) Pydantic models for the full definitions.*
+
+Each aircraft includes: type, registration, make, model, number of engines, engine type, year manufactured, operator, flight type, persons on board (total/crew/passengers), damage, and a list of pilots with their role, responsibility, licence, age, and experience (total and on type).
 
 ```json
 {
@@ -107,20 +133,28 @@ Each aircraft includes: type, registration, make, model, number of engines, engi
     "model": "172",
     "number_of_engines": 1,
     "type_of_engines": "piston",
+    "year_manufactured": 1995,
     "operator": "Flying School Ltd",
     "flight_type": "training",
     "persons_on_board_total": 2,
+    "persons_on_board_crew": 1,
+    "persons_on_board_passengers": 1,
+    "damage": "substantial damage",
     "pilots": [{
       "role": "Instructor",
+      "responsibility": "Pilot monitoring",
       "licence": "Commercial Pilot Licence (Aeroplane)",
       "age": 35,
-      "total_flying_experience": 1500
+      "total_flying_experience": 1500,
+      "experience_on_type": 500
     }]
   }]
 }
 ```
 
 **Rail** — `trains: list[TrainMetadata]`
+
+*See the [`TrainMetadata`](../api/extractionmodels.md#engine.ExtractionModels.TrainMetadata) Pydantic model for the full definition.*
 
 Each train includes: type, number, length, weight, classification, year manufactured, operator, and crew count.
 
@@ -131,6 +165,8 @@ Each train includes: type, number, length, weight, classification, year manufact
     "train_number": "1234",
     "length": 450.0,
     "weight": 3110.0,
+    "classification": "manifest",
+    "year_manufactured": 1998,
     "operator": "KiwiRail",
     "operating_crew": 2
   }]
@@ -139,6 +175,8 @@ Each train includes: type, number, length, weight, classification, year manufact
 
 **Marine** — `vessels: list[VesselMetadata]`
 
+*See the [`VesselMetadata`](../api/extractionmodels.md#engine.ExtractionModels.VesselMetadata) Pydantic model for the full definition.*
+
 Each vessel includes: name, type, classification society, length, breadth, gross tonnage, manufacturer, year built, propulsion, power, speed, owner/operator, and port of registry.
 
 ```json
@@ -146,35 +184,17 @@ Each vessel includes: name, type, classification society, length, breadth, gross
   "vessels": [{
     "vessel_name": "MV Example",
     "vessel_type": "fishing",
+    "classification": "unclassed",
     "length": 25.0,
+    "breadth": 6.5,
+    "gross_tonnage": 80.0,
+    "manufacturer": "Whangarei Engineering",
+    "year_built": 2005,
     "propulsion": "diesel",
+    "total_power": 500.0,
+    "service_speed": 12.0,
+    "owner_operator": "Coastal Fishing Ltd",
     "port_of_registry": "Auckland"
   }]
 }
 ```
-
-## Pipeline Flow
-
-Reports flow through the pipeline as follows:
-
-1. **Scraping** → PDFs downloaded, metadata stored in `report_titles.pkl` and agency-specific pickle files
-2. **Parsing** → PDF text extracted and saved to `parsed_reports.pkl`
-3. **Extraction** → AI extracts safety issues, recommendations, and metadata using the models above, stored in `extracted_reports.pkl`
-4. **Combination** → All data merged into `complete_data.pkl`
-5. **Embedding** → Content from `complete_data.pkl` is embedded and stored in **LanceDB** (`all_document_types` table)
-
-## Output Files
-
-All structured data is stored as pickle (`.pkl`) files in the `output/` directory:
-
-| File | Content |
-|---|---|
-| `parsed_reports.pkl` | Raw extracted text from PDFs |
-| `extracted_reports.pkl` | AI-extracted safety issues, recommendations, and metadata |
-| `complete_data.pkl` | Merged canonical rows for vector DB ingestion |
-| `report_titles.pkl` | Report metadata from website scraping |
-| `atsb_website_safety_issues.pkl` | Safety issues scraped directly from ATSB |
-| `tsb_website_recommendations.pkl` | Recommendations scraped from TSB |
-| `taic_website_recommendations.pkl` | Recommendations scraped from TAIC |
-
-Vector embeddings are stored externally in **LanceDB** (configured via `VECTORDB_URI`), not in the `output/` directory.

@@ -41,7 +41,7 @@ Coordinates the end-to-end pipeline execution with different operational modes.
 ```
 Agency Websites
       ↓
-WebsiteScraping → PDF Downloads
+WebsiteScraping → PDF Downloads, Report Metadata, Safety Issues (ATSB), Recommendations(TSB and TAIC)
       ↓
 PDFParsing → Text Content (parsed_reports.pkl)
       ↓

@@ -41,6 +41,7 @@ plugins:
           options:
             docstring_style: google
             show_source: true
+            summary: true
             show_root_heading: true
             show_root_full_path: false
             show_symbol_type_heading: true
@@ -48,6 +49,9 @@ plugins:
             members_order: source
             merge_init_into_class: true
             docstring_section_style: table
+            extensions:
+            - griffe_pydantic:
+                schema: true
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -103,6 +107,16 @@ nav:
       - ReportExtracting: api/reportextracting.md
       - SavedDataFrames: api/saveddataframes.md
       - WebsiteScraping: api/websitescraping.md
+      - Tests:
+          - Overview: api/tests.md
+          - TestAICaller: api/test_aicaller.md
+          - TestAzureStorage: api/test_azurestorage.md
+          - TestCombine: api/test_combine.md
+          - TestEmbedding: api/test_embedding.md
+          - TestMetadataExtraction: api/test_metadataextraction.md
+          - TestPDFParser: api/test_pdfparser.md
+          - TestReportExtracting: api/test_reportextracting.md
+          - TestWebsiteScraping: api/test_websitescraping.md
 
 extra:
   social:

@@ -41,7 +41,7 @@ Edit `.env` with your Azure credentials and API keys.
 ### 5. Run the Pipeline
 
 ```bash
-uv run engine
+uv run engine -t all
 ```
 
 ## Project Structure

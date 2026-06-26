@@ -72,7 +72,7 @@ def test_single_pdf_parsing(
 
     Args:
         stable_pdf_storage_manager: PDF storage manager for the stable Azure container
-        report_id : ID of the report to test
+        report_id: ID of the report to test
         expected_pages: Expected number of pages in the PDF
     """
     extracted_text = PDFParsing.pdf_to_text(stable_pdf_storage_manager, report_id)

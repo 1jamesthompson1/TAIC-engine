@@ -45,6 +45,9 @@ DataFrame persistence utilities.
 ### [WebsiteScraping](websitescraping.md)
 Agency website scraping functionality.
 
+### [Tests](tests.md)
+Test modules for all API components — AI calling, storage, PDF parsing, extraction, embedding, and website scraping.
+
 ## Contributing
 
 When adding new code:
