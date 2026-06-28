@@ -145,7 +145,7 @@ class WebsiteScraper:
 
         self.id_dict = {
             agency: {
-                agency_id: report_id
+                agency_id.upper(): report_id
                 for report_id, agency_id in ids[["report_id", "agency_id"]].to_numpy()
             }
             for agency, ids in report_titles_df.assign(
@@ -276,7 +276,7 @@ class WebsiteScraper:
 
         return _inner()
 
-    def id_converter(self, agency: str, agency_id: str | None) -> str | None:
+    def id_converter(self, agency: str, agency_id: str) -> str | None:
         """Convert agency-specific ID to report ID using the COMPLETE report titles dataframe.
 
         The agency argument is needed as some of the agency IDs are not globally unique
@@ -295,7 +295,7 @@ class WebsiteScraper:
         if agency not in self.id_dict:
             error_msg = f"{agency} is not a valid agency"
             raise ValueError(error_msg)
-        return self.id_dict[agency].get(agency_id)
+        return self.id_dict[agency].get(agency_id.upper())
 
     @staticmethod
     def html_table_to_dict(table: BeautifulSoup) -> dict[str, str]:
@@ -1647,6 +1647,8 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
     def _format_and_save_safety_issues(self, safety_issue_df: pd.DataFrame) -> None:
         """Format safety issues and save them to disk.
 
+        This methods creates the report id column from the safety issue id, and saves the dataframe to disk.
+
         Args:
             safety_issue_df: DataFrame containing all safety issues.
         """
@@ -1772,6 +1774,7 @@ class RecommendationScraper(WebsiteScraper, ABC):
     BASE_URL: ClassVar[str]
     LOOP_ITER: ClassVar[list | range]
     AGENCY: ClassVar[str]
+    BREAK_ON_NO_NEW_RECOMMENDATIONS: ClassVar[bool] = True
 
     def __init__(
         self,
@@ -1835,7 +1838,7 @@ class RecommendationScraper(WebsiteScraper, ABC):
             if len(recommendations_df) > 0:
                 table = table[~table["recommendation_id"].isin(all_recommendation_ids)]
 
-            if len(table) == 0:
+            if len(table) == 0 and self.BREAK_ON_NO_NEW_RECOMMENDATIONS:
                 break
             new_recommendations = pd.concat(
                 [new_recommendations, table], ignore_index=True
@@ -1853,16 +1856,22 @@ class RecommendationScraper(WebsiteScraper, ABC):
             for key, value in recommendation_data.items():
                 new_recommendations.loc[i, key] = value
 
-        new_recommendations["report_id"] = new_recommendations["agency_id"].map(
+        if len(new_recommendations) == 0:
+            logger.info(
+                "No new recommendations found, only updating report_id for existing recommendations"
+            )
+        else:
+            recommendations_df = pd.concat(
+                [recommendations_df, new_recommendations], ignore_index=True
+            )
+
+        # Always derive the complete report_id from the agency_id to ensure consistency and correctness.
+        recommendations_df["report_id"] = recommendations_df["agency_id"].map(
             lambda x: (
                 self.id_converter(self.agency, x)
                 if self.id_converter(self.agency, x)
                 else f"Unmatched {self.agency} ({x})"
             )
-        )
-
-        recommendations_df = pd.concat(
-            [recommendations_df, new_recommendations], ignore_index=True
         )
 
         self.recommendations_dc.save(recommendations_df)
@@ -1938,6 +1947,7 @@ class TSBRecommendationsScraper(RecommendationScraper):
     BASE_URL: ClassVar[str] = "https://www.tsb.gc.ca"
     LOOP_ITER: ClassVar[list[str]] = ["rail", "marine", "aviation"]
     AGENCY: ClassVar[str] = "TSB"
+    BREAK_ON_NO_NEW_RECOMMENDATIONS = False
 
     def get_url(self, element: str) -> str:
         """Get the URL for a recommendation element.
@@ -2254,7 +2264,7 @@ class TAICRecommendationsScraper(RecommendationScraper):
             out[label] = dd.get_text(" ", strip=True)
 
         agency_id = (
-            out.get("Related inquiries")[0]["href"].split("/")[-1]
+            out.get("Related inquiries")[0]["href"].split("/")[-1].upper()
             if "Related inquiries" in out
             else None
         )
