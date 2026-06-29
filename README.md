@@ -1,4 +1,14 @@
 ﻿# TAIC engine
+
+> [!Note] - New version coming soon
+> Work is underway on a version two of this engine (expected integration mid 2026). The new engine will be an almost complete rewrite. Work is being completed in a [separate branch](https://github.com/1jamesthompson1/TAIC-engine/tree/report-extracting-rewrite). Note new [doc website](https://jolly-sand-0d46cc000.7.azurestaticapps.net/) is built off version 2
+>
+> The reasons for doing this are to:
+>
+> - Simply the extraction process (all AI extraction will now be done in a single step, which is possible due to the new LLMs being able to handle larger contexts)
+> - Improve the data pipeline to be more robust and easier to maintain
+> - Add in new features like metadata extraction and support for new ATSB and TAIC websites
+
 > An AI powered data pipeline that ingests transport accident investigation reports and outputs structured datasets to be used downstream in RAG like applications, like [TAIC smart tools](https://github.com/1jamesthompson1/TAIC_smart_assistant)
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
