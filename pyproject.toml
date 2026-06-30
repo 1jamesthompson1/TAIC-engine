@@ -1,6 +1,6 @@
 [project]
 name = "taic-report-engine"
-version = "1.0.0"
+version = "1.0.1"
 description = "An AI powered data pipelines that takes publicly available reports from transport accident investigation organizations and turns them into structured datasets (Safety issues, Recommendations, Summaries etc) for downstream applications (Like a RAG chatbot)."
 authors = [
     {name = "James", email = "1jamesthompson1@gmail.com"}
