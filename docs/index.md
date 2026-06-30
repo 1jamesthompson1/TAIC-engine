@@ -15,12 +15,13 @@ All of this information is stored in a vector database, enabling powerful retrie
 
 ## Quick Links
 
-- [User Guide](user-guide/overview.md) — Learn about the pipeline
-- [Developer Guide](developer-guide/getting-started.md) — Set up local development
-- [API Reference](api/index.md) — Detailed code documentation
+If you are looking at **understanding the pipeline**, please see the [User Guide](user-guide/overview.md).
+
+If you are **a developer** looking to contribute, please read the [User guide](user-guide/overview.md) first then the [Developer Guide](developer-guide/getting-started.md). For detailed code documentation, please see the [API Reference](api/index.md).
+
 
 ## Project Status
 
-Current version: **0.1.0**
+[![version](https://img.shields.io/github/v/tag/1jamesthompson1/TAIC-engine?sort=semver&label=version)](https://github.com/1jamesthompson1/TAIC-engine/tags)
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)

@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide will help you set up a local development environment for TAIC Report Engine.
+This guide will help you set up a local development environment for TAIC Report Engine. First though you should read the [User Guide](../user-guide/overview.md) to understand what the engine does and how to use it.
 
 ## Prerequisites
 
@@ -38,7 +38,19 @@ cp .env.example .env
 
 Edit `.env` with your Azure credentials and API keys.
 
-### 5. Run the Pipeline
+For TAIC developers please see devops wiki for instructions on how to get access to the Azure resources.
+
+### 5. (Optional) Run the Engine
+
+The engine running will take days to complete and cost hundreds in API costs. Instead one would usually download the latest output from the Azure blob storage and only experiment from there.
+
+Downloading of latest output requires you having the .env file configured with the correct Azure credentials. Then you can run:
+
+```bash
+uv run azure --latest-output
+```
+
+Afterwards running the engine will only process reports that have not been processed yet. You can run the engine with:
 
 ```bash
 uv run engine -t all
@@ -57,16 +69,16 @@ TAIC-report-summary/
 │   ├── ExtractionModels.py # Pydantic extraction models
 │   ├── ExtractionPrompts.py # LLM prompt templates
 │   ├── Logging.py         # Centralized logging
-│   ├── Modes.py           # Pipeline execution modes
+│   ├── Modes.py           # Simple transport mode enums
 │   ├── PDFParsing.py      # PDF text extraction
 │   ├── ReportExtracting.py # Main extraction orchestrator
 │   ├── SavedDataFrames.py # DataFrame persistence
 │   └── WebsiteScraping.py # Agency website scraping
-├── data/                  # Raw and processed data
-├── output/                # Extracted datasets
+├── data/                  # Raw data
+├── output/                # Extracted datasets it is gitignored
 ├── tests/                 # Test suite
 ├── notebooks/             # Jupyter notebooks
-└── workbench/             # Experimental code
+└── workbench/             # Experimental code it is gitignored
 ```
 
 ## Running Tests

@@ -3,9 +3,9 @@
 ## Workflow
 
 1. Create feature branch from `main`
-2. Make changes with clear commit messages
-3. Run tests: `uv run pytest`
-4. Run linting: `uv run pre-commit run --all-files`
+2. Make changes with clear [conventional commit](https://www.conventionalcommits.org/en/v1.0.0/) messages, not that pre-commit hooks are setup to enforce this as well as linting and formatting
+3. Run tests
+4. Push branch to remote
 5. Create a pull request
 
 ## Documentation
@@ -27,18 +27,6 @@ uv run mkdocs build
 - Use [Google-style docstrings](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) for all public APIs
 - Update `mkdocs.yml` nav when adding pages
 
-**Callout boxes:**
-```markdown
-!!! note
-    This is a note.
-
-!!! warning
-    This is a warning.
-
-!!! tip
-    This is a tip.
-```
-
 ## Code Style
 
 This project uses:
@@ -46,13 +34,9 @@ This project uses:
 - **Google-style docstrings**
 - **Type hints** for all functions
 
-Run linting before committing:
-
-```bash
-uv run pre-commit run --all-files
-```
-
 ## Testing
+
+You can do it with cli however I would recommend using the `pytest` plugin for your ide.
 
 ```bash
 # Run all tests

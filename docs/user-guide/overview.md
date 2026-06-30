@@ -1,6 +1,9 @@
 # User Guide Overview
 
-This guide explains how the TAIC Report Engine pipeline works and how to use it effectively.
+This guide explains how the TAIC Report Engine pipeline works and how to use it effectively.  
+
+!!! note
+    From a cold start the engine takes a few days to run and costs a few hundred dollars in AI api costs. If you are wanted to get started quickly, we may be able to provide the current 'output' folder with all the data to save you time and money. Please contact TAIC for more information.
 
 ## What is TAIC Report Engine?
 
@@ -21,8 +24,7 @@ TAIC Report Engine is a data pipeline that:
 
 1. **Configure** the pipeline via `config.yaml`
 2. **Run** the pipeline with `uv run engine`
-3. **Review** extracted data in the `output/` directory
-4. **Use** the structured data in downstream applications
+3. **Use** the structured data from the vector database for downstream applications, such as the [TAIC Smart Tools](https://github.com/1jamesthompson1/TAIC-smart-tools) project.
 
 ## Next Steps
 
