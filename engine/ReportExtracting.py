@@ -172,7 +172,7 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
             output_structure=output_model,
         )
     except Exception as e:
-        msg = f"AI extraction failed for agency '{agency_name}'"
+        msg = f"AI extraction failed for agency '{agency_name}': {type(e).__name__}"
         raise RuntimeError(msg) from e
 
     return response
@@ -346,6 +346,7 @@ def process_reports_parallel(  # noqa: PLR0912, PLR0913, PLR0917
     report_titles_dc: ReportTitles | None = None,
     event_types_csv_path: Path = Path("data/event_types.csv"),
     max_workers: int | None = None,
+    save_interval: int = 100,
 ) -> pd.DataFrame:
     """Process reports in parallel, skipping those already extracted.
 
@@ -365,6 +366,7 @@ def process_reports_parallel(  # noqa: PLR0912, PLR0913, PLR0917
         event_types_csv_path: Path to taxonomy CSV used for occurrence_type values.
         max_workers: Maximum number of parallel workers. Adjust
             based on your API rate limits and system resources.
+        save_interval: Number of reports to process before saving progress to disk.
 
     Returns:
         pd.DataFrame: Updated DataFrame containing both previously extracted
@@ -427,7 +429,7 @@ def process_reports_parallel(  # noqa: PLR0912, PLR0913, PLR0917
 
     results = []
 
-    errors = 0
+    errors = []
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_report = {
@@ -450,25 +452,40 @@ def process_reports_parallel(  # noqa: PLR0912, PLR0913, PLR0917
                 result = future.result()
             except Exception as exc:
                 logger.warning(f"Error processing {report_id}: {exc}", exc_info=True)
-                errors += 1
+                errors.append(f"{report_id}: {exc}")
                 continue
             if result is not None:
                 results.append(result)
 
-    new_extracted_df = pd.DataFrame(results)
+            if len(results) > 0 and len(results) % save_interval == 0:
+                _save_progress(results, current_extracted_df, extracted_reports_dc)
 
+    _save_progress(results, current_extracted_df, extracted_reports_dc)
+
+    if len(errors) > 0:
+        for err in errors:
+            logger.warning(err)
+        logger.warning(f"Completed with {len(errors)} missed reports due to errors.")
+
+    return extracted_reports_dc.read()
+
+
+def _save_progress(
+    results: list,
+    current_extracted_df: pd.DataFrame,
+    extracted_reports_dc: ExtractedReports,
+) -> pd.DataFrame | None:
+    if len(results) == 0:
+        return None
+
+    new_df = pd.DataFrame(results)
     if len(current_extracted_df) > 0:
-        completed_df = pd.concat(
-            [current_extracted_df, new_extracted_df], ignore_index=True
-        )
+        combined = pd.concat([current_extracted_df, new_df], ignore_index=True)
     else:
-        completed_df = new_extracted_df
+        combined = new_df
 
-    if errors > 0:
-        logger.warning(
-            f"Completed with {errors} missed reports due to errors. Check logs for details."
-        )
-
-    extracted_reports_dc.save(completed_df)
-
-    return completed_df
+    extracted_reports_dc.save(combined)
+    logger.info(
+        f"Saved {len(combined)} total reports ({len(new_df)} new in this batch)"
+    )
+    return combined

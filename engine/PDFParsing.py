@@ -102,7 +102,7 @@ def process_all_pdfs_into_text(
             )
 
     # Save any remaining reports
-    if batch_reports:
+    if len(batch_reports) > 0:
         parsed_reports_df = pd.concat(
             [parsed_reports_df, pd.DataFrame(batch_reports)],
             ignore_index=True,

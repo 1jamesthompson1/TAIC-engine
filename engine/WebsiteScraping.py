@@ -1303,15 +1303,18 @@ class TSBReportScraper(ReportScraper):
         """
         modes = ["aviation", "rail", "marine"]
 
-        modes_df = [
-            pd.read_html(
-                self.get(
-                    f"https://www.tsb.gc.ca/eng/rapports-reports/{mode}/index.html",
-                ).content,
-                flavor="lxml",
-            )[0]
-            for mode in tqdm(modes)
-        ]
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=5, max=15),
+            retry=retry_if_exception_type(ValueError),
+            reraise=True,
+        )
+        def _read_table(mode: str) -> pd.DataFrame:
+            url = f"https://www.tsb.gc.ca/eng/rapports-reports/{mode}/index.html"
+            response = self.get(url)
+            return pd.read_html(response.content, flavor="lxml")[0]
+
+        modes_df = [_read_table(mode) for mode in tqdm(modes)]
 
         # Add dataframes togather with extra column identifier
 
@@ -1844,6 +1847,9 @@ class RecommendationScraper(WebsiteScraper, ABC):
                 [new_recommendations, table], ignore_index=True
             )
 
+        # Drop ones without a URL as we cannot extract the recommendation data without a URL
+        new_recommendations = new_recommendations.dropna(subset=["url"])
+
         logger.info(
             f"Found {new_recommendations.shape[0]} new recommendations, reading each individual webpage now"
         )
@@ -1853,6 +1859,9 @@ class RecommendationScraper(WebsiteScraper, ABC):
                 f"Processing recommendation {row['recommendation_id']} from {row['agency_id']} with i:{i}"
             )
             recommendation_data = self.extract_recommendation_data(row["url"])
+            if recommendation_data is None:
+                new_recommendations = new_recommendations.drop(i)
+                continue
             for key, value in recommendation_data.items():
                 new_recommendations.loc[i, key] = value
 
@@ -1877,7 +1886,7 @@ class RecommendationScraper(WebsiteScraper, ABC):
         self.recommendations_dc.save(recommendations_df)
 
     @abstractmethod
-    def extract_recommendation_data(self, url: str) -> dict:
+    def extract_recommendation_data(self, url: str) -> dict | None:
         """Goes to the URL and extracts the needed data.
 
         This method must be implemented by subclasses to handle agency-specific
@@ -1993,7 +2002,7 @@ class TSBRecommendationsScraper(RecommendationScraper):
             logger.info(f"Multiple tables found on {url}, using the first one")
         return tables[0]
 
-    def extract_recommendation_data(self, url: str) -> dict:
+    def extract_recommendation_data(self, url: str) -> dict | None:
         """Read the webpage and extract recommendation data.
 
         This will read the webpage and extract:
@@ -2012,22 +2021,13 @@ class TSBRecommendationsScraper(RecommendationScraper):
             - recommendation: The recommendation text
             - made: The date recommendation was made
             - recommendation_context: The context/rationale for the recommendation
-
-        Raises:
-            ValueError: If the webpage cannot be accessed (non-200 status code).
         """
-        if url is None:
-            return {
-                "recommendation": None,
-                "made": None,
-                "recommendation_context": None,
-            }
-
         response = self.get(url)
 
         if response.status_code != HTTPStatus.OK:
             msg = f"Failed to scrape recommendations from {url}. Error code {response.status_code}"
-            raise ValueError(msg)
+            logger.warning(msg)
+            return None
 
         soup = BeautifulSoup(response.content, "html.parser")
 
@@ -2051,6 +2051,14 @@ class TSBRecommendationsScraper(RecommendationScraper):
             recommendation_context = "\n".join(
                 [child.get_text() for child in context.children if child.name == "p"]
             )
+
+        if (
+            recommendation is None
+            and recommendation_date is None
+            and recommendation_context is None
+        ):
+            logger.warning(f"No recommendation data found at {url}")
+            return None
 
         return {
             "recommendation": recommendation,
@@ -2098,6 +2106,10 @@ class TSBRecommendationsScraper(RecommendationScraper):
             "watchlist",
             "url",
         ]
+
+        # Remove rows with empty recommendation
+        table = table[~table["recommendation"].isna()]
+
         return table.drop("recommendation", axis=1)
 
 
@@ -2185,7 +2197,7 @@ class TAICRecommendationsScraper(RecommendationScraper):
         """
         return table
 
-    def extract_recommendation_data(self, url: str) -> dict:
+    def extract_recommendation_data(self, url: str) -> dict | None:
         """Read the actual recommendation page and extract needed data.
 
         This will extract information that is not found in the table:
@@ -2205,24 +2217,13 @@ class TAICRecommendationsScraper(RecommendationScraper):
             - recipient: The recipient of the recommendation
             - made: The date the recommendation was made
             - agency_id: The agency identifier
-
-        Raises:
-            ValueError: If the webpage cannot be accessed (non-200 status code).
         """
-        if url is None:
-            return {
-                "recommendation": None,
-                "reply_text": None,
-                "recipient": None,
-                "made": None,
-                "agency_id": None,
-            }
-
         response = self.get(url)
 
         if response.status_code != HTTPStatus.OK:
             msg = f"Failed to scrape recommendation from {url}. Error code {response.status_code}"
-            raise ValueError(msg)
+            logger.warning(msg)
+            return None
 
         soup = BeautifulSoup(response.content, "html.parser")
 

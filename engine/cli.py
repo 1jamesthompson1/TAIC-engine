@@ -186,17 +186,13 @@ def extract(output_dir: Path, config: dict, refresh: bool) -> None:
     """
     output_config = config.get("output")
 
-    logger.welcome("Extracting Report Artifacts", {"Output directory": str(output_dir)})
-
-    logger.info("Setting up PDF storage manager...")
     pdf_storage_manager = PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
         os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
         output_config["pdf_container_name"],
     )
     logger.info(
-        "PDF storage container: %s",
-        output_config["pdf_container_name"],
+        f"PDF storage container: {output_config['pdf_container_name']}",
     )
 
     # Parse PDFs into text
@@ -211,6 +207,7 @@ def extract(output_dir: Path, config: dict, refresh: bool) -> None:
     event_types_csv_path = Path(
         config.get("data").get("data_local_folder_location")
     ) / config.get("data").get("event_types_file_name")
+
     ReportExtracting.process_reports_parallel(
         SavedDataFrames.ParsedReports(output_dir),
         SavedDataFrames.ExtractedReports(output_dir),

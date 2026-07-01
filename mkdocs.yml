@@ -87,6 +87,7 @@ nav:
   - User Guide:
       - Overview: user-guide/overview.md
       - Pipeline: user-guide/pipeline.md
+      - Pipeline Inputs & Data Sources: user-guide/pipeline-inputs.md
       - Report Processing: user-guide/reports.md
   - Developer Guide:
       - Getting Started: developer-guide/getting-started.md

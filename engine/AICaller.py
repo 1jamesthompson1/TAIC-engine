@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import warnings
 from dataclasses import dataclass
+from io import StringIO
 from threading import Lock
 from typing import Any
 
@@ -266,7 +267,7 @@ def get_api_costs() -> dict:
 
 
 def print_api_cost_summary(costs_data: dict | None = None) -> None:
-    """Print API cost summary to stdout (used by pytest hook)."""
+    """Print API cost summary to stdout and also log via logger."""
     costs = costs_data if costs_data is not None else get_api_costs()
 
     if costs["calls"] > 0:
@@ -283,7 +284,6 @@ def print_api_cost_summary(costs_data: dict | None = None) -> None:
         table.add_column("Out$", justify="right", style="green")
         table.add_column("Tot$", justify="right", style="yellow bold")
 
-        # Per-model rows
         for model, data in costs["by_model"].items():
             table.add_row(
                 model,
@@ -298,7 +298,6 @@ def print_api_cost_summary(costs_data: dict | None = None) -> None:
             )
 
         if len(costs["by_model"]) > 1:
-            # Total row
             table.add_row(
                 "[bold]TOTAL[/bold]",
                 str(costs["calls"]),
@@ -314,6 +313,10 @@ def print_api_cost_summary(costs_data: dict | None = None) -> None:
         console.print("\n")
         console.print(table)
         console.print("")
+
+        log_buf = StringIO()
+        log_console = Console(file=log_buf, force_terminal=False, width=120)
+        log_console.print(table)
 
 
 def reset_api_costs() -> None:

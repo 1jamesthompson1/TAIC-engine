@@ -9,10 +9,10 @@ This guide explains how the TAIC Report Engine pipeline works and how to use it 
 
 TAIC Report Engine is a data pipeline that:
 
-1. **Scrapes** reports from transport accident investigation agency websites, as well as safety issues and recommendations if available.
-2. **Parses** the PDF reports into structured text
-3. **Extracts** safety issues, recommendations, and splits the report into sections using AI models
-4. **Stores** the results are stored in a structured datasets and embedded in a vector database for retrieval-augmented generation (RAG) applications.
+1. **Scrapes** report metadata, PDFs, safety issues, and recommendations from agency websites
+2. **Parses** PDF reports into structured text
+3. **Extracts** safety issues, recommendations, and occurrence metadata from report text using AI models
+4. **Stores** the results in structured datasets and a vector database for retrieval-augmented generation (RAG) applications
 
 ## Supported Agencies
 
@@ -20,13 +20,8 @@ TAIC Report Engine is a data pipeline that:
 - **ATSB** — Australian Transport Safety Bureau (Australia)
 - **TSB** — Transportation Safety Board of Canada
 
-## Typical Workflow
-
-1. **Configure** the pipeline via `config.yaml`
-2. **Run** the pipeline with `uv run engine`
-3. **Use** the structured data from the vector database for downstream applications, such as the [TAIC Smart Tools](https://github.com/1jamesthompson1/TAIC-smart-tools) project.
-
 ## Next Steps
 
 - Read about the [Pipeline](pipeline.md) in detail
+- Then find out about the [data sources](pipeline-inputs.md) for each item
 - Learn about [Report Processing](reports.md)
