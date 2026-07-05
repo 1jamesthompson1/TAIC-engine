@@ -5,6 +5,7 @@ database and embedding them for search and analysis.
 """
 
 import os
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import ClassVar
@@ -193,6 +194,7 @@ class VectorDB:
         model_name: str,
         context_limit: int,
         table_name: str,
+        report_text_table_name: str | None = None,
     ) -> None:
         """Initialize the VectorDB.
 
@@ -201,12 +203,17 @@ class VectorDB:
             model_name: Name of the embedding model to use.
             context_limit: Maximum context limit for the model.
             table_name: Name of the table in the database.
+            report_text_table_name: Name of the separate table for raw report_text
+                (no embeddings). Defaults to "{table_name}_report_text".
 
         Raises:
             ValueError: If the existing table's embedding function does not match the specified model.
         """
         self.model_context_limit = context_limit
         self.table_name = table_name
+        self.report_text_table_name = (
+            report_text_table_name or f"{table_name}_report_text"
+        )
         self.db = lancedb.connect(db_uri)
         azure_embeddings = (
             EmbeddingFunctionRegistry.get_instance()
@@ -231,8 +238,8 @@ class VectorDB:
             occurrence_type: str | None = None
             fatalities: int | None = None
             injuries: int | None = None
-            damage: str | None = None
-            who_may_benefit: str | None = None
+            metadata_json: str | None = None
+            publication_date: str | None = None
 
         self.VectorDBSchema = VectorDBSchema
 
@@ -309,26 +316,83 @@ class VectorDB:
 
         return df
 
+    def upload_report_text_table(
+        self,
+        complete_data_dc: DataForVectorDB,
+    ) -> pd.Series | None:
+        """Upload report_text documents to a separate table without embeddings.
+
+        Reads the complete data from the given dataclass, filters for report_text
+        documents, and upserts them into a non-vector LanceDB table using the same
+        schema as the main vector table (minus the vector column).
+
+        Uses merge insert on ``document_id`` so new docs are inserted and existing
+        ones are updated in place.
+
+        Args:
+            complete_data_dc: DataForVectorDB dataclass holding all documents.
+
+        Returns:
+            pd.Series: Series of document IDs that were added/updated, or None if empty.
+        """
+        complete_data = complete_data_dc.read()
+        report_text_docs = complete_data[
+            complete_data["document_type"] == "report_text"
+        ]
+
+        if report_text_docs.empty:
+            logger.info("No report_text documents to upload.")
+            return None
+
+        # Derive schema from the main vector table (same fields, no vector column)
+        main_schema = self.table.schema
+        report_text_fields = [f for f in main_schema if f.name != "vector"]
+        report_text_schema = pa.schema(report_text_fields)
+
+        cols = [f.name for f in report_text_schema]
+        to_upsert = report_text_docs[cols].copy()
+        pa_table = pa.Table.from_pandas(to_upsert, schema=report_text_schema)
+
+        if self.report_text_table_name in self.db.table_names():
+            table = self.db.open_table(self.report_text_table_name)
+        else:
+            table = self.db.create_table(
+                self.report_text_table_name, schema=report_text_schema, mode="create"
+            )
+
+        pre_row_count = table.count_rows()
+
+        table.merge_insert("document_id").when_not_matched_insert_all().execute(
+            pa_table
+        )
+
+        # Calculate the number of rows that were actually inserted by looking at the count of rows in the table after the merge insert
+        inserted_rows_count = table.count_rows()
+        logger.info(
+            f"Inserted {inserted_rows_count - pre_row_count} new report_text documents out of a total of {len(to_upsert)} documents into {self.report_text_table_name}."
+        )
+        return to_upsert["document_id"]
+
     def add_documents(
         self, documents_df: pd.DataFrame, document_column_name: str = "document"
-    ) -> pd.Series | None:
-        """Add documents to the vector database with generated embeddings.
+    ) -> Generator[pd.Series, None, None]:
+        """Add documents to the vector database, yielding IDs batch by batch.
 
-        This processes a dataframe of documents and generates embeddings for all
-        documents that don't have embeddings in the dataframe. It uses
-        multithreading to speed up the process.
+        Processes the dataframe in token-balanced batches, adding each to the
+        LanceDB table and yielding the document IDs as each batch is saved.
+        This lets callers persist progress incrementally so a failure mid-way
+        only loses the current batch, not everything.
 
         Args:
             documents_df: The dataframe containing documents to add.
             document_column_name: The name of the column that contains the documents.
 
-        Returns:
-            pd.Series: Series of document IDs that were added, or None if empty.
+        Yields:
+            pd.Series: Document IDs successfully added for each batch.
 
         Raises:
             ValueError: If dataframe columns don't match the expected schema.
         """
-        # Validate dataframe has required columns (order not required)
         expected_cols = list(self.VectorDBSchema.model_fields.keys())[1:]
         missing = [c for c in expected_cols if c not in documents_df.columns.tolist()]
         if missing:
@@ -338,9 +402,10 @@ class VectorDB:
             )
             raise ValueError(msg)
 
-        # Get document lengths
+        documents_df = documents_df.copy()
+
         token_length_column_name = f"{document_column_name}_token_length"
-        documents_df = self.tokenize_documents(
+        self.tokenize_documents(
             documents_df, document_column_name, token_length_column_name
         )
 
@@ -348,20 +413,31 @@ class VectorDB:
             f"There are a total of {documents_df[token_length_column_name].sum()} tokens in {len(documents_df)} documents"
         )
 
-        to_drop = pd.Series(
+        within_limit = (
             documents_df[token_length_column_name] < self.model_context_limit * 2
         )
-
-        documents_df = documents_df.loc[to_drop]
+        documents_df = documents_df.loc[within_limit]
 
         logger.info(
-            f"Dropping documents with more than {self.model_context_limit * 2} tokens which is {len(to_drop) - sum(to_drop)} documents"
+            f"Dropping documents with more than {self.model_context_limit * 2} tokens "
+            f"which is {len(within_limit) - within_limit.sum()} documents"
         )
 
-        if documents_df.empty:
-            return None
+        # Filter out empty document strings — Azure AI rejects empty inputs
+        empty_docs = documents_df[
+            documents_df[document_column_name].isna()
+            | (documents_df[document_column_name].str.strip() == "")
+        ]
+        if not empty_docs.empty:
+            logger.warning(
+                f"Dropping {len(empty_docs)} documents with empty text before embedding:\n"
+                f"{empty_docs[['report_id', 'document_id', 'document_type']].to_csv(index=False)}"
+            )
+            documents_df = documents_df.drop(empty_docs.index)
 
-        # Truncate all documents to just below the context limit
+        if documents_df.empty:
+            return
+
         documents_df.loc[:, document_column_name] = documents_df.apply(
             lambda x: x[document_column_name][: self.model_context_limit - 50],
             axis=1,
@@ -369,54 +445,45 @@ class VectorDB:
 
         num_batches = min(os.cpu_count() or 1, len(documents_df))
 
-        # Split the dataframe into batches based on token length
-        # Reorder columns so they match the table schema (token length kept for batching)
-        documents_df = documents_df.copy()
-
         df_sorted = documents_df.sort_values(
             token_length_column_name, ascending=False
         ).reset_index(drop=True)
 
-        batches = [[] for _ in range(num_batches)]
+        batches: list[list[int]] = [[] for _ in range(num_batches)]
         batch_token_counts = [0] * num_batches
 
         for idx, row in df_sorted.iterrows():
             min_batch_idx = min(range(num_batches), key=lambda i: batch_token_counts[i])
-
             batches[min_batch_idx].append(idx)
             batch_token_counts[min_batch_idx] += row[token_length_column_name]
 
-        # Convert to DataFrames and drop token length column
-        batches = [
+        batch_dfs = [
             df_sorted.iloc[batch_indices].drop(token_length_column_name, axis=1)
             for batch_indices in batches
         ]
 
-        for i, (batch, token_count) in enumerate(
-            zip(batches, batch_token_counts, strict=False)
+        for i, (batch_df, token_count) in enumerate(
+            zip(batch_dfs, batch_token_counts, strict=False)
         ):
-            logger.debug(f"Batch {i}: {len(batch)} documents, {token_count} tokens")
+            logger.debug(f"Batch {i}: {len(batch_df)} documents, {token_count} tokens")
 
-        def add_documents_to_db(batch: pd.DataFrame) -> object:
-            pa_table = pa.Table.from_pandas(
-                batch,
-                schema=pa.schema(
-                    [field for field in self.table.schema if field.name != "vector"]
-                ),
-            )
+        lance_schema = pa.schema(
+            [field for field in self.table.schema if field.name != "vector"]
+        )
 
+        def add_batch(batch_df: pd.DataFrame) -> object:
+            pa_table = pa.Table.from_pandas(batch_df, schema=lance_schema)
             return self.table.add(pa_table, mode="append")
 
         with ThreadPoolExecutor(max_workers=num_batches) as executor:
-            futures = {
-                executor.submit(add_documents_to_db, batch): i
-                for i, batch in enumerate(batches)
+            future_to_ids = {
+                executor.submit(add_batch, batch_df): batch_df["document_id"]
+                for batch_df in batch_dfs
             }
 
-            for future in tqdm(as_completed(futures), total=len(futures)):
+            for future in tqdm(as_completed(future_to_ids), total=len(future_to_ids)):
                 future.result()
-
-        return documents_df["document_id"]
+                yield future_to_ids[future]
 
     def process_extracted_reports(
         self,
@@ -424,6 +491,10 @@ class VectorDB:
         already_embedded_ids_dc: VectorDBDocumentIDs,
     ) -> None:
         """Process extracted reports and generate embeddings.
+
+        Embeds all document types (except report_text, which is filtered out) into
+        the main vector table. report_text documents should be uploaded separately
+        via upload_report_text_table() before calling this.
 
         Args:
             complete_data_dc: The complete data for vector database insertion.
@@ -450,36 +521,42 @@ class VectorDB:
                 f"No already embedded document IDs found, starting fresh embedding process. If you have previously embedded documents, make sure to save the document IDs to {already_embedded_ids_dc.path} to avoid re-embedding."
             )
 
+        # Not using merge_insert as it will then compute the embedding of all items to merge first before checking if they are already in the table.
         data_to_add = complete_data[
             ~complete_data["document_id"].isin(already_embedded_ids)
         ]
 
-        current_table_version = self.table.version
+        # Exclude report_text — too long to embed, stored separately
+        data_to_embed = data_to_add[data_to_add["document_type"] != "report_text"]
+
+        if data_to_embed.empty:
+            logger.info("No new documents to embed.")
+            return
+
+        all_added_ids: list[pd.Series] = []
 
         try:
-            added_document_ids = self.add_documents(
-                data_to_add,
-            )
-
-            logger.info(
-                f"Added {len(added_document_ids)} documents to the vector database table {self.table_name}."
-            )
-            already_embedded_ids_dc.save(
-                pd.DataFrame(
-                    {
-                        "document_id": pd.concat(
-                            [already_embedded_ids, added_document_ids]
-                        )
-                    }
+            for batch_ids in self.add_documents(data_to_embed):
+                all_added_ids.append(batch_ids)
+                already_embedded_ids = pd.concat([already_embedded_ids, batch_ids])
+                logger.info(
+                    f"Added {len(batch_ids)} documents to the vector database table {self.table_name}. Total embedded documents: {len(already_embedded_ids)}"
                 )
-            )
-
+                already_embedded_ids_dc.save(
+                    pd.DataFrame({"document_id": already_embedded_ids})
+                )
         except Exception:
+            saved_count = len(pd.concat(all_added_ids)) if all_added_ids else 0
             logger.exception(
-                "Error during adding of documents, going to restore previous state of the table"
+                "Error during adding of documents. "
+                f"{saved_count} documents were already saved."
             )
-            self.table = self.table.restore(current_table_version)
             raise
+
+        total_added = len(pd.concat(all_added_ids))
+        logger.info(
+            f"Added {total_added} documents to the vector database table {self.table_name}."
+        )
 
         logger.info("Finished embedding all reports.")
         self.table.optimize(cleanup_older_than=timedelta(days=14))

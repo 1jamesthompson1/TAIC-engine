@@ -89,6 +89,7 @@ nav:
       - Pipeline: user-guide/pipeline.md
       - Pipeline Inputs & Data Sources: user-guide/pipeline-inputs.md
       - Report Processing: user-guide/reports.md
+      - Vector Database: user-guide/vector-database.md
   - Developer Guide:
       - Getting Started: developer-guide/getting-started.md
       - Architecture: developer-guide/architecture.md

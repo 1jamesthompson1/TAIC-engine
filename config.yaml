@@ -29,7 +29,8 @@ engine:
         recommendations: false
         metadata: true
   vector:
-    table_name: "all_document_types"  # LanceDB table name
+    table_name: "all_document_types"  # LanceDB table name for embedded docs
+    report_text_table_name: "report_text"  # LanceDB table for raw report text (no embeddings)
     model:
       name: "text-embedding-3-large"
       context_limit: 8191  # Approx token context limit for truncation logic

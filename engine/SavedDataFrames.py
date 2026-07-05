@@ -396,14 +396,14 @@ class DataForVectorDB(SavedDataFrame):
         document: str
         document_type: str
         url: str | None = None
+        metadata_json: str | None = None
         location: str | None = None
         occurrence_date: datetime | None = None
         occurrence_type: str | None = None
         fatalities: int | None = None
         injuries: int | None = None
-        damage: str | None = None
-        who_may_benefit: str | None = None
         agency_id: str
+        publication_date: str | None = None
         mode: str
         year: int
         agency: str

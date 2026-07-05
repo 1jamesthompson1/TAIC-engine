@@ -221,12 +221,16 @@ def embed(output_dir: Path, config: dict, refresh: bool) -> None:
     """Embed extracted reports into the vector database.
 
     First step is creating the long dataformat dataframe, then embedding the document text from each row.
+    report_text documents are uploaded to a separate table without embeddings (they are too long).
 
     Args:
         output_dir (Path): Directory where output artifacts are written.
         config (dict): Engine configuration settings.
         refresh (bool): Whether to refresh cached data and reprocess sources.
     """
+    data_dc = SavedDataFrames.DataForVectorDB(output_dir)
+    ids_dc = SavedDataFrames.VectorDBDocumentIDs(output_dir)
+
     Combine.create_long_data_format(
         Combine.LongDataFormatDCs(
             parsed_reports_dc=SavedDataFrames.ParsedReports(output_dir),
@@ -240,22 +244,21 @@ def embed(output_dir: Path, config: dict, refresh: bool) -> None:
                 output_dir
             ),
         ),
-        SavedDataFrames.DataForVectorDB(output_dir),
+        data_dc,
     )
 
     vector_config = config.get("vector")
-
     vector_db = Embedding.VectorDB(
-        os.environ["VECTORDB_URI"],
+        os.environ["db_URI"],  # noqa: SIM112
         vector_config["model"]["name"],
         vector_config["model"]["context_limit"],
         vector_config["table_name"],
+        report_text_table_name=vector_config.get("report_text_table_name"),
     )
 
-    vector_db.process_extracted_reports(
-        SavedDataFrames.DataForVectorDB(output_dir),
-        SavedDataFrames.VectorDBDocumentIDs(output_dir),
-    )
+    vector_db.upload_report_text_table(data_dc)
+
+    vector_db.process_extracted_reports(data_dc, ids_dc)
 
 
 def upload(container_name: str, output_dir: Path, output_config: dict) -> None:
@@ -296,7 +299,14 @@ def cli() -> None:
     parser.add_argument(
         "-t",
         "--run_type",
-        choices=["download", "scrape", "extract", "embed", "upload", "all"],
+        choices=[
+            "download",
+            "scrape",
+            "extract",
+            "embed",
+            "upload",
+            "all",
+        ],
         required=True,
         help="This is function that you want to run.",
     )

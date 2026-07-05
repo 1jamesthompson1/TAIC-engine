@@ -26,8 +26,6 @@ def test_metadata_expansion() -> None:
         "occurrence_type": str,
         "fatalities": int,
         "injuries": int,
-        "damage": str,
-        "who_may_benefit": (str, type(None)),
     }
 
     # Check data types row by row to get more informative error messages which includes the entire row id.
@@ -70,6 +68,7 @@ def test_metadata_combination() -> None:
         "url",
         "agency_id",
         "occurrence_type",
+        "publication_date",
         "mode",
         "agency",
         "year",
