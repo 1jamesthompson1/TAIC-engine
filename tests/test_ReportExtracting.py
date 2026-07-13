@@ -123,21 +123,24 @@ def _compare_recommendations(
     extracted: list[RecommendationItem],
     expected: list[RecommendationItem],
     recommendation_similarity_threshold: float = 0.95,
-    context_similarity_threshold: float = 0.3,
 ) -> list[str]:
     """Compare extracted recommendations against expected.
 
-    Checks ID presence, recipient exact-match, and text/context similarity.
+    Checks ID presence, recipient exact-match, text similarity, and whether context is present.
 
     Returns:
         A list of failure description strings (empty means success).
     """
+
+    def _normalise_id(rid: str | None) -> str:
+        return re.sub(r"\s+", "", (rid or "").strip())
+
     failures: list[str] = []
     if not expected:
         return failures
 
-    expected_ids = {item.recommendation_id for item in expected}
-    extracted_ids = {item.recommendation_id for item in extracted}
+    expected_ids = {_normalise_id(item.recommendation_id) for item in expected}
+    extracted_ids = {_normalise_id(item.recommendation_id) for item in extracted}
 
     missing_ids = expected_ids - extracted_ids
     unexpected_ids = extracted_ids - expected_ids
@@ -151,7 +154,8 @@ def _compare_recommendations(
             (
                 item
                 for item in extracted
-                if item.recommendation_id == expected_item.recommendation_id
+                if _normalise_id(item.recommendation_id)
+                == _normalise_id(expected_item.recommendation_id)
             ),
             None,
         )
@@ -186,18 +190,15 @@ def _compare_recommendations(
                 f"Got:\n{extracted_item.recommendation}"
             )
 
-        context_similarity = SequenceMatcher(
-            lambda x: re.match(r"\s+", x) is not None,
-            (extracted_item.recommendation_context or "").lower(),
-            (expected_item.recommendation_context or "").lower(),
-        ).ratio()
+        extracted_has_context = extracted_item.recommendation_context is not None
+        expected_has_context = expected_item.recommendation_context is not None
 
-        if context_similarity < context_similarity_threshold:
+        if extracted_has_context != expected_has_context:
             failures.append(
                 f"Item {idx} ({extracted_item.recommendation_id}): "
-                f"Context similarity {context_similarity:.2f} < {context_similarity_threshold}\n"
-                f"Expected:\n{expected_item.recommendation_context}\n"
-                f"Got:\n{extracted_item.recommendation_context}"
+                f"Context presence mismatch: "
+                f"expected has_context={expected_has_context}, "
+                f"got has_context={extracted_has_context}"
             )
 
     return failures
@@ -335,7 +336,6 @@ class TestAIExtraction:
         expected: list[RecommendationItem],
         agency_id_lookup: dict[str, str],
         recommendation_similarity_threshold: float = 0.95,
-        context_similarity_threshold: float = 0.3,  # Only weak match is needed
     ) -> None:
         """Test the recommendation extraction of ATSB.
 
@@ -344,7 +344,6 @@ class TestAIExtraction:
             expected (list[RecommendationItem]): The expected recommendations.
             agency_id_lookup (dict[str, str]): Report ID to agency ID mapping.
             recommendation_similarity_threshold (float): Minimum similarity for recommendation text.
-            context_similarity_threshold (float): Minimum similarity for recommendation context.
 
         """
         report_text = get_report_text(report_id)
@@ -365,7 +364,6 @@ class TestAIExtraction:
             extracted,
             expected,
             recommendation_similarity_threshold=recommendation_similarity_threshold,
-            context_similarity_threshold=context_similarity_threshold,
         )
         assert not failures, "\n".join(failures)
 

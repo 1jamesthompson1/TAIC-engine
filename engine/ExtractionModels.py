@@ -47,7 +47,7 @@ class RecommendationItem(BaseModel):
     )
     recommendation_context: str | None = Field(
         default=None,
-        description="The context or background information related to the recommendation, if available. This should include the safety issue or issues that the recommendation is addressing, the entire safety action/response of the recommendation recipient and the final justification from the investiagtion agency as to why their safety action was inadequate. For each of these three elements only include what is actually present in the report. If no context is given around the recommendation then return None. It is important that whatever is copied is copied verbatim and not invented or summarised although removing markdown formatting and cleaing up PDF text extraction artefacts is acceptable. Information on the current status of the recommendation is not to be included.",
+        description="The context or background information related to the recommendation. This should be the text that is found just before or just after the recommendation in the report. This should include the safety issue or issues that the recommendation is addressing, the entire safety action/response of the recommendation recipient and the final justification from the investiagtion agency as to why their safety action was inadequate. For each of these three elements only include what is actually present in the report. If no context is given around the recommendation then return None. It is important that whatever is copied is copied verbatim and not invented or summarised although removing markdown formatting and cleaing up PDF text extraction artefacts is acceptable. Information on the current status of the recommendation is not to be included.",
     )
     made: str | None = Field(
         default=None,
@@ -588,7 +588,7 @@ def build_extraction_output_model(
             list[RecommendationItem],
             Field(
                 default_factory=list,
-                description="A list of all recommendations made in the report.",
+                description="A list of all recommendations made in the report. Remember to include all recommendations made by the agency in relation to this accident regardless of their response status or if they were issues prior to publication. Do not include recommendations made by other agencies or entities.",
             ),
         )
 

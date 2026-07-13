@@ -153,7 +153,7 @@ An inferred safety issue will generally be found in the "findings" section of th
     def _recommendations_prompt(self) -> str:
         return f"""Recommendation extraction instructions:
 Please extract all recommendations made in the report. Copy the recommendation verbatim. If there is a unique identifier for the recommendation (e.g Recommendation 1, Rec-01, etc) then include that as the recommendation_id. If there is any context or background information related to the recommendation, include that as recommendation_context (this is sometimes present like a paragraph just before or just after the stated recommendations).
-I only want recommendations that are formally made by {self.agency_name} in the report and which are specific to this particular accident (i.e not previous recommendations they have made). Do not include any recommendations made by other agencies or entities. I want all recommendations regardless of their response status."""
+I only want recommendations that are formally made by {self.agency_name} in the report and which are specific to this particular accident (i.e not previous recommendations they have made in relation to other accidents. However recommendations specific to this accident that were made prior to publication should be included). Do not include any recommendations made by other agencies or entities. I want all recommendations regardless of their response status."""
 
     @staticmethod
     def _metadata_prompt(event_type_taxonomy: list[dict[str, str]] | None) -> str:
