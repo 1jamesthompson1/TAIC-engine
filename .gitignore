@@ -9,10 +9,11 @@ site/**
 # This folder is for various notebooks and stuff I want handy while developing
 workbench/
 
-# Ignore all files inside the notebook folder except jupyter notebooks.
+# Ignore all files inside the notebook folder except scripts and jupyter notebooks.
 notebooks/*.*
 notebooks/*/*
-!notebooks/*/*.ipynb
+!notebooks/*.py
+!notebooks/*.ipynb
 !notebooks/readme.md
 
 
