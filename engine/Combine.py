@@ -402,6 +402,10 @@ def create_long_data_format(  # noqa: PLR0914
         long_format["document"].notna() & (long_format["document"].str.strip() != "")
     ]
 
+    # Allow specific URLs for particular documents (i.e recommendations) to be used over the generic report URL from the metadata.
+    long_format["url"] = long_format["url"].combine_first(long_format["url_metadata"])
+    long_format = long_format.drop(columns=["url_metadata"])
+
     # Log null metadata field counts (helps identify whether issues are in scraped or extracted metadata)
     metadata_fields = [
         "url",
@@ -423,9 +427,5 @@ def create_long_data_format(  # noqa: PLR0914
             f"Metadata null counts after merge ({long_format['report_id'].nunique()} reports, {len(long_format)} documents):\n"
             f"{null_info}"
         )
-
-    # Allow specific URLs for particular documents (i.e recommendations) to be used over the generic report URL from the metadata.
-    long_format["url"] = long_format["url"].combine_first(long_format["url_metadata"])
-    long_format = long_format.drop(columns=["url_metadata"])
 
     long_data_format_dc.save(long_format)
