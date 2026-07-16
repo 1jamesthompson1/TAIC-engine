@@ -103,9 +103,23 @@ def create_complete_report_metadata(
         A dataframe where the extracted report metadata and scraped report metadata have been combined, so that each row is information rich.
     """
     combined_metadata = extracted_metadata.merge(
-        scraped_metadata[["report_id", "url", "agency_id", "publication_date"]],
+        scraped_metadata[
+            ["report_id", "url", "agency_id", "publication_date", "occurrence_date"]
+        ],
         on="report_id",
         how="inner",
+    )
+
+    # Prefer scraped occurrence_date, fall back to AI-extracted
+    # (scraped is more reliable; AI sometimes produces garbage like 0000-00-00)
+    combined_metadata["occurrence_date_scraped"] = pd.to_datetime(
+        combined_metadata["occurrence_date_y"], errors="coerce"
+    )
+    combined_metadata["occurrence_date"] = combined_metadata[
+        "occurrence_date_scraped"
+    ].combine_first(combined_metadata["occurrence_date_x"])
+    combined_metadata = combined_metadata.drop(
+        columns=["occurrence_date_x", "occurrence_date_y", "occurrence_date_scraped"]
     )
 
     missing_scraped_metadata_report_ids = set(
@@ -286,7 +300,7 @@ def combine_safety_issues(
     return final_si
 
 
-def create_long_data_format(  # noqa: PLR0914
+def create_long_data_format(
     dcs: LongDataFormatDCs, long_data_format_dc: DataForVectorDB
 ) -> None:
     """Collate all engine output data into a long format for easier embedding and analysis.
@@ -300,6 +314,14 @@ def create_long_data_format(  # noqa: PLR0914
             dataframe will be saved.
     """
     extracted_reports = dcs.extracted_reports_dc.read()
+
+    logger.welcome(
+        "Creating Long Format Data",
+        {
+            "Extracted reports": str(len(extracted_reports)),
+            "Output path": str(long_data_format_dc.path),
+        },
+    )
 
     report_metadata = create_complete_report_metadata(
         expand_extracted_report_metadata(dcs.extracted_reports_dc.read()),
@@ -356,6 +378,32 @@ def create_long_data_format(  # noqa: PLR0914
         axis=0,
     )
 
+    _log_missing_report_metadata(long_format, report_metadata)
+
+    long_format = long_format.merge(
+        report_metadata,
+        on="report_id",
+        how="inner",
+        suffixes=("", "_metadata"),
+    )
+
+    long_format = _log_and_drop_empty_documents(long_format)
+
+    # Allow specific URLs for particular documents (i.e recommendations) to be used over the generic report URL from the metadata.
+    long_format["url"] = long_format["url"].combine_first(long_format["url_metadata"])
+    long_format = long_format.drop(columns=["url_metadata"])
+
+    _log_null_metadata_counts(long_format)
+
+    long_format = long_format[long_data_format_dc._effective_columns]
+
+    long_data_format_dc.save(long_format)
+
+
+def _log_missing_report_metadata(
+    long_format: pd.DataFrame, report_metadata: pd.DataFrame
+) -> None:
+    """Log reports in the long format that have no matching metadata."""
     missing_metadata_report_ids = set(long_format["report_id"].unique()) - set(
         report_metadata["report_id"].unique()
     )
@@ -375,14 +423,13 @@ def create_long_data_format(  # noqa: PLR0914
                 f"Affected documents:\n{missing_docs[['report_id', 'document_type', 'document_id']].to_csv(index=False)}"
             )
 
-    long_format = long_format.merge(
-        report_metadata,
-        on="report_id",
-        how="inner",
-        suffixes=("", "_metadata"),
-    )
 
-    # Find rows with missing or empty document text
+def _log_and_drop_empty_documents(long_format: pd.DataFrame) -> pd.DataFrame:
+    """Log rows with missing or empty document text and drop them.
+
+    Returns:
+        DataFrame with empty document rows removed.
+    """
     missing_document_rows = long_format[
         long_format["document"].isna() | (long_format["document"].str.strip() == "")
     ]
@@ -398,34 +445,53 @@ def create_long_data_format(  # noqa: PLR0914
                 f"Affected documents:\n{missing_document_rows[['report_id', 'document_type', 'document_id']].to_csv(index=False)}"
             )
 
-    long_format = long_format[
+    return long_format[
         long_format["document"].notna() & (long_format["document"].str.strip() != "")
     ]
 
-    # Allow specific URLs for particular documents (i.e recommendations) to be used over the generic report URL from the metadata.
-    long_format["url"] = long_format["url"].combine_first(long_format["url_metadata"])
-    long_format = long_format.drop(columns=["url_metadata"])
 
-    # Log null metadata field counts (helps identify whether issues are in scraped or extracted metadata)
-    metadata_fields = [
-        "url",
-        "metadata_json",
-        "location",
-        "occurrence_date",
-        "occurrence_type",
-        "fatalities",
-        "injuries",
-        "publication_date",
-    ]
-    null_meta = {col: int(long_format[col].isna().sum()) for col in metadata_fields}
-    total_null = sum(null_meta.values())
-    if total_null > 0:
-        null_info = "\n".join(
-            f"  {k}: {v} nulls" for k, v in null_meta.items() if v > 0
-        )
-        logger.info(
-            f"Metadata null counts after merge ({long_format['report_id'].nunique()} reports, {len(long_format)} documents):\n"
-            f"{null_info}"
-        )
+def _log_null_metadata_counts(long_format: pd.DataFrame) -> None:
+    """Log null metadata field counts grouped by which fields are missing."""
+    key_fields = ["location", "occurrence_date", "publication_date"]
+    null_meta = {
+        col: int(long_format[col].isna().sum())
+        for col in [
+            *key_fields,
+            "url",
+            "metadata_json",
+            "occurrence_type",
+            "fatalities",
+            "injuries",
+        ]
+    }
+    if sum(null_meta.values()) == 0:
+        return
 
-    long_data_format_dc.save(long_format)
+    null_info_parts = []
+
+    report_level = long_format[["report_id", *key_fields]].drop_duplicates("report_id")
+    null_reports = report_level[report_level[key_fields].isna().any(axis=1)].copy()
+    if not null_reports.empty:
+        null_info_parts.append("")
+        null_info_parts.append(
+            f"  Total: {len(null_reports)} report(s) missing key metadata:"
+        )
+        null_reports["_missing_tuple"] = (
+            null_reports[key_fields]
+            .isna()
+            .apply(
+                lambda row: tuple(key_fields[i] for i, v in enumerate(row) if v),
+                axis=1,
+            )
+        )
+        grouped = null_reports.groupby("_missing_tuple")["report_id"].apply(sorted)
+        for missing_fields in sorted(grouped.keys(), key=lambda x: (-len(x), x)):
+            ids = grouped[missing_fields]
+            null_info_parts.append(f"  missing {', '.join(missing_fields)}:")
+            for rid in ids:
+                null_info_parts.append(f"    {rid}")
+
+    logger.info(
+        f"Metadata null counts after merge ({long_format['report_id'].nunique()} reports, {len(long_format)} documents):\n"
+        + "\n".join(null_info_parts)
+    )

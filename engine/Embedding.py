@@ -21,6 +21,7 @@ from lancedb.embeddings import EmbeddingFunctionRegistry
 from lancedb.embeddings.base import TextEmbeddingFunction
 from lancedb.embeddings.registry import register
 from lancedb.embeddings.utils import TEXT
+from lancedb.index import FTS, BTree
 from lancedb.pydantic import LanceModel, Vector
 from lancedb.table import Table
 from tqdm import tqdm
@@ -260,7 +261,7 @@ class VectorDB:
         Returns:
             The LanceDB table object.
         """
-        if self.table_name in self.db.table_names():
+        if self.table_name in self.db.list_tables().tables:
             return self.db.open_table(self.table_name)
         table = self.db.create_table(
             self.table_name, data=None, schema=self.VectorDBSchema, mode="create"
@@ -268,20 +269,21 @@ class VectorDB:
 
         # Create FTS index for text search
         try:
-            table.create_fts_index(
-                field_names="document",
-                use_tantivy=False,
-                language="English",
-                ascii_folding=True,
-                with_position=True,
-                remove_stop_words=False,
+            table.create_index(
+                "document",
+                config=FTS(
+                    with_position=True,
+                    language="English",
+                    ascii_folding=True,
+                    remove_stop_words=False,
+                ),
                 replace=True,
             )
         except Exception as e:
             logger.warning(f"Could not create FTS index: {e}")
 
         try:
-            table.create_scalar_index("document_id")
+            table.create_index("document_id", config=BTree())
         except Exception as e:
             logger.warning(f"Could not create scalar index on document_id: {e}")
 
@@ -335,6 +337,15 @@ class VectorDB:
         Returns:
             pd.Series: Series of document IDs that were added/updated, or None if empty.
         """
+        logger.welcome(
+            "Uploading report_text documents to separate table",
+            {
+                "complete_data_dc": complete_data_dc.path,
+                "report_text_table_name": self.report_text_table_name,
+                "db_uri": self.db.uri,
+            },
+        )
+
         complete_data = complete_data_dc.read()
         report_text_docs = complete_data[
             complete_data["document_type"] == "report_text"
@@ -353,7 +364,7 @@ class VectorDB:
         to_upsert = report_text_docs[cols].copy()
         pa_table = pa.Table.from_pandas(to_upsert, schema=report_text_schema)
 
-        if self.report_text_table_name in self.db.table_names():
+        if self.report_text_table_name in self.db.list_tables().tables:
             table = self.db.open_table(self.report_text_table_name)
         else:
             table = self.db.create_table(
@@ -555,9 +566,13 @@ class VectorDB:
 
         total_added = len(pd.concat(all_added_ids))
         logger.info(
-            f"Added {total_added} documents to the vector database table {self.table_name}."
+            f"Added {total_added} documents to the vector database table {self.table_name}. There are now {len(already_embedded_ids)} total embedded documents."
         )
 
         logger.info("Finished embedding all reports.")
         self.table.optimize(cleanup_older_than=timedelta(days=14))
-        logger.info("Optimized the table and cleaned up older entries.")
+        tag_name = f"engine-run-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        self.table.tags.create(tag_name, self.table.version)
+        logger.info(
+            f"Optimized the table. Tagged version {self.table.version} as '{tag_name}'."
+        )

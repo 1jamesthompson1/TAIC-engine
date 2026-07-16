@@ -155,7 +155,7 @@ def test_basic_embedding(tmp_path: object) -> None:
                 already_embedded_ids_dc,
             )
 
-        assert vector_db.table_name in vector_db.db.table_names()
+        assert vector_db.table_name in vector_db.db.list_tables().tables
         assert vector_db.table.count_rows() == len(complete_data)
 
         azure_embeddings = (
