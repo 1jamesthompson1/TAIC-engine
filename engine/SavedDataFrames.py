@@ -403,7 +403,7 @@ class DataForVectorDB(SavedDataFrame):
         fatalities: int | None = None
         injuries: int | None = None
         agency_id: str
-        publication_date: str | None = None
+        publication_date: datetime | None = None
         mode: str
         year: int
         agency: str

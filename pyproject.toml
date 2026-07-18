@@ -28,7 +28,6 @@ dependencies = [
     "roman>=4.2",
     "lancedb>=0.34.0,<0.35",
     "azure-ai-inference>=1.0.0b9",
-    "pylance>=0.34.0",
     "pytest>=7.4.3",
     "pytest-xdist>=3.5.0",
     "azure-storage-blob>=12.26.0",
@@ -63,7 +62,7 @@ dev = [
 
 [project.scripts]
 engine = "engine.cli:cli"
-azure = "notebooks.admin.easy_azure:main"
+azure = "notebooks.easy_azure:main"
 
 [tool.coverage.report]
 include_namespace_packages = true

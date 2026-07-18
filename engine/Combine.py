@@ -134,6 +134,11 @@ def create_complete_report_metadata(
             f"Sample report_ids: {display_ids}"
         )
 
+    # Convert publication_date to datetime for proper date filtering in the vector DB
+    combined_metadata["publication_date"] = pd.to_datetime(
+        combined_metadata["publication_date"], errors="coerce"
+    )
+
     # Take the scraped event type if it exists, otherwise take the extracted occurrence type.
     combined_metadata["occurrence_type"] = scraped_metadata["event_type"].combine_first(
         extracted_metadata["occurrence_type"]

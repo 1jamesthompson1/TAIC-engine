@@ -43,8 +43,7 @@ from engine.AzureStorage import EngineOutputManager
 
 
 def _repo_root() -> Path:
-    # notebooks/admin/easy_azure.py -> repo root is two parents up
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parent.parent
 
 
 # Load repo-root .env (works no matter where you run from)
@@ -141,6 +140,10 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0912, PLR09
     parser.add_argument("--src", help="Source folder/prefix inside container")
     parser.add_argument("--dst", help="Destiniation container prefix)")
     parser.add_argument(
+        "--upload",
+        help="Local path to upload from.",
+    )
+    parser.add_argument(
         "--local",
         help="Local path to download to.",
     )
@@ -175,11 +178,22 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0912, PLR09
             msg = "--latest-output and --prod-db require --local to be specified."
             raise ValueError(msg)
 
+    if args.upload:
+        if not args.dst:
+            msg = "--upload requires --dst to be specified."
+            raise ValueError(msg)
+        if not args.container:
+            msg = "--upload requires --container to be specified."
+            raise ValueError(msg)
+        if args.local:
+            msg = "--upload and --local cannot be combined."
+            raise ValueError(msg)
+
     if args.local and args.dst:
-        msg = "Only Local or dst can be specified, not both."
+        msg = "Only --local or --dst can be specified, not both."
         raise ValueError(msg)
-    if not args.local and not args.dst:
-        msg = "Either --local or --dst must be specified."
+    if not any([args.local, args.dst, args.upload]):
+        msg = "Either --local, --dst, or --upload must be specified."
         raise ValueError(msg)
 
     account = _require_env("AZURE_STORAGE_ACCOUNT_NAME")
@@ -205,6 +219,24 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0912, PLR09
         container=args.container,
         expiry_hours=args.expiry_hours,
     )
+
+    if args.upload:
+        # Upload from local to Azure
+        src_path = Path(args.upload)
+        if not src_path.exists():
+            msg = f"Upload path does not exist: {src_path}"
+            raise SystemExit(msg)
+        dst_prefix = args.dst.strip("/")
+        cmd = [
+            "azcopy",
+            "copy",
+            str(src_path),
+            f"https://{account}.blob.core.windows.net/{args.container}/{dst_prefix}?{sas}",
+            "--recursive=true",
+        ]
+        if args.dry_run:
+            return 0
+        return _run(cmd)
 
     src_prefix = args.src.strip("/")
 

@@ -240,13 +240,19 @@ class VectorDB:
             fatalities: int | None = None
             injuries: int | None = None
             metadata_json: str | None = None
-            publication_date: str | None = None
+            publication_date: datetime | None = None
 
         self.VectorDBSchema = VectorDBSchema
 
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
-        self.table = self._get_or_create_table()
+        self.table = self.get_or_create_table(
+            self.table_name, schema=self.VectorDBSchema
+        )
+        schema = pa.schema([f for f in self.table.schema if f.name != "vector"])
+        self.report_text_table = self.get_or_create_table(
+            self.report_text_table_name, schema=schema
+        )
 
         self.current_table_model = self.table.embedding_functions[
             "vector"
@@ -255,19 +261,13 @@ class VectorDB:
             msg = f"Existing table {self.table_name} has embedding function {self.current_table_model} which does not match the specified model {model_name}. Please specify a different table name or delete the existing table if you want to use a different embedding model."
             raise ValueError(msg)
 
-    def _get_or_create_table(self) -> Table:
-        """Get existing table or create new one.
+    @staticmethod
+    def _create_indices(table: Table) -> None:
+        """Create FTS and BTree indices on the document and document_id columns.
 
-        Returns:
-            The LanceDB table object.
+        Args:
+            table: The LanceDB table to create indices on.
         """
-        if self.table_name in self.db.list_tables().tables:
-            return self.db.open_table(self.table_name)
-        table = self.db.create_table(
-            self.table_name, data=None, schema=self.VectorDBSchema, mode="create"
-        )
-
-        # Create FTS index for text search
         try:
             table.create_index(
                 "document",
@@ -287,6 +287,24 @@ class VectorDB:
         except Exception as e:
             logger.warning(f"Could not create scalar index on document_id: {e}")
 
+    def get_or_create_table(
+        self, table_name: str, schema: pa.Schema | type[LanceModel]
+    ) -> Table:
+        """Get existing table or create new one with indices.
+
+        Args:
+            table_name: Name of the table in the database.
+            schema: PyArrow schema or LanceModel schema for the table.
+
+        Returns:
+            The LanceDB table object.
+        """
+        if table_name in self.db.list_tables().tables:
+            return self.db.open_table(table_name)
+        table = self.db.create_table(
+            table_name, data=None, schema=schema, mode="create"
+        )
+        self._create_indices(table)
         return table
 
     def tokenize_documents(
@@ -355,30 +373,17 @@ class VectorDB:
             logger.info("No report_text documents to upload.")
             return None
 
-        # Derive schema from the main vector table (same fields, no vector column)
-        main_schema = self.table.schema
-        report_text_fields = [f for f in main_schema if f.name != "vector"]
-        report_text_schema = pa.schema(report_text_fields)
-
-        cols = [f.name for f in report_text_schema]
+        cols = [f.name for f in self.report_text_table.schema]
         to_upsert = report_text_docs[cols].copy()
-        pa_table = pa.Table.from_pandas(to_upsert, schema=report_text_schema)
+        pa_table = pa.Table.from_pandas(to_upsert, schema=self.report_text_table.schema)
 
-        if self.report_text_table_name in self.db.list_tables().tables:
-            table = self.db.open_table(self.report_text_table_name)
-        else:
-            table = self.db.create_table(
-                self.report_text_table_name, schema=report_text_schema, mode="create"
-            )
+        pre_row_count = self.report_text_table.count_rows()
 
-        pre_row_count = table.count_rows()
+        self.report_text_table.merge_insert(
+            "document_id"
+        ).when_not_matched_insert_all().execute(pa_table)
 
-        table.merge_insert("document_id").when_not_matched_insert_all().execute(
-            pa_table
-        )
-
-        # Calculate the number of rows that were actually inserted by looking at the count of rows in the table after the merge insert
-        inserted_rows_count = table.count_rows()
+        inserted_rows_count = self.report_text_table.count_rows()
         logger.info(
             f"Inserted {inserted_rows_count - pre_row_count} new report_text documents out of a total of {len(to_upsert)} documents into {self.report_text_table_name}."
         )
