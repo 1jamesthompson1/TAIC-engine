@@ -27,7 +27,7 @@ from lancedb.table import Table
 from tqdm import tqdm
 
 from engine.Logging import get_logger
-from engine.SavedDataFrames import DataForVectorDB, VectorDBDocumentIDs
+from engine.SavedDataFrames import DataForVectorDB
 
 logger = get_logger(__name__)
 
@@ -489,7 +489,11 @@ class VectorDB:
 
         def add_batch(batch_df: pd.DataFrame) -> object:
             pa_table = pa.Table.from_pandas(batch_df, schema=lance_schema)
-            return self.table.add(pa_table, mode="append")
+            return (
+                self.table.merge_insert("document_id")
+                .when_not_matched_insert_all()
+                .execute(pa_table)
+            )
 
         with ThreadPoolExecutor(max_workers=num_batches) as executor:
             future_to_ids = {
@@ -504,7 +508,6 @@ class VectorDB:
     def process_extracted_reports(
         self,
         complete_data_dc: DataForVectorDB,
-        already_embedded_ids_dc: VectorDBDocumentIDs,
     ) -> None:
         """Process extracted reports and generate embeddings.
 
@@ -512,15 +515,16 @@ class VectorDB:
         the main vector table. report_text documents should be uploaded separately
         via upload_report_text_table() before calling this.
 
+        Uses the vector table itself to track which document IDs have already been
+        embedded, so it's safe to call multiple times.
+
         Args:
             complete_data_dc: The complete data for vector database insertion.
-            already_embedded_ids_dc: A list of document IDs that have already been embedded.
         """
         logger.welcome(
             "Embedding Reports",
             {
                 "complete_data_dc": complete_data_dc.path,
-                "already_embedded_ids_dc": already_embedded_ids_dc.path,
                 "table_name": self.table_name,
                 "db_uri": self.db.uri,
                 "model_name": self.current_table_model,
@@ -530,14 +534,32 @@ class VectorDB:
 
         complete_data = complete_data_dc.read()
 
-        already_embedded_ids = already_embedded_ids_dc.read_or_create()["document_id"]
+        dupe_ids = complete_data["document_id"].value_counts()
+        dupe_ids = dupe_ids[dupe_ids > 1]
+        if len(dupe_ids) > 0:
+            logger.warning(
+                f"complete_data has {len(dupe_ids)} duplicate document_ids "
+                f"({dupe_ids.sum() - len(dupe_ids)} extra rows). "
+                "Keeping last occurrence per document_id."
+            )
+            complete_data = (
+                complete_data.groupby("document_id", sort=False)
+                .tail(1)
+                .reset_index(drop=True)
+            )
+
+        already_embedded_ids = pd.Series(
+            self.table.search()
+            .select(["document_id"])
+            .to_pandas()["document_id"]
+            .unique()
+        )
 
         if len(already_embedded_ids) == 0:
             logger.warning(
-                f"No already embedded document IDs found, starting fresh embedding process. If you have previously embedded documents, make sure to save the document IDs to {already_embedded_ids_dc.path} to avoid re-embedding."
+                "No documents found in vector table, starting fresh embedding process."
             )
 
-        # Not using merge_insert as it will then compute the embedding of all items to merge first before checking if they are already in the table.
         data_to_add = complete_data[
             ~complete_data["document_id"].isin(already_embedded_ids)
         ]
@@ -554,12 +576,8 @@ class VectorDB:
         try:
             for batch_ids in self.add_documents(data_to_embed):
                 all_added_ids.append(batch_ids)
-                already_embedded_ids = pd.concat([already_embedded_ids, batch_ids])
                 logger.info(
-                    f"Added {len(batch_ids)} documents to the vector database table {self.table_name}. Total embedded documents: {len(already_embedded_ids)}"
-                )
-                already_embedded_ids_dc.save(
-                    pd.DataFrame({"document_id": already_embedded_ids})
+                    f"Added {len(batch_ids)} documents to the vector database table {self.table_name}."
                 )
         except Exception:
             saved_count = len(pd.concat(all_added_ids)) if all_added_ids else 0
@@ -571,7 +589,7 @@ class VectorDB:
 
         total_added = len(pd.concat(all_added_ids))
         logger.info(
-            f"Added {total_added} documents to the vector database table {self.table_name}. There are now {len(already_embedded_ids)} total embedded documents."
+            f"Added {total_added} documents to the vector database table {self.table_name}."
         )
 
         logger.info("Finished embedding all reports.")

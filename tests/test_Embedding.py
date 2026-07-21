@@ -30,7 +30,7 @@ def test_upload_report_text_table(tmp_path: object) -> None:
                 "fatalities": 0,
                 "injuries": 1,
                 "agency_id": "TAIC",
-                "publication_date": "2024-06-01",
+                "publication_date": datetime(2024, 6, 1),
                 "mode": "m",
                 "year": 2024,
                 "agency": "TAIC",
@@ -89,7 +89,6 @@ def test_basic_embedding(tmp_path: object) -> None:
         return result
 
     complete_data_dc = SavedDataFrames.DataForVectorDB(tmp_path)
-    already_embedded_ids_dc = SavedDataFrames.VectorDBDocumentIDs(tmp_path)
 
     complete_data = pd.DataFrame(
         [
@@ -106,7 +105,7 @@ def test_basic_embedding(tmp_path: object) -> None:
                 "fatalities": 0,
                 "injuries": 1,
                 "agency_id": "TAIC",
-                "publication_date": "2024-06-01",
+                "publication_date": datetime(2024, 6, 1),
                 "mode": "m",
                 "year": 2024,
                 "agency": "TAIC",
@@ -124,7 +123,7 @@ def test_basic_embedding(tmp_path: object) -> None:
                 "fatalities": 0,
                 "injuries": 0,
                 "agency_id": "TAIC",
-                "publication_date": "2024-07-15",
+                "publication_date": datetime(2024, 7, 15),
                 "mode": "a",
                 "year": 2024,
                 "agency": "TAIC",
@@ -152,11 +151,18 @@ def test_basic_embedding(tmp_path: object) -> None:
 
             vector_db.process_extracted_reports(
                 complete_data_dc,
-                already_embedded_ids_dc,
             )
 
         assert vector_db.table_name in vector_db.db.list_tables().tables
         assert vector_db.table.count_rows() == len(complete_data)
+
+        stored_ids = (
+            vector_db.table.search()
+            .select(["document_id"])
+            .to_pandas()["document_id"]
+            .tolist()
+        )
+        assert sorted(stored_ids) == sorted(complete_data["document_id"].tolist())
 
         azure_embeddings = (
             Embedding.EmbeddingFunctionRegistry.get_instance()
@@ -168,10 +174,6 @@ def test_basic_embedding(tmp_path: object) -> None:
         assert all(
             len(e) == expected_dim for e in generated_embeddings
         ), f"Expected embeddings of length {expected_dim}, got {[len(e) for e in generated_embeddings][:5]}"
-
-        saved_ids = already_embedded_ids_dc.read()
-        assert len(saved_ids) == len(complete_data)
-        assert set(saved_ids["document_id"]) == set(complete_data["document_id"])
 
     finally:
         if vector_db is not None:

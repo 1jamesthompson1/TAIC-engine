@@ -221,6 +221,17 @@ def combine_recommendations(
         axis=0,
     )
 
+    combined_recs["recommendation_id"] = combined_recs["recommendation_id"].astype(
+        "string"
+    )
+
+    # For recommendations with None recommendation_id (e.g. ATSB without discrete IDs),
+    # generate a sequential ID within each report group.
+    generated_ids = combined_recs.groupby("report_id").cumcount() + 1
+    combined_recs["recommendation_id"] = combined_recs["recommendation_id"].fillna(
+        generated_ids.astype(str)
+    )
+
     combined_recs["document_id"] = combined_recs.apply(
         lambda row: create_document_id(
             row["report_id"], "rec", row["recommendation_id"]
@@ -293,6 +304,18 @@ def combine_safety_issues(
         lambda row: create_document_id(row["report_id"], "si", row["safety_issue_id"]),
         axis=1,
     )
+
+    # If safety_issue_id collisions exist within a report (e.g. two issues with id "002/11"),
+    # disambiguate by appending _1, _2 etc.
+    dup_mask = combined_si.duplicated(
+        subset=["report_id", "safety_issue_id"], keep=False
+    )
+    if dup_mask.any():
+        combined_si.loc[dup_mask, "document_id"] = (
+            combined_si.loc[dup_mask]
+            .groupby("report_id")["document_id"]
+            .transform(lambda g: [f"{val}_{i + 1}" for i, val in enumerate(g)])
+        )
 
     final_si = combined_si[["report_id", "document_id"]].copy()
 
@@ -401,6 +424,15 @@ def create_long_data_format(
     _log_null_metadata_counts(long_format)
 
     long_format = long_format[long_data_format_dc._effective_columns]
+
+    dupe_ids = long_format["document_id"].value_counts()
+    dupe_ids = dupe_ids[dupe_ids > 1]
+    if len(dupe_ids) > 0:
+        logger.warning(
+            f"Long format data has {len(dupe_ids)} duplicate document_ids "
+            f"({dupe_ids.sum() - len(dupe_ids)} extra rows).\n"
+            f"Top dupes:\n{dupe_ids.head(10).to_string()}"
+        )
 
     long_data_format_dc.save(long_format)
 

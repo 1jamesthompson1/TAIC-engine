@@ -229,7 +229,6 @@ def embed(output_dir: Path, config: dict, refresh: bool) -> None:
         refresh (bool): Whether to refresh cached data and reprocess sources.
     """
     data_dc = SavedDataFrames.DataForVectorDB(output_dir)
-    ids_dc = SavedDataFrames.VectorDBDocumentIDs(output_dir)
 
     Combine.create_long_data_format(
         Combine.LongDataFormatDCs(
@@ -258,7 +257,7 @@ def embed(output_dir: Path, config: dict, refresh: bool) -> None:
 
     vector_db.upload_report_text_table(data_dc)
 
-    vector_db.process_extracted_reports(data_dc, ids_dc)
+    vector_db.process_extracted_reports(data_dc)
 
 
 def upload(container_name: str, output_dir: Path, output_config: dict) -> None:

@@ -366,23 +366,6 @@ class TAICWebsiteReportsTable(SavedDataFrame):
         publication_date: datetime
 
 
-class VectorDBDocumentIDs(SavedDataFrame):
-    """Manages the tracking file for documents embedded in the vector database.
-
-    Stores document IDs that have been successfully embedded and added to the
-    vector database to avoid re-embedding on subsequent runs.
-    """
-
-    filename = "vector_db_document_ids.pkl"
-
-    class Row(BaseModel):
-        """Schema for a single row in the vector database document IDs dataframe."""
-
-        document_id: str = Field(
-            ..., description="Document ID embedded in vector database"
-        )
-
-
 class DataForVectorDB(SavedDataFrame):
     """SavedDataFrame for the long-format canonical document rows."""
 
