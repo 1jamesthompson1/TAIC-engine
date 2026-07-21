@@ -7,7 +7,7 @@ database and embedding them for search and analysis.
 import os
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import ClassVar
 
 import lancedb
@@ -593,9 +593,13 @@ class VectorDB:
         )
 
         logger.info("Finished embedding all reports.")
-        self.table.optimize(cleanup_older_than=timedelta(days=14))
         tag_name = f"engine-run-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.table.tags.create(tag_name, self.table.version)
+        logger.info(f"Tagged version {self.table.version} as '{tag_name}'.")
+        # Using these deprecated methods as bug in 0.34: https://github.com/lance-format/lance/issues/7653 wiating for 0.35 release to fix it
+        self.table.cleanup_old_versions()
+        self.table.compact_files()
+        # self.table.optimize(cleanup_older_than=timedelta(days=14))  # noqa: ERA001
         logger.info(
-            f"Optimized the table. Tagged version {self.table.version} as '{tag_name}'."
+            f"Optimized table {self.table_name} by cleaning up old versions and compacting files."
         )
