@@ -1,0 +1,1329 @@
+[
+  {
+    "id": "Air accident with complete aircraft and pilot metadata",
+    "report_id": "TAIC_a_2023_011",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2023-10-03T21:25",
+          "time_zone": "UTC+13:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Ardmore Aerodrome",
+          "standardized_location": "Ardmore Aerodrome, Ardmore, Auckland, New Zealand"
+        },
+        "occurrence_type": "Aircraft separation",
+        "total_persons_involved": 6,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "nil",
+        "who_may_benefit": "Aerodrome operators, aircraft owners and all pilots may benefit from reading this report."
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Aeroplane",
+          "registration": "ZK-JED",
+          "make": "Beech",
+          "model": "76 Duchess",
+          "number_of_engines": 2,
+          "type_of_engines": "piston",
+          "year_manufactured": 1981,
+          "operator": "Private",
+          "flight_type": "training",
+          "persons_on_board_total": 3,
+          "persons_on_board_crew": 2,
+          "persons_on_board_passengers": 1,
+          "damage": "nil",
+          "pilots": [
+            {
+              "role": "Student Pilot",
+              "licence": "Air Transport Pilot Licence (Aeroplane)",
+              "age": 66,
+              "total_flying_experience": 21000,
+              "experience_on_type": null,
+              "responsibility": "Pilot flying"
+            },
+            {
+              "role": "Instructor",
+              "licence": "Air Transport Pilot Licence (Aeroplane)",
+              "age": 52,
+              "total_flying_experience": 14700,
+              "experience_on_type": null,
+              "responsibility": "Pilot monitoring"
+            }
+          ]
+        },
+        {
+          "aircraft_type": "Aeroplane",
+          "registration": "ZK-WFS",
+          "make": "Cessna",
+          "model": "172M",
+          "number_of_engines": 1,
+          "type_of_engines": "piston",
+          "year_manufactured": 1973,
+          "operator": "Private",
+          "flight_type": "private",
+          "persons_on_board_total": 3,
+          "persons_on_board_crew": 1,
+          "persons_on_board_passengers": 2,
+          "damage": "nil",
+          "pilots": [
+            {
+              "role": "Sole Pilot",
+              "licence": "Commercial Pilot Licence (Aeroplane)",
+              "age": 20,
+              "total_flying_experience": 256,
+              "experience_on_type": null,
+              "responsibility": "Pilot flying"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "TSB runway excursion with one aircraft and two pilots",
+    "report_id": "TSB_a_2020_C0016",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2020-02-24T16:10",
+          "time_zone": "UTC-06:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Dryden Regional Airport (CYHD), Ontario",
+          "standardized_location": "Dryden Regional Airport, Dryden, Ontario, Canada"
+        },
+        "occurrence_type": "Runway events",
+        "total_persons_involved": 8,
+        "fatalities": 0,
+        "injuries": 1,
+        "damage_description": "substantial damage: propellers both damaged; fuselage panels and skins penetrated; engine mounts fractured; nacelles distorted.",
+        "who_may_benefit": null
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Aeroplane",
+          "registration": "C-GJVB",
+          "make": "Fairchild Aircraft",
+          "model": "SA227-DC Metro 23",
+          "number_of_engines": 2,
+          "type_of_engines": "turboprop",
+          "year_manufactured": 2000,
+          "operator": "Perimeter Aviation LP",
+          "flight_type": "scheduled service",
+          "persons_on_board_total": 8,
+          "persons_on_board_crew": 2,
+          "persons_on_board_passengers": 6,
+          "damage": "substantial damage",
+          "pilots": [
+            {
+              "role": "Captain",
+              "licence": "Air Transport Pilot Licence (Aeroplane)",
+              "age": null,
+              "total_flying_experience": 20000,
+              "experience_on_type": 19000,
+              "responsibility": "Pilot monitoring"
+            },
+            {
+              "role": "First Officer",
+              "licence": "Commercial Pilot Licence (Aeroplane)",
+              "age": null,
+              "total_flying_experience": 270,
+              "experience_on_type": 15,
+              "responsibility": "Pilot flying"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "TSB fuel starvation forced landing with one aircraft and two pilots",
+    "report_id": "TSB_a_2021_W0098",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2021-11-01T18:51",
+          "time_zone": "UTC-06:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Fort Providence, Northwest Territories, 6.7 NM NW",
+          "standardized_location": "6.7 NM NW of Fort Providence Aerodrome, Fort Providence, Northwest Territories, Canada"
+        },
+        "occurrence_type": "Forced / Precautionary landing",
+        "total_persons_involved": 5,
+        "fatalities": 0,
+        "injuries": 5,
+        "damage_description": "substantial damage: nose bulkhead distorted; nose landing gear displaced rearward.",
+        "who_may_benefit": null
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Aeroplane",
+          "registration": "C-GNPS",
+          "make": "de Havilland",
+          "model": "DHC-6-300 Twin Otter",
+          "number_of_engines": 2,
+          "type_of_engines": "turboprop",
+          "year_manufactured": 1977,
+          "operator": "Air Tindi Ltd.",
+          "flight_type": "charter",
+          "persons_on_board_total": 5,
+          "persons_on_board_crew": 2,
+          "persons_on_board_passengers": 3,
+          "damage": "substantial damage",
+          "pilots": [
+            {
+              "role": "Captain",
+              "licence": "Air Transport Pilot Licence (Aeroplane)",
+              "age": null,
+              "total_flying_experience": 6397,
+              "experience_on_type": 2945,
+              "responsibility": "Pilot flying"
+            },
+            {
+              "role": "First Officer",
+              "licence": "Commercial Pilot Licence (Aeroplane)",
+              "age": null,
+              "total_flying_experience": 435,
+              "experience_on_type": 85,
+              "responsibility": "Pilot monitoring"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "TAIC ATC loss of separation incident with no aircraft",
+    "report_id": "TAIC_a_2015_009",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2015-12-17T12:13",
+          "time_zone": "UTC+13:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Hamilton Aerodrome",
+          "standardized_location": "Hamilton aerodrome, Hamilton, Waikato, New Zealand"
+        },
+        "occurrence_type": "Aircraft separation",
+        "total_persons_involved": 5,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "nil",
+        "who_may_benefit": null
+      },
+      "aircraft": []
+    }
+  },
+  {
+    "id": "TAIC cabin depressurisation event with one aircraft",
+    "report_id": "TAIC_a_2013_008",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2013-08-30T08:19",
+          "time_zone": "UTC+12:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "En route, near Raglan, Waikato",
+          "standardized_location": "En route, Raglan, Waikato, New Zealand"
+        },
+        "occurrence_type": "Systems",
+        "total_persons_involved": 81,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "nil",
+        "who_may_benefit": null
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Aeroplane",
+          "registration": "ZK-NGI",
+          "make": "Boeing",
+          "model": "737-319",
+          "number_of_engines": 2,
+          "type_of_engines": "turbofan",
+          "year_manufactured": 1999,
+          "operator": "Air New Zealand Limited",
+          "flight_type": "scheduled service",
+          "persons_on_board_total": 81,
+          "persons_on_board_crew": 5,
+          "persons_on_board_passengers": 76,
+          "damage": "nil",
+          "pilots": [
+            {
+              "role": "Captain",
+              "licence": "Air Transport Pilot Licence (Aeroplane)",
+              "age": 44,
+              "total_flying_experience": 12100,
+              "experience_on_type": 5200,
+              "responsibility": "Pilot monitoring"
+            },
+            {
+              "role": "Captain",
+              "licence": null,
+              "age": null,
+              "total_flying_experience": 10800,
+              "experience_on_type": 3500,
+              "responsibility": "Pilot flying"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "TAIC air proximity event with two aircraft and nested pilots",
+    "report_id": "TAIC_a_2023_008",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2023-08-28T10:06",
+          "time_zone": "UTC+12:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Above and near to the township of Brynderwyn latitude: 36\u00b0 5'54.60\"S longitude: 174\u00b029'42.22\"E",
+          "standardized_location": "En route, Brynderwyn, Northland, New Zealand"
+        },
+        "occurrence_type": "Aircraft separation",
+        "total_persons_involved": 42,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "nil",
+        "who_may_benefit": "All aviation participants may benefit from the findings and recommendations in this report."
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Aeroplane",
+          "registration": "ZK-NES",
+          "make": "de Havilland/Bombardier",
+          "model": "DHC-8-311",
+          "number_of_engines": 2,
+          "type_of_engines": "turboprop",
+          "year_manufactured": 2007,
+          "operator": "Air New Zealand",
+          "flight_type": "scheduled service",
+          "persons_on_board_total": 40,
+          "persons_on_board_crew": 2,
+          "persons_on_board_passengers": 38,
+          "damage": "nil",
+          "pilots": [
+            {
+              "role": "Captain",
+              "licence": "Air Transport Pilot Licence (Aeroplane)",
+              "age": 37,
+              "total_flying_experience": 2800,
+              "experience_on_type": null,
+              "responsibility": "Pilot flying"
+            },
+            {
+              "role": "First Officer",
+              "licence": "Commercial Pilot Licence (Aeroplane)",
+              "age": 41,
+              "total_flying_experience": 1700,
+              "experience_on_type": 214,
+              "responsibility": "Pilot monitoring"
+            }
+          ]
+        },
+        {
+          "aircraft_type": "Aeroplane",
+          "registration": "ZK-JED",
+          "make": "Beech",
+          "model": "76 Duchess",
+          "number_of_engines": 2,
+          "type_of_engines": "piston",
+          "year_manufactured": 1981,
+          "operator": "Private",
+          "flight_type": "training",
+          "persons_on_board_total": 2,
+          "persons_on_board_crew": 2,
+          "persons_on_board_passengers": 0,
+          "damage": "nil",
+          "pilots": [
+            {
+              "role": "Instructor",
+              "licence": "Air Transport Pilot Licence (Aeroplane)",
+              "age": 53,
+              "total_flying_experience": 14950,
+              "experience_on_type": null,
+              "responsibility": "Pilot monitoring"
+            },
+            {
+              "role": "Student Pilot",
+              "licence": "Commercial Pilot Licence (Aeroplane)",
+              "age": 23,
+              "total_flying_experience": 315,
+              "experience_on_type": null,
+              "responsibility": "Pilot flying"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "ATSB loss of separation in hold with two Boeing 737s",
+    "report_id": "ATSB_a_2011_090",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2011-07-29T07:56",
+          "time_zone": "UTC+10:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "BLAKA, 93 km south-south-east of Brisbane Airport, Queensland",
+          "standardized_location": "BLAKA, Brisbane, Queensland, Australia"
+        },
+        "occurrence_type": "Aircraft separation",
+        "total_persons_involved": 4,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "nil",
+        "who_may_benefit": null
+      },
+      "aircraft": []
+    }
+  },
+  {
+    "id": "ATSB Robinson R22 loss of tail rotor effectiveness collision with terrain near Springsure",
+    "report_id": "ATSB_a_2012_032",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2012-02-21T09:00",
+          "time_zone": "UTC+10:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "95 km SW of Springsure ALA, Queensland",
+          "standardized_location": "95 km SW of Springsure ALA, Springsure, Queensland, Australia"
+        },
+        "occurrence_type": "Terrain collisions",
+        "total_persons_involved": 1,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "serious damage: helicopter rolled over on landing.",
+        "who_may_benefit": null
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Helicopter",
+          "registration": "VH-HRY",
+          "make": "Robinson",
+          "model": "R22 Beta",
+          "number_of_engines": 1,
+          "type_of_engines": "piston",
+          "year_manufactured": null,
+          "operator": null,
+          "flight_type": "aerial work",
+          "persons_on_board_total": 1,
+          "persons_on_board_crew": 1,
+          "persons_on_board_passengers": 0,
+          "damage": "substantial damage",
+          "pilots": [
+            {
+              "role": "Sole Pilot",
+              "licence": "Commercial Pilot Licence (Helicopter)",
+              "age": null,
+              "total_flying_experience": 2600,
+              "experience_on_type": 1150,
+              "responsibility": "Pilot flying"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "ATSB McDonnell Douglas 369D fuel exhaustion and collision with terrain near Hawker SA",
+    "report_id": "ATSB_a_2016_078",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2016-07-17T10:39",
+          "time_zone": "UTC+09:30",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "36 km north-west of Hawker, South Australia",
+          "standardized_location": "36 km NW of Hawker, Hawker, South Australia, Australia"
+        },
+        "occurrence_type": "Terrain collisions",
+        "total_persons_involved": 3,
+        "fatalities": 0,
+        "injuries": 3,
+        "damage_description": "substantial damage: helicopter fuel exhaustion and collision with terrain.",
+        "who_may_benefit": null
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Helicopter",
+          "registration": "VH-PLY",
+          "make": "McDonnell Douglas",
+          "model": "369D",
+          "number_of_engines": 1,
+          "type_of_engines": "turboshaft",
+          "year_manufactured": 1981,
+          "operator": null,
+          "flight_type": "aerial work",
+          "persons_on_board_total": 3,
+          "persons_on_board_crew": 3,
+          "persons_on_board_passengers": 0,
+          "damage": "substantial damage",
+          "pilots": [
+            {
+              "role": "Sole Pilot",
+              "licence": "Commercial Pilot Licence (Helicopter)",
+              "age": null,
+              "total_flying_experience": 6679,
+              "experience_on_type": null,
+              "responsibility": "Pilot flying"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "ATSB Cessna 510 runway excursion at Bankstown Airport",
+    "report_id": "ATSB_a_2025_002",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2025-01-11T11:56",
+          "time_zone": "UTC+11:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Bankstown Airport, New South Wales",
+          "standardized_location": "Bankstown Airport, Bankstown, New South Wales, Australia"
+        },
+        "occurrence_type": "Runway events",
+        "total_persons_involved": 3,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "nil",
+        "who_may_benefit": null
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Aeroplane",
+          "registration": "VH-SQY",
+          "make": "Cessna",
+          "model": "510 Mustang",
+          "number_of_engines": 2,
+          "type_of_engines": "turbofan",
+          "year_manufactured": 2010,
+          "operator": "AirMed Australia",
+          "flight_type": "emergency services",
+          "persons_on_board_total": 3,
+          "persons_on_board_crew": 2,
+          "persons_on_board_passengers": 1,
+          "damage": "nil",
+          "pilots": [
+            {
+              "role": "Sole Pilot",
+              "licence": "Air Transport Pilot Licence (Aeroplane)",
+              "age": null,
+              "total_flying_experience": 6954,
+              "experience_on_type": 133,
+              "responsibility": "Pilot flying"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "TAIC i-Catcher capsize with vessel metadata",
+    "report_id": "TAIC_m_2022_206",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2022-09-10T10:05",
+          "time_zone": "UTC+12:00",
+          "time_zone_source": "inferred"
+        },
+        "location": {
+          "description": "Goose Bay, New Zealand",
+          "standardized_location": "Goose Bay, Kaik\u014dura, Canterbury, New Zealand"
+        },
+        "occurrence_type": "Capsizing/listing",
+        "total_persons_involved": 11,
+        "fatalities": 5,
+        "injuries": 3,
+        "damage_description": "damage: hull damaged; machinery and electrical systems lost.",
+        "who_may_benefit": "All mariners, maritime regulatory agencies, industry stakeholders, recreational boaters, lifejacket manufacturers and their consumers, and agencies and operators involved in search and rescue operations."
+      },
+      "vessels": [
+        {
+          "vessel_name": "i-Catcher",
+          "vessel_type": "recreational",
+          "classification": "unclassed",
+          "length": 8.0,
+          "breadth": null,
+          "gross_tonnage": null,
+          "manufacturer": "Kiwi Engineering & Marine Limited",
+          "manufacturer_model": "820 Hardtop",
+          "year_built": 2003,
+          "propulsion": null,
+          "total_power": 171.5,
+          "service_speed": 20,
+          "owner_operator": "Fish Kaikoura 2011 Limited",
+          "port_of_registry": "Kaikoura, New Zealand",
+          "primary_port": "Kaikoura, New Zealand"
+        }
+      ]
+    }
+  },
+  {
+    "id": "TAIC Shiling incidents with vessel metadata",
+    "report_id": "TAIC_m_2023_203",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2023-04-15T08:09",
+          "time_zone": "UTC+12:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Wellington Harbour and off Farewell Spit, New Zealand",
+          "standardized_location": "Wellington Harbour and off Farewell Spit, Wellington, Wellington, New Zealand"
+        },
+        "occurrence_type": "Machinery failure",
+        "total_persons_involved": 24,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "minor damage: cracked cylinder liner in generator 2; generators and associated machinery required repair",
+        "who_may_benefit": "All ship owners and operators (including ship managers), port state [8], and flag state [9] regulators, classification societies, insurance providers and deck and engineering officers may benefit from the findings of this inquiry."
+      },
+      "vessels": [
+        {
+          "vessel_name": "Shiling",
+          "vessel_type": "container",
+          "classification": "Lloyd's Register",
+          "length": 294.4,
+          "breadth": 32.2,
+          "gross_tonnage": 53807,
+          "manufacturer": "HD Hyundai Heavy Industries",
+          "manufacturer_model": null,
+          "year_built": 2005,
+          "propulsion": "diesel",
+          "total_power": 45760,
+          "service_speed": 25,
+          "owner_operator": "Shiling Navigation Pte. Ltd./Asian-Alliance Ship Management",
+          "port_of_registry": "Singapore",
+          "primary_port": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "ATSB Adonis capsize at Gladstone with vessel metadata",
+    "report_id": "ATSB_m_2011_005",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2011-06-11T12:46",
+          "time_zone": "UTC+10:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "at the southern end of the Targinie Channel, Gladstone, Queensland, Australia",
+          "standardized_location": "Port of Gladstone, Gladstone, Queensland, Australia"
+        },
+        "occurrence_type": "Capsizing/listing",
+        "total_persons_involved": 8,
+        "fatalities": 1,
+        "injuries": 0,
+        "damage_description": "substantial damage: Adonis capsized, later sank and was eventually scrapped; Wolli's port bow push-plate was damaged.",
+        "who_may_benefit": null
+      },
+      "vessels": [
+        {
+          "vessel_name": "Adonis",
+          "vessel_type": "tug",
+          "classification": "DNV",
+          "length": 21.3,
+          "breadth": 6.72,
+          "gross_tonnage": 91,
+          "manufacturer": "Mofaz Marine, Malaysia",
+          "manufacturer_model": null,
+          "year_built": 1995,
+          "propulsion": "diesel",
+          "total_power": 544,
+          "service_speed": 9,
+          "owner_operator": "Sea Swift, Cairns",
+          "port_of_registry": "Cairns",
+          "primary_port": null
+        },
+        {
+          "vessel_name": "Wolli",
+          "vessel_type": "tug",
+          "classification": "Lloyd's Register",
+          "length": 29.88,
+          "breadth": 9.73,
+          "gross_tonnage": 223,
+          "manufacturer": "Carrington Slipway, Newcastle, Australia",
+          "manufacturer_model": null,
+          "year_built": 1970,
+          "propulsion": "diesel",
+          "total_power": 1398,
+          "service_speed": 9,
+          "owner_operator": "Sea Swift, Cairns",
+          "port_of_registry": "Sydney",
+          "primary_port": null
+        },
+        {
+          "vessel_name": "Chrysus",
+          "vessel_type": "barge",
+          "classification": "DNV",
+          "length": 54.86,
+          "breadth": 15.26,
+          "gross_tonnage": null,
+          "manufacturer": "Yangzhou Hanjiang Juidian Eastern Shipyard, China",
+          "manufacturer_model": null,
+          "year_built": 2009,
+          "propulsion": null,
+          "total_power": null,
+          "service_speed": null,
+          "owner_operator": "Sea Swift",
+          "port_of_registry": "Australia",
+          "primary_port": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "ATSB APL England container loss with vessel metadata",
+    "report_id": "ATSB_m_2020_002",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2020-05-24T06:10",
+          "time_zone": "UTC+10:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "46 NM south-east of Sydney, New South Wales",
+          "standardized_location": "46 NM south-east of Sydney, Sydney, New South Wales, Australia"
+        },
+        "occurrence_type": "Damage to ship or equipment",
+        "total_persons_involved": 25,
+        "fatalities": 0,
+        "injuries": 1,
+        "damage_description": "damage: 50 containers lost overboard; 63 containers damaged and remaining on board; vessel structure damaged.",
+        "who_may_benefit": null
+      },
+      "vessels": [
+        {
+          "vessel_name": "APL England",
+          "vessel_type": "container",
+          "classification": "DNV",
+          "length": 277.255,
+          "breadth": 40.0,
+          "gross_tonnage": 65792,
+          "manufacturer": "Samsung Heavy Industries (South Korea)",
+          "manufacturer_model": null,
+          "year_built": 2001,
+          "propulsion": "diesel",
+          "total_power": 55659,
+          "service_speed": 25,
+          "owner_operator": "CMB Ocean 13 Leasing Company / CMA CGM International Shipping Company",
+          "port_of_registry": "Singapore",
+          "primary_port": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "ATSB Leeuwin II groundings with vessel metadata",
+    "report_id": "ATSB_m_2005_217",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2005-07-22T16:00",
+          "time_zone": "UTC+08:00",
+          "time_zone_source": "inferred"
+        },
+        "location": {
+          "description": "Prince Frederick Harbour, Western Australia",
+          "standardized_location": "Prince Frederick Harbour and Shark Bay, Kimberley and Denham, Western Australia, Australia"
+        },
+        "occurrence_type": "Grounding/stranding",
+        "total_persons_involved": 53,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "minor damage: grounded on uncharted shoals on two occasions; hull minor paint loss and shell plate deformation after first grounding.",
+        "who_may_benefit": null
+      },
+      "vessels": [
+        {
+          "vessel_name": "Leeuwin II",
+          "vessel_type": "passenger",
+          "classification": "unclassed",
+          "length": 55.0,
+          "breadth": 9.01,
+          "gross_tonnage": null,
+          "manufacturer": "Australian Shipbuilding Industries",
+          "manufacturer_model": null,
+          "year_built": 1986,
+          "propulsion": "wind",
+          "total_power": 400,
+          "service_speed": 7,
+          "owner_operator": "Leeuwin Ocean Adventure Foundation, Fremantle",
+          "port_of_registry": "Fremantle, Western Australia",
+          "primary_port": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "TSB Tyhawk capsizing in Gulf of St. Lawrence with vessel metadata",
+    "report_id": "TSB_m_2021_A0065",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2021-04-03T17:42",
+          "time_zone": "UTC-03:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Gulf of St. Lawrence, 20 nautical miles west of Ch\u00e9ticamp, Nova Scotia",
+          "standardized_location": "Gulf of St. Lawrence, Ch\u00e9ticamp, Nova Scotia, Canada"
+        },
+        "occurrence_type": "Capsizing/listing",
+        "total_persons_involved": 5,
+        "fatalities": 2,
+        "injuries": 0,
+        "damage_description": "capsized: vessel capsized and sank.",
+        "who_may_benefit": null
+      },
+      "vessels": [
+        {
+          "vessel_name": "Tyhawk",
+          "vessel_type": "fishing",
+          "classification": "unclassed",
+          "length": 13.61,
+          "breadth": null,
+          "gross_tonnage": 15.23,
+          "manufacturer": "Guimond Boats Ltd.",
+          "manufacturer_model": null,
+          "year_built": 2001,
+          "propulsion": "diesel",
+          "total_power": 366,
+          "service_speed": null,
+          "owner_operator": "Elsipogtog First Nation",
+          "port_of_registry": "Moncton, NB",
+          "primary_port": "Richibucto, New Brunswick"
+        }
+      ]
+    }
+  },
+  {
+    "id": "TSB Kitano container fire off Chebucto Head with vessel metadata",
+    "report_id": "TSB_m_2001_M0017",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2001-03-22T16:00",
+          "time_zone": "UTC-04:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Off Chebucto Head, Nova Scotia",
+          "standardized_location": "Off Chebucto Head, Halifax, Nova Scotia, Canada"
+        },
+        "occurrence_type": "Fire/explosion",
+        "total_persons_involved": 22,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "fire damage: 15 containers fire damaged; no structural damage to vessel.",
+        "who_may_benefit": null
+      },
+      "vessels": [
+        {
+          "vessel_name": "Kitano",
+          "vessel_type": "container",
+          "classification": null,
+          "length": 288.31,
+          "breadth": null,
+          "gross_tonnage": 50618,
+          "manufacturer": "Koyo Dockyard Company Limited",
+          "manufacturer_model": null,
+          "year_built": 1990,
+          "propulsion": "diesel",
+          "total_power": 31538,
+          "service_speed": null,
+          "owner_operator": "Nippon Yusen Kabushiki Kaisha",
+          "port_of_registry": "Tokyo, Japan",
+          "primary_port": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "TSB Strait Air Islander loss of control near Port Hope Simpson",
+    "report_id": "TSB_a_2009_A0036",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2009-06-07T06:50",
+          "time_zone": "UTC-02:30",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Port Hope Simpson, Newfoundland and Labrador 4 nm W",
+          "standardized_location": "4 nm W of Port Hope Simpson Airport, Port Hope Simpson, Newfoundland and Labrador, Canada"
+        },
+        "occurrence_type": "Terrain collisions",
+        "total_persons_involved": 1,
+        "fatalities": 1,
+        "injuries": 0,
+        "damage_description": "destroyed: aircraft destroyed by impact forces and severe post-crash fire.",
+        "who_may_benefit": null
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Aeroplane",
+          "registration": "C-FJJR",
+          "make": "Britten-Norman",
+          "model": "BN.2A-27 Islander",
+          "number_of_engines": 2,
+          "type_of_engines": "piston",
+          "year_manufactured": null,
+          "operator": "Strait Air 2000 Ltd.",
+          "flight_type": "emergency services",
+          "persons_on_board_total": 1,
+          "persons_on_board_crew": 1,
+          "persons_on_board_passengers": 0,
+          "damage": "destroyed",
+          "pilots": [
+            {
+              "role": "Sole Pilot",
+              "licence": "Commercial Pilot Licence (Aeroplane)",
+              "age": null,
+              "total_flying_experience": 13500,
+              "experience_on_type": 600,
+              "responsibility": "Pilot flying"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "TSB CN main-track train derailment near Pangburn Station",
+    "report_id": "TSB_r_2021_M0027",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2021-08-21T12:49",
+          "time_zone": "UTC-03:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Mile 18.9, Napadogan Subdivision, Pangburn Station, New Brunswick",
+          "standardized_location": "Mile 18.9, Pangburn Station, New Brunswick, Canada"
+        },
+        "occurrence_type": "Derailment",
+        "total_persons_involved": 2,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "derailment: 30 hopper cars derailed; 27 cars breached with potash release.",
+        "who_may_benefit": null
+      },
+      "trains": [
+        {
+          "train_type": "freight",
+          "train_number": "B73041-15",
+          "length": 1997.05,
+          "weight": 18009.4,
+          "classification": "unit",
+          "year_manufactured": null,
+          "operator": "Canadian National Railway Company",
+          "operating_crew": 2
+        }
+      ]
+    }
+  },
+  {
+    "id": "TSB CPR crossing accident near Blackie with rail metadata",
+    "report_id": "TSB_r_2004_C0110",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2004-10-24T01:38",
+          "time_zone": "UTC-06:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Mile 69.33, Aldersyde Subdivision Near Blackie, Alberta",
+          "standardized_location": "Mile 69.33 Aldersyde Subdivision, near Blackie, Alberta, Canada"
+        },
+        "occurrence_type": "Level Crossing",
+        "total_persons_involved": 4,
+        "fatalities": 1,
+        "injuries": 1,
+        "damage_description": "damage: tank car derailed; five dangerous-goods tank cars damaged; truck tractor destroyed by impact and fire; track about 2060 feet damaged.",
+        "who_may_benefit": null
+      },
+      "trains": [
+        {
+          "train_type": "freight",
+          "train_number": "2nd 269-23",
+          "length": 1383.18,
+          "weight": 7379.6,
+          "classification": "manifest",
+          "year_manufactured": null,
+          "operator": "Canadian Pacific Railway",
+          "operating_crew": 2
+        }
+      ]
+    }
+  },
+  {
+    "id": "TAIC Aratere shunting injury in Wellington with rail metadata",
+    "report_id": "TAIC_r_2021_101",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2021-04-09T23:30",
+          "time_zone": "UTC+12:00",
+          "time_zone_source": "inferred"
+        },
+        "location": {
+          "description": "On board the Aratere, Interislander ferry terminal, Wellington",
+          "standardized_location": "On board the Aratere, Interislander ferry terminal, Wellington, New Zealand"
+        },
+        "occurrence_type": "Safeworking Rule or Procedure Breach",
+        "total_persons_involved": 3,
+        "fatalities": 0,
+        "injuries": 1,
+        "damage_description": "nil",
+        "who_may_benefit": "Rail operators and operational staff involved in shunting activities may benefit from this report."
+      },
+      "trains": [
+        {
+          "train_type": "shunt",
+          "train_number": "DSG 3210 / EUF24",
+          "length": 12.5,
+          "weight": 56.0,
+          "classification": "yard/shunting",
+          "year_manufactured": null,
+          "operator": "KiwiRail",
+          "operating_crew": 1
+        }
+      ]
+    }
+  },
+  {
+    "id": "TAIC Northern Explorer level crossing collision at Rangiriri",
+    "report_id": "TAIC_r_2014_101",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2014-02-27T09:42",
+          "time_zone": "UTC+13:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Te Onetea Road level crossing, Rangiriri, Waikato District",
+          "standardized_location": "Te Onetea Road level crossing, Rangiriri, Waikato, New Zealand"
+        },
+        "occurrence_type": "Level Crossing",
+        "total_persons_involved": 114,
+        "fatalities": 1,
+        "injuries": 0,
+        "damage_description": "moderate and extensive damage: locomotive front and cowcatcher damaged; diesel fuel tank punctured; truck driving unit destroyed; truck engine torn from mountings; semi-trailer skid plate and hydraulic hoses severely damaged.",
+        "who_may_benefit": null
+      },
+      "trains": [
+        {
+          "train_type": "passenger",
+          "train_number": "Train 201 - Northern Explorer",
+          "length": 130.0,
+          "weight": 311.0,
+          "classification": "intercity",
+          "year_manufactured": null,
+          "operator": "KiwiRail",
+          "operating_crew": 5
+        }
+      ]
+    }
+  },
+  {
+    "id": "TAIC Tamper 703 derailment in Purewa tunnel with rail metadata",
+    "report_id": "TAIC_r_2023_105",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2023-10-09T00:26",
+          "time_zone": "UTC+13:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Purewa tunnel, Auckland",
+          "standardized_location": "Purewa tunnel, Auckland, Auckland, New Zealand"
+        },
+        "occurrence_type": "Derailment",
+        "total_persons_involved": 4,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "significant damage: tamper equipment significant damage.",
+        "who_may_benefit": "Organisations and anyone responsible for managing or working within a safety-critical environment may benefit from the findings and recommendations in this report."
+      },
+      "trains": [
+        {
+          "train_type": "maintenance vehicle",
+          "train_number": "AV2 - Tamper 703",
+          "length": null,
+          "weight": null,
+          "classification": "maintenance",
+          "year_manufactured": null,
+          "operator": "KiwiRail",
+          "operating_crew": 4
+        }
+      ]
+    }
+  },
+  {
+    "id": "ATSB freight train 8796 collision with Alexandra Bridge at Rockhampton",
+    "report_id": "ATSB_r_2021_010",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2021-09-17T07:24",
+          "time_zone": "UTC+10:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Alexandra Bridge, Rockhampton, Queensland",
+          "standardized_location": "Alexandra Bridge, Rockhampton, Queensland, Australia"
+        },
+        "occurrence_type": "Collision",
+        "total_persons_involved": 1,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "damage: Alexandra Bridge damaged; tipping trailer damaged; train no damage.",
+        "who_may_benefit": null
+      },
+      "trains": [
+        {
+          "train_type": "freight",
+          "train_number": "8796",
+          "length": 526.0,
+          "weight": 1164.0,
+          "classification": "intermodal",
+          "year_manufactured": null,
+          "operator": "Aurizon",
+          "operating_crew": 1
+        }
+      ]
+    }
+  },
+  {
+    "id": "ATSB Overland level crossing collision at Inverleigh",
+    "report_id": "ATSB_r_2013_023",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2013-08-31T10:09",
+          "time_zone": "UTC+10:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Mahers Road, Inverleigh, Victoria",
+          "standardized_location": "Mahers Road, Inverleigh, Victoria, Australia"
+        },
+        "occurrence_type": "Level Crossing",
+        "total_persons_involved": 111,
+        "fatalities": 0,
+        "injuries": 1,
+        "damage_description": "minor and substantial damage: locomotive minor damage; level crossing equipment minor damage; dual cab utility substantially damaged.",
+        "who_may_benefit": "All local councils and track managers."
+      },
+      "trains": [
+        {
+          "train_type": "passenger",
+          "train_number": "7MA8 - The Overland",
+          "length": 215.0,
+          "weight": 535.0,
+          "classification": "intercity",
+          "year_manufactured": null,
+          "operator": "Great Southern Rail",
+          "operating_crew": 7
+        }
+      ]
+    }
+  },
+  {
+    "id": "TSB Diamond DA20-C1 collision with terrain at Beaverhill Lake",
+    "report_id": "TSB_a_2023_W0096",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2023-08-11T18:06",
+          "time_zone": "UTC-06:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "surface of Beaverhill Lake, 20 nautical miles east of the Cooking Lake Aerodrome, Alberta",
+          "standardized_location": "surface of Beaverhill Lake, unknown, Alberta, Canada"
+        },
+        "occurrence_type": "Terrain collisions",
+        "total_persons_involved": 2,
+        "fatalities": 2,
+        "injuries": 0,
+        "damage_description": "destroyed: aircraft destroyed by impact forces; main landing gear and nose gear collapsed; left wing sheared from the fuselage; fuel tank fractured; approximately 16 U.S. gallons of fuel leaked at the accident site; no post-impact fire.",
+        "who_may_benefit": null
+      },
+      "aircraft": [
+        {
+          "aircraft_type": "Aeroplane",
+          "registration": "C-FRZG",
+          "make": "Diamond Aircraft Industries",
+          "model": "DA20-C1",
+          "number_of_engines": 1,
+          "type_of_engines": "piston",
+          "year_manufactured": 2023,
+          "operator": "Cooking Lake Aviation Academy Inc.",
+          "flight_type": "training",
+          "persons_on_board_total": 2,
+          "persons_on_board_crew": 2,
+          "persons_on_board_passengers": 0,
+          "damage": "destroyed",
+          "pilots": [
+            {
+              "role": "Instructor",
+              "responsibility": "Pilot monitoring",
+              "licence": "Commercial Pilot Licence (Aeroplane)",
+              "age": null,
+              "total_flying_experience": 671,
+              "experience_on_type": 139
+            },
+            {
+              "role": "Student Pilot",
+              "responsibility": "Pilot flying",
+              "licence": null,
+              "age": null,
+              "total_flying_experience": 11,
+              "experience_on_type": 9
+            }
+          ]
+        } 
+      ]
+    }
+  },
+  {
+    "id": "Extra ATSB for full extraction",
+    "report_id": "ATSB_m_2022_007",
+    "expected": {
+      "occurrence": {
+        "occurrence_datetime": {
+          "local_datetime": "2022-04-09T01:40",
+          "time_zone": "UTC+08:00",
+          "time_zone_source": "explicit_in_report"
+        },
+        "location": {
+          "description": "Port Hedland, Western Australia",
+          "standardized_location": "western side of Port Hedland channel, Port Hedland, Western Australia, Australia"
+        },
+        "occurrence_type": "Grounding/stranding",
+        "total_persons_involved": 21,
+        "fatalities": 0,
+        "injuries": 0,
+        "damage_description": "substantial damage: port bottom shell plating breached; transverse bulkhead between number 1 and 2 port double-bottom tanks failed; extensive impact damage along port side hull; several structural frames and internal strength members buckled or fractured",
+        "who_may_benefit": null
+      },
+      "vessels": [
+        {
+          "vessel_name": "Hagen Oldendorff",
+          "vessel_type": "bulk carrier",
+          "classification": "Lloyd's Register",
+          "length": 299.95,
+          "breadth": 50.0,
+          "gross_tonnage": 107549.0,
+          "manufacturer": "Cosco Shipping Heavy Industry (Yangzhou, China)",
+          "year_built": 2020,
+          "propulsion": "diesel",
+          "total_power": 15131.0,
+          "service_speed": 14.5,
+          "owner_operator": "CL Marina; managed and operated by Wah Kwong Ship Management Hong Kong",
+          "port_of_registry": "Liberia"
+        },
+        {
+          "vessel_name": "RT Clerke",
+          "vessel_type": "tug",
+          "classification": null,
+          "length": null,
+          "breadth": null,
+          "gross_tonnage": null,
+          "manufacturer": null,
+          "year_built": null,
+          "propulsion": "diesel",
+          "total_power": 5295.0,
+          "service_speed": null,
+          "owner_operator": null,
+          "port_of_registry": null
+        },
+        {
+          "vessel_name": "RT Atlantis",
+          "vessel_type": "tug",
+          "classification": null,
+          "length": null,
+          "breadth": null,
+          "gross_tonnage": null,
+          "manufacturer": null,
+          "year_built": null,
+          "propulsion": "diesel",
+          "total_power": 5295.0,
+          "service_speed": null,
+          "owner_operator": null,
+          "port_of_registry": null
+        },
+        {
+          "vessel_name": "RT Inspiration",
+          "vessel_type": "tug",
+          "classification": null,
+          "length": null,
+          "breadth": null,
+          "gross_tonnage": null,
+          "manufacturer": null,
+          "year_built": null,
+          "propulsion": "diesel",
+          "total_power": 4962.0,
+          "service_speed": null,
+          "owner_operator": null,
+          "port_of_registry": null
+        },
+        {
+          "vessel_name": "RT Darwin",
+          "vessel_type": "tug",
+          "classification": null,
+          "length": null,
+          "breadth": null,
+          "gross_tonnage": null,
+          "manufacturer": null,
+          "year_built": null,
+          "propulsion": "diesel",
+          "total_power": 4962.0,
+          "service_speed": null,
+          "owner_operator": null,
+          "port_of_registry": null
+        }
+      ]
+    }
+  }
+]

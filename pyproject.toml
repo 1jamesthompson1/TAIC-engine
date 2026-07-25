@@ -7,21 +7,11 @@ authors = [
 ]
 license = {text = "GPLv3"}
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = ["accident", "investigation", "reports", "llm", "analysis"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-]
 
 dependencies = [
     "python-dotenv>=1.0.0",
-    "pypdf>=5.1.0",
     "requests>=2.31.0",
     "tiktoken>=0.12.0",
     "pyyaml>=6.0.1",
@@ -36,14 +26,19 @@ dependencies = [
     "tqdm>=4.66.4",
     "hrequests>=0.8.2",
     "roman>=4.2",
-    "lancedb>=0.25.0,<0.26",
+    "lancedb>=0.34.0,<0.35",
     "azure-ai-inference>=1.0.0b9",
-    "pylance>=0.31.1",
     "pytest>=7.4.3",
     "pytest-xdist>=3.5.0",
     "azure-storage-blob>=12.26.0",
     "pytest-cov>=6.2.1",
     "lxml>=6.0.0",
+    "langchain-text-splitters>=1.1.0",
+    "pymupdf-layout",
+    "pymupdf4llm>=1.0.0",
+    "marimo>=0.23.10",
+    "pylance>=8.0.0",
+    "pytz>=2026.2",
 ]
 
 [dependency-groups]
@@ -54,6 +49,12 @@ dev = [
     "ipywidgets>=8.1.2",
     "pre-commit>=3.7.1",
     "azure-data-tables>=12.7.0",
+    "ruff==0.15.21",  # Keep in sync with .pre-commit-config.yaml and .github/workflows/ci.yml
+    "pypdf>=6.7.0",
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.25.0",
+    "griffe-pydantic>=1.3.1",
     "python-semantic-release>=9.0.0",
 ]
 
@@ -63,8 +64,8 @@ dev = [
 "Bug Tracker" = "https://github.com/1jamesthompson1/TAIC-engine/issues"
 
 [project.scripts]
-engine = "engine.utils.cli:cli"
-azure = "notebooks.admin.easy_azure:main"
+engine = "engine.cli:cli"
+azure = "notebooks.easy_azure:main"
 
 [tool.coverage.report]
 include_namespace_packages = true
@@ -72,8 +73,15 @@ include_namespace_packages = true
 [tool.coverage.run]
 omit = ["tests/*"]
 
+# Disable pytest capture so tests emit a single console-style log
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = "-n auto -s"
+# Disable pytest's live log handler so tests use the centralized engine.Logging
+log_cli = false
+log_cli_level = "DEBUG"
+log_cli_format = "%(levelname).1s %(filename)s - %(message)s"
+log_cli_date_format = "%H:%M:%S"
 
 [tool.uv]
 package = true
@@ -91,6 +99,41 @@ include = ["engine*"]
 
 [tool.ruff]
 extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "ANN",
+    "B",
+    "C4",
+    "D",
+    "DOC",
+    "E",
+    "ERA",
+    "F",
+    "I",
+    "N",
+    "PD",
+    "PIE",
+    "PL",
+    "RET",
+    "RUF",
+    "SIM",
+    "T20",
+    "TRY",
+    "UP",
+    "W",
+]
+
+ignore = ["E501", "ANN204"]  # Ignore line too long, and missing return type for special methods
+
+preview = true
+
+[tool.ruff.lint.flake8-annotations]
+mypy-init-return = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]

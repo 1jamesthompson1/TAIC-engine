@@ -1,0 +1,154 @@
+[
+  {
+    "id": "safety issues are short and at the top (but no where else)",
+    "report_id": "TAIC_m_2004_203",
+    "expected": [
+      {
+        "safety_issue": "securing of vehicular cargo on car and rail decks",
+        "quality": "exact",
+        "safety_issue_id": null
+      },
+      {
+        "safety_issue": "securing of heavy items of equipment in passenger accessible areas",
+        "quality": "exact",
+        "safety_issue_id": null
+      }
+    ]
+  },
+  {
+    "id": "no safety issues present, this is explicitly stated",
+    "report_id": "TAIC_a_2020_003",
+    "expected": []
+  },
+  {
+    "id": "no safety issues present, this is explicitly stated 2",
+    "report_id": "TAIC_m_2023_204",
+    "expected": []
+  },
+  {
+    "id": "TSB report with inferred safety issues from findings",
+    "report_id": "TSB_a_2023_W0096",
+    "expected": [
+      {
+        "safety_issue": "If spin training is initiated from a height that does not provide a pilot a wide enough recovery margin, there is an increased risk of collision with terrain.",
+        "quality": "inferred",
+        "safety_issue_id": "Risk 1"
+      },
+      {
+        "safety_issue": "If emergency locator transmitters are incorrectly installed and/or tested, they may not   function as designed, increasing the risk that search and rescue efforts are not timely.",
+        "quality": "inferred",
+        "safety_issue_id": "Risk 2"
+      }
+    ]
+  },
+  {
+    "id": "ATSB pre-2008 report",
+    "report_id": "ATSB_a_2005_912",
+    "expected": [
+      {
+        "safety_issue": "The current overhaul manual provides no guidance to assemblers on the maximum allowable assembly time following the tower shaft/bevel gear heating and cooling process to reduce the likelihood of producing surface damage (galling damage) to the components during assembly.",
+        "quality": "exact",
+        "safety_issue_id": null
+      }
+    ]
+  },
+  {
+    "id": "ATSB inferred safety issue",
+    "report_id": "ATSB_a_2000_157",
+    "expected": [
+      {
+        "safety_issue": "High\u2011power piston engine leaning practices during climb and cruise increased the risk of forming combustion chamber deposits that could cause preignition.",
+        "quality": "inferred",
+        "safety_issue_id": null
+      },
+      {
+        "safety_issue": "Inadequate management of combustion chamber deposits (including lead oxybromides) reduced engine reliability across operators of high\u2011powered piston engines.",
+        "quality": "inferred",
+        "safety_issue_id": null
+      },
+      {
+        "safety_issue": "Lack of required life jackets or flotation devices on over\u2011water flights within 50 NM of land reduced fare-paying passenger survival prospects during ditching.",
+        "quality": "inferred",
+        "safety_issue_id": null
+      },
+      {
+        "safety_issue": "Passenger seats in small aircraft used for fare-paying passenger operations were not required to be fitted with upper body restraints for all occupants.",
+        "quality": "inferred",
+        "safety_issue_id": null
+      },
+      {
+        "safety_issue": "Inadequate national guidance material for ditching procedures reduced pilot preparedness for such emergencies.",
+        "quality": "inferred",
+        "safety_issue_id": null
+      },
+      {
+        "safety_issue": "Whyalla Airlines' small organisational structure, concentrated management roles and weak safety culture left safety heavily dependent on a few individuals and vulnerable to schedule and commercial pressures.",
+        "quality": "inferred",
+        "safety_issue_id": null
+      }
+    ]
+  },
+  {
+    "id": "TAIC report with explicit safety issues",
+    "report_id": "TAIC_a_2015_009",
+    "expected": [
+      {
+        "safety_issue": "The standard of team resource management in the Hamilton ATC tower did not match good industry practice.",
+        "quality": "exact",
+        "safety_issue_id": null
+      },
+      {
+        "safety_issue": "Changes in the size and shape of the Hamilton zone have shifted some VFR traffic congestion to prominent points outside the zone, and likely increased the risk of collision in those areas.",
+        "quality": "exact",
+        "safety_issue_id": null
+      },
+      {
+        "safety_issue": "Some aerodrome controllers are 'over-controlling' VFR traffic in and around the zone, which is unnecessarily congesting the radio frequencies and risks causing difficulties for inexperienced pilots and those for whom English is their second language.",
+        "quality": "exact",
+        "safety_issue_id": null
+      }
+    ]
+  },
+  {
+    "id": "TAIC rail report with explicit safety issue",
+    "report_id": "TAIC_r_2021_101",
+    "expected": [
+      {
+        "safety_issue": "The number of wagons loaded on the Aratere's outer tracks at the time of the accident exceeded the limits that would have put them in a position to be safely accommodated without presenting difficulty when coupling.",
+        "quality": "exact",
+        "safety_issue_id": null
+      }
+    ]
+  },
+  {
+    "id": "ATSB extra si for full report extraction",
+    "report_id": "ATSB_m_2022_007",
+    "expected": [
+      {
+        "safety_issue": "The Pilbara Ports Authority's port user guidelines and procedures did not reflect the best practice escort towage guidance detailed in the port's draft escort towage strategy and business continuity plan. The detail of these improved towage practices, designed to reduce the risk of channel blockages, were also not integrated into the Port Hedland Pilots' safety management system and were consequently, inconsistently applied by pilots.",
+        "safety_issue_id": "MO-2022-007-SI-01",
+        "quality": "exact"
+      },
+      {
+        "safety_issue": "The Pilbara Ports Authority's port user guidelines and procedures did not reflect the best practice escort towage guidance detailed in the port's draft escort towage strategy and business continuity plan. The details of these improved towage practices, designed to reduce the risk of channel blockages, were also not integrated into the Port Hedland Pilots' safety management system and were, consequently, inconsistently applied by pilots.",
+        "safety_issue_id": "MO-2022-007-SI-02",
+        "quality": "exact"
+      },
+      {
+        "safety_issue": "Although Hagen Oldendorff's steering and rudder angle indicator systems complied with the applicable rules and regulations, neither the SOLAS regulations, nor the rules of the ship's responsible classification society, Lloyd's Register, mandated protection of the ship's rudder angle indication systems against a single point of failure in electrical power supply, nor did they require installation of audible or visual alerts to notify the bridge team of a power failure affecting the indicators.",
+        "safety_issue_id": "MO-2022-007-SI-03",
+        "quality": "exact"
+      },
+      {
+        "safety_issue": "Although Hagen Oldendorff's steering and rudder angle indicator systems complied with the applicable rules and regulations, neither the SOLAS regulations, nor the rules of the ship's responsible classification society, Lloyd's Register, mandated protection of the ship's rudder angle indication systems against a single point of failure in electrical power supply, nor did they require installation of audible or visual alerts to notify the bridge team of a power failure affecting the indicators.",
+        "safety_issue_id": "MO-2022-007-SI-04",
+        "quality": "exact"
+      },
+      {
+        "safety_issue": "Although Hagen Oldendorff's steering and rudder angle indicator systems complied with the applicable rules and regulations, neither the SOLAS regulations, nor the rules of the ship's responsible classification society, Lloyd's Register, mandated protection of the ship's rudder angle indication systems against a single point of failure in electrical power supply, nor did they require installation of audible or visual alerts to notify the bridge team of a power failure affecting the indicators.",
+        "safety_issue_id": "MO-2022-007-SI-05",
+        "quality": "exact"
+      }
+    ]
+  }
+]

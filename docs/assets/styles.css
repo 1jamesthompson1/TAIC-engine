@@ -1,0 +1,11 @@
+.docs-home-button {
+    margin-left: 0.5rem;
+    white-space: nowrap;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    padding: 0.2rem 0.4rem;
+}
+
+.docs-home-button .md-button {
+  font-weight: 600;
+}

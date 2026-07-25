@@ -1,3 +1,5 @@
+"""Tests for Azure Storage module."""
+
 import os
 import uuid
 from datetime import datetime
@@ -5,13 +7,17 @@ from datetime import datetime
 import pytest
 import pytz
 
-from engine.utils.AzureStorage import (
+from engine.AzureStorage import (
     EngineOutputDownloader,
     EngineOutputUploader,
 )
 
+# Manually update this to be the 'output' folder.
+EXPECTED_FILE_COUNT = 9
 
-def test_upload_outputs():
+
+def test_upload_outputs() -> None:
+    """Test uploading outputs to Azure storage."""
     uploader = EngineOutputUploader(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
         os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
@@ -30,7 +36,8 @@ def test_upload_outputs():
     assert len(blobs) > 0
 
 
-def test_download_outputs(tmpdir):
+def test_download_outputs(tmpdir: object) -> None:
+    """Test downloading outputs from Azure storage."""
     downloader = EngineOutputDownloader(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
         os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
@@ -41,17 +48,15 @@ def test_download_outputs(tmpdir):
     downloader.download_latest_output()
 
     downloaded_files = [len(f[2]) for f in os.walk(tmpdir.strpath)]
-    assert sum(downloaded_files) == 40
+    assert sum(downloaded_files) == EXPECTED_FILE_COUNT
 
 
-def test_upload_pdf_to_pdf_container(test_pdf_storage_manager):
+def test_upload_pdf_to_pdf_container(test_pdf_storage_manager: object) -> None:
     """Upload a small fake PDF to the test PDF container and verify it exists."""
     report_id = f"TEST_UPLOAD_{uuid.uuid4().hex[:8]}"
     pdf_bytes = b"%PDF-1.4\n%Fake PDF for tests\n%%EOF"
 
-    uploaded = test_pdf_storage_manager.upload_pdf(
-        report_id, pdf_bytes, overwrite=True
-    )
+    uploaded = test_pdf_storage_manager.upload_pdf(report_id, pdf_bytes, overwrite=True)
     assert uploaded is True
 
     pdfs = test_pdf_storage_manager.list_pdfs()

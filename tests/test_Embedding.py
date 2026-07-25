@@ -1,24 +1,79 @@
+"""Tests for Embedding module."""
+
 import hashlib
-import os
+from datetime import datetime
 from unittest.mock import patch
 
 import numpy as np
+import pandas as pd
 import pytest
 
-import engine.analyze.Embedding as Embedding
+from engine import Embedding, SavedDataFrames
 
 
-def test_basic_embedding(tmpdir):
-    vector_db = None
-    generated_embeddings = []
+def test_upload_report_text_table(tmp_path: object) -> None:
+    """Local LanceDB: upload report_text, verify table exists and is queryable."""
+    dc = SavedDataFrames.DataForVectorDB(tmp_path)
+    test_report_texts = pd.DataFrame(
+        [
+            {
+                "report_id": "TAIC_m_2024_001",
+                "document_id": "TAIC_m_2024_001_text_0",
+                "document": "Very long report body…"
+                * 10_000,  # trying to simluate a 50 page report
+                "document_type": "report_text",
+                "url": "https://example.com/r/1",
+                "metadata_json": "{}",
+                "location": "Auckland",
+                "occurrence_date": datetime(2024, 1, 15),
+                "occurrence_type": "Accident",
+                "fatalities": 0,
+                "injuries": 1,
+                "agency_id": "TAIC",
+                "publication_date": datetime(2024, 6, 1),
+                "mode": "m",
+                "year": 2024,
+                "agency": "TAIC",
+            }
+        ],
+        columns=dc._effective_columns,
+    )
+    dc.save(test_report_texts)
 
-    def mock_generate_embeddings(self, texts, *args, **kwargs):
-        # normalize input
+    vdb = Embedding.VectorDB(
+        db_uri=str(tmp_path / "lancedb"),
+        model_name=pytest.vector_config["model"]["name"],
+        context_limit=pytest.vector_config["model"]["context_limit"],
+        table_name="main_test",
+    )
+    try:
+        ids = vdb.upload_report_text_table(dc)
+        assert ids is not None and len(ids) == 1
+
+        # Call again with same data — should not duplicate rows
+        vdb.upload_report_text_table(dc)
+        t = vdb.db.open_table(vdb.report_text_table_name)
+        assert t.count_rows() == 1, "Duplicate rows were inserted on second call"
+
+        result = t.to_pandas()
+        assert result["document_id"].iloc[0] == "TAIC_m_2024_001_text_0"
+        assert result["document"].iloc[0] == "Very long report body…" * 10_000
+        assert "vector" not in result.columns
+    finally:
+        vdb.db.drop_all_tables()
+
+
+def test_basic_embedding(tmp_path: object) -> None:
+    """Test the embedding pipeline using the saved dataframe flow."""
+    generated_embeddings: list[list[float]] = []
+
+    def mock_generate_embeddings(
+        self: object, texts: object, *args: object, **kwargs: object
+    ) -> list[list[float]]:
         if isinstance(texts, np.ndarray):
             if texts.dtype != object:
-                raise ValueError(
-                    "AzureAIEmbeddingFunction only supports input of strings for numpy arrays."
-                )
+                msg = "AzureAIEmbeddingFunction only supports input of strings for numpy arrays."
+                raise ValueError(msg)
             texts = texts.tolist()
 
         result = []
@@ -33,77 +88,93 @@ def test_basic_embedding(tmpdir):
             generated_embeddings.append(emb)
         return result
 
+    complete_data_dc = SavedDataFrames.DataForVectorDB(tmp_path)
+
+    complete_data = pd.DataFrame(
+        [
+            {
+                "report_id": "TAIC_m_2024_001",
+                "document_id": "TAIC_m_2024_001_sum_0",
+                "document": "A short report text about an incident.",
+                "document_type": "summary",
+                "url": "https://example.com/report/1",
+                "metadata_json": '{"occurrence": {"location": {"standardized_location": "Auckland, Auckland, Auckland, New Zealand"}, "occurrence_datetime": {"local_datetime": "2024-01-15T10:00"}, "occurrence_type": "Accident", "fatalities": 0, "injuries": 1, "damage_description": "Minor damage", "who_may_benefit": "Operators"}}',
+                "location": "Auckland",
+                "occurrence_date": datetime(2024, 1, 15),
+                "occurrence_type": "Accident",
+                "fatalities": 0,
+                "injuries": 1,
+                "agency_id": "TAIC",
+                "publication_date": datetime(2024, 6, 1),
+                "mode": "m",
+                "year": 2024,
+                "agency": "TAIC",
+            },
+            {
+                "report_id": "TAIC_a_2024_002",
+                "document_id": "TAIC_a_2024_002_sum_0",
+                "document": "Another short report text about a second incident.",
+                "document_type": "summary",
+                "url": "https://example.com/report/2",
+                "metadata_json": '{"occurrence": {"location": {"standardized_location": "Wellington, Wellington, Wellington, New Zealand"}, "occurrence_datetime": {"local_datetime": "2024-02-20T14:00"}, "occurrence_type": "Incident", "fatalities": 0, "injuries": 0, "damage_description": "No damage", "who_may_benefit": "Investigators"}}',
+                "location": "Wellington",
+                "occurrence_date": datetime(2024, 2, 20),
+                "occurrence_type": "Incident",
+                "fatalities": 0,
+                "injuries": 0,
+                "agency_id": "TAIC",
+                "publication_date": datetime(2024, 7, 15),
+                "mode": "a",
+                "year": 2024,
+                "agency": "TAIC",
+            },
+        ],
+        columns=complete_data_dc._effective_columns,
+    )
+    complete_data_dc.save(complete_data)
+
+    test_db_uri = str(tmp_path / "vectordb")
+    vector_db = None
+
     try:
-        extracted_df_path = os.path.join(
-            pytest.output_config["folder_name"],
-            pytest.output_config["extracted_reports_df_file_name"],
-        )
-
-        # Initialize VectorDB instance
-        test_db_uri = os.getenv("TEST_VECTORDB_URI")
-        assert test_db_uri, "TEST_VECTORDB_URI environment variable must be set."
-
-        # Create a temporary path for local embedded IDs
-        temp_path = tmpdir.join("local_embedded_ids")
-
-        # Patch embedding generation to a fast deterministic mock that returns correct-sized vectors
         with patch.object(
             Embedding.AzureAITextEmbeddingFunction,
             "generate_embeddings",
             new=mock_generate_embeddings,
         ):
             vector_db = Embedding.VectorDB(
-                local_embedded_ids_path=temp_path,
                 db_uri=test_db_uri,
                 model_name=pytest.vector_config["model"]["name"],
-                table_name=pytest.vector_config["table_name"],
                 context_limit=pytest.vector_config["model"]["context_limit"],
+                table_name="all_document_types_test",
             )
 
             vector_db.process_extracted_reports(
-                extracted_df_path,
-                [
-                    (
-                        "safety_issues",
-                        "safety_issue",
-                    ),
-                    (
-                        "recommendations",
-                        "recommendation",
-                    ),
-                    (
-                        "sections",
-                        "section",
-                    ),
-                    (
-                        "summary",
-                        "summary",
-                    ),
-                ],
+                complete_data_dc,
             )
 
-            # Verify table exists
-            assert vector_db.table_name in vector_db.db.table_names()
+        assert vector_db.table_name in vector_db.db.list_tables().tables
+        assert vector_db.table.count_rows() == len(complete_data)
 
-            # Verify that the table has rows
-            assert vector_db.table.count_rows() > 0, "The table should have rows."
+        stored_ids = (
+            vector_db.table.search()
+            .select(["document_id"])
+            .to_pandas()["document_id"]
+            .tolist()
+        )
+        assert sorted(stored_ids) == sorted(complete_data["document_id"].tolist())
 
-            # Ensure embeddings were generated and have the expected dimensionality
-            azure_embeddings = (
-                Embedding.EmbeddingFunctionRegistry.get_instance()
-                .get("azure-ai-text")
-                .create(name=pytest.vector_config["model"]["name"])
-            )
-            expected_dim = azure_embeddings.ndims()
-            assert generated_embeddings, "No embeddings were generated by the mock."
-            assert all(
-                len(e) == expected_dim for e in generated_embeddings
-            ), f"Expected embeddings of length {expected_dim}, got {[len(e) for e in generated_embeddings][:5]}"
+        azure_embeddings = (
+            Embedding.EmbeddingFunctionRegistry.get_instance()
+            .get("azure-ai-text")
+            .create(name=pytest.vector_config["model"]["name"])
+        )
+        expected_dim = azure_embeddings.ndims()
+        assert generated_embeddings, "No embeddings were generated by the mock."
+        assert all(
+            len(e) == expected_dim for e in generated_embeddings
+        ), f"Expected embeddings of length {expected_dim}, got {[len(e) for e in generated_embeddings][:5]}"
 
     finally:
-        if vector_db:
-            # Drop all tables
+        if vector_db is not None:
             vector_db.db.drop_all_tables()
-
-            # Ensure tables are dropped
-            assert not vector_db.db.table_names()

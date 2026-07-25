@@ -1,15 +1,43 @@
+"""Pytest fixtures and session hooks for loading test config and Azure PDF storage cleanup."""
+
+import contextlib
+import json
 import os
+from collections.abc import Generator
+from pathlib import Path
 
 import dotenv
 import pytest
 
-from engine.utils import Config
-from engine.utils.AzureStorage import PDFStorageManager
+from engine import Config, Logging
+from engine.AICaller import get_api_costs, print_api_cost_summary
+from engine.AzureStorage import PDFStorageManager
+from engine.SavedDataFrames import ReportTitles
+
+logger = Logging.get_logger(__name__)
 
 
 @pytest.fixture(scope="session", autouse=True)
-def load_test_config():
-    config = Config.ConfigReader(os.path.join("tests", "test_config.yaml")).get_config()
+def load_test_config() -> None:
+    """Load test configuration and setup logging for the test session.
+
+    This fixture runs once per test session and configures:
+    - Test logger filtering for noisy third-party libraries
+    - Test configuration from test_config.yaml
+    - Environment variables from .env file
+
+    The loaded configuration is stored in pytest.config and made available
+    to all tests in the session.
+    """
+    # Centralize logging configuration for tests using engine.Logging.
+    log_level = os.getenv("TEST_LOG_LEVEL", "DEBUG").upper()
+    Logging.configure_logging(
+        log_level=log_level,
+        format_string="%(asctime)s %(levelname).1s %(module)s: %(message)s",
+        suppress_azure_logging=True,
+    )
+
+    config = Config.ConfigReader(Path("tests") / "test_config.yaml").get_config()
     pytest.config = config
 
     pytest.output_config = config["engine"]["output"]
@@ -19,9 +47,8 @@ def load_test_config():
 
 
 @pytest.fixture(scope="function")
-def test_pdf_storage_manager():
-    """
-    Create a PDF storage manager for tests.
+def test_pdf_storage_manager() -> PDFStorageManager:
+    """Create a PDF storage manager for tests.
 
     This fixture is available to all tests in the suite and provides access
     to the test Azure storage container for PDF operations.
@@ -38,6 +65,9 @@ def test_pdf_storage_manager():
     ```
 
     The fixture automatically connects to the test container specified in test_config.yaml.
+
+    Returns:
+        PDFStorageManager: Configured manager for the test PDF container.
     """
     return PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
@@ -47,9 +77,8 @@ def test_pdf_storage_manager():
 
 
 @pytest.fixture(scope="function")
-def stable_pdf_storage_manager():
-    """
-    Create a PDF storage manager for stable test PDFs.
+def stable_pdf_storage_manager() -> PDFStorageManager:
+    """Create a PDF storage manager for stable test PDFs.
 
     This fixture connects to a separate container with a consistent set of test PDFs
     that are NOT automatically cleaned up. This is useful for tests that need
@@ -65,6 +94,9 @@ def stable_pdf_storage_manager():
 
     Note: This container is separate from the regular test container and is not
     subject to automatic cleanup.
+
+    Returns:
+        PDFStorageManager: Configured manager for the stable PDF container.
     """
     return PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
@@ -74,9 +106,8 @@ def stable_pdf_storage_manager():
 
 
 @pytest.fixture(scope="function", autouse=True)
-def cleanup_test_containers():
-    """
-    Universal cleanup fixture for Azure test containers.
+def cleanup_test_containers() -> Generator[None, None, None]:
+    """Universal cleanup fixture for Azure test containers.
 
     This fixture automatically cleans up Azure storage containers after each test
     to prevent accumulation of test data and associated storage costs.
@@ -84,28 +115,158 @@ def cleanup_test_containers():
 
     NOTE: This does NOT clean up the stable PDF container, which is meant to
     contain consistent test data.
+
     """
+    pdf_storage_manager = PDFStorageManager(
+        os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
+        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
+        pytest.output_config["pdf_container_name"],
+    )
+
+    baseline_blobs: set[str] = set()
+    with contextlib.suppress(Exception):
+        baseline_blobs = set(pdf_storage_manager.list_blobs())
+
     # This runs before each test
     yield
 
     # This runs after each test completes
     try:
-        # Clean up regular PDF container (but NOT the stable one)
-        pdf_storage_manager = PDFStorageManager(
-            os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
-            os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
-            pytest.output_config["pdf_container_name"],
-        )
+        current_blobs = set(pdf_storage_manager.list_blobs())
+        new_blobs = current_blobs - baseline_blobs
 
-        # Get list of all blobs and delete them silently
-        all_blobs = pdf_storage_manager.list_blobs()
-        for blob_name in all_blobs:
-            try:
+        for blob_name in new_blobs:
+            with contextlib.suppress(Exception):
                 pdf_storage_manager.delete_blob(blob_name)
-            except Exception:
-                # Silently ignore individual deletion failures
-                pass
+    except Exception as exc:
+        # Don't fail the test run if cleanup fails, but leave a breadcrumb.
+        logger.warning("Post-test PDF cleanup failed: %s", exc)
 
-    except Exception:
-        # Don't fail the test run if cleanup fails
-        pass
+
+@pytest.fixture(scope="function")
+def agency_id_lookup() -> dict[str, str]:
+    """Load agency IDs keyed by report_id from test report titles data.
+
+    Returns:
+        dict[str, str]: Mapping from report ID to agency ID.
+    """
+    from test_ReportExtracting import _output_dir_from_pytest  # noqa: PLC0415, PLC2701
+
+    report_titles = ReportTitles(_output_dir_from_pytest()).read()
+    if report_titles.empty:
+        return {}
+
+    titles = report_titles[["report_id", "agency_id"]].drop_duplicates(
+        subset=["report_id"], keep="last"
+    )
+    return {
+        str(row["report_id"]): str(row["agency_id"])
+        for _, row in titles.iterrows()
+        if row["agency_id"] is not None
+    }
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Called before tests start. Clean up previous cost files."""
+    # Only run on master
+    if not hasattr(session.config, "workerinput"):
+        # Ensure directory exists
+        cache_dir = session.config.cache.makedir("aicosts")
+        # Clear existing files
+        for f in os.listdir(cache_dir):
+            with contextlib.suppress(Exception):
+                os.remove(os.path.join(cache_dir, f))
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Called after whole test run finishes."""
+    # If we are in a worker node (xdist)
+    if hasattr(session.config, "workerinput"):
+        costs = get_api_costs()
+        worker_id = session.config.workerinput["workerid"]
+        # Save to cache
+        cache_dir = session.config.cache.makedir("aicosts")
+        with open(
+            os.path.join(str(cache_dir), f"costs_{worker_id}.json"),
+            "w",
+            encoding="utf-8",
+        ) as f:
+            json.dump(costs, f)
+
+
+def pytest_terminal_summary(
+    terminalreporter: pytest.Config, exitstatus: int, config: pytest.Config
+) -> None:
+    """Aggregate and print costs from all workers (or just main process if not using xdist)."""
+    # Only run on master
+    if not hasattr(config, "workerinput"):
+        aggregated_costs = {
+            "total_cost": 0.0,
+            "input_cost": 0.0,
+            "cached_input_cost": 0.0,
+            "output_cost": 0.0,
+            "total_input_tokens": 0,
+            "total_cached_tokens": 0,
+            "total_output_tokens": 0,
+            "calls": 0,
+            "by_model": {},
+        }
+
+        # Load costs from main process
+        main_costs = get_api_costs()
+        cache_dir = config.cache.makedir("aicosts")
+        if os.path.exists(cache_dir):
+            cost_files = [
+                os.path.join(cache_dir, f)
+                for f in os.listdir(cache_dir)
+                if f.startswith("costs_")
+            ]
+        else:
+            cost_files = []
+
+        all_costs_list = [main_costs]
+
+        for cost_file in cost_files:
+            try:
+                with open(cost_file, encoding="utf-8") as f:
+                    all_costs_list.append(json.load(f))
+            except Exception:
+                pass  # Ignore errors in reading these files
+
+        # Aggregate
+        for cost in all_costs_list:
+            aggregated_costs["total_cost"] += cost["total_cost"]
+            aggregated_costs["input_cost"] += cost["input_cost"]
+            aggregated_costs["cached_input_cost"] += cost["cached_input_cost"]
+            aggregated_costs["output_cost"] += cost["output_cost"]
+            aggregated_costs["total_input_tokens"] += cost["total_input_tokens"]
+            aggregated_costs["total_cached_tokens"] += cost["total_cached_tokens"]
+            aggregated_costs["total_output_tokens"] += cost["total_output_tokens"]
+            aggregated_costs["calls"] += cost["calls"]
+
+            for model, model_stats in cost["by_model"].items():
+                if model not in aggregated_costs["by_model"]:
+                    aggregated_costs["by_model"][model] = {
+                        "total_cost": 0.0,
+                        "input_cost": 0.0,
+                        "cached_input_cost": 0.0,
+                        "output_cost": 0.0,
+                        "input_tokens": 0,
+                        "cached_tokens": 0,
+                        "output_tokens": 0,
+                        "calls": 0,
+                    }
+
+                start_model = aggregated_costs["by_model"][model]
+                start_model["total_cost"] += model_stats["total_cost"]
+                start_model["input_cost"] += model_stats["input_cost"]
+                start_model["cached_input_cost"] += model_stats["cached_input_cost"]
+                start_model["output_cost"] += model_stats["output_cost"]
+                start_model["input_tokens"] += model_stats["input_tokens"]
+                start_model["cached_tokens"] += model_stats["cached_tokens"]
+                start_model["output_tokens"] += model_stats["output_tokens"]
+                start_model["calls"] += model_stats["calls"]
+
+        # Print summary
+        if aggregated_costs["calls"] > 0:
+            print_api_cost_summary(aggregated_costs)

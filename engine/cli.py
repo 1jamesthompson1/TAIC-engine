@@ -1,0 +1,375 @@
+"""CLI entry points for downloading, extracting, analyzing, and uploading report data."""
+
+import argparse
+import os
+import time
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from . import (
+    Combine,
+    Config,
+    Embedding,
+    Modes,
+    PDFParsing,
+    ReportExtracting,
+    SavedDataFrames,
+    WebsiteScraping,
+)
+from .AICaller import print_api_cost_summary
+from .AzureStorage import (
+    EngineOutputDownloader,
+    EngineOutputUploader,
+    PDFStorageManager,
+)
+from .Logging import configure_logging, get_logger
+
+logger = get_logger(__name__)
+
+
+SECONDS_IN_MINUTE = 60
+SECONDS_IN_HOUR = 3600
+
+
+def format_duration(seconds: float) -> str:
+    """Format duration to show appropriate time units.
+
+    Returns:
+        str: A human-readable duration string.
+    """
+    if seconds < SECONDS_IN_MINUTE:
+        return f"{seconds:.2f} seconds"
+    if seconds < SECONDS_IN_HOUR:
+        minutes = int(seconds // SECONDS_IN_MINUTE)
+        remaining_seconds = seconds % SECONDS_IN_MINUTE
+        return f"{minutes}m {remaining_seconds:.1f}s ({seconds:.2f} seconds)"
+    hours = int(seconds // SECONDS_IN_HOUR)
+    minutes = int((seconds % SECONDS_IN_HOUR) // SECONDS_IN_MINUTE)
+    remaining_seconds = seconds % SECONDS_IN_MINUTE
+    return f"{hours}h {minutes}m {remaining_seconds:.1f}s ({seconds:.2f} seconds)"
+
+
+def log_timing_summary(timing_results: dict[str, float], total_time: float) -> None:
+    """Log the timing summary for the executed steps."""
+    logger.info("%s", "=" * 60)
+    logger.info("TIMING SUMMARY")
+    logger.info("%s", "=" * 60)
+
+    for step, duration in timing_results.items():
+        formatted_time = format_duration(duration)
+        logger.info("%s: %s", step.upper().rjust(10), formatted_time)
+
+    if len(timing_results) > 1:
+        logger.info("%s", "-" * 60)
+        formatted_total = format_duration(total_time)
+        logger.info("%s: %s", "TOTAL".rjust(10), formatted_total)
+
+    logger.info("%s", "=" * 60)
+
+
+def run_step(
+    step_name: str,
+    func: Callable[..., Any],
+    timing_results: dict[str, float],
+    *args: object,
+    **kwargs: object,
+) -> None:
+    """Run a step function and record its timing."""
+    start_time = time.time()
+    func(*args, **kwargs)
+    timing_results[step_name] = time.time() - start_time
+
+
+def download(container: str, output_dir: Path, refresh: bool) -> None:
+    """Download the latest engine output from Azure Storage and get generic data.
+
+    Args:
+        container (str): The name of the Azure Storage container to download from.
+        output_dir (Path): The local directory to save the downloaded files to.
+        refresh (bool): Whether to refresh cached data.
+    """
+    downloader = EngineOutputDownloader(
+        os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
+        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
+        container,
+        output_dir,
+    )
+
+    downloader.download_latest_output()
+
+
+def scrape(output_dir: Path, config: dict, refresh: bool) -> None:
+    """Scrape reports from websites and extract additional data.
+
+    Args:
+        output_dir (Path): Directory where output artifacts are written.
+        config (dict): Engine configuration settings.
+        refresh (bool): Whether to refresh cached data and re-download sources.
+    """
+    output_config = config.get("output")
+    download_config = config.get("download")
+
+    logger.info("Scraping reports from websites")
+
+    logger.info("Setting up PDF storage manager...")
+    pdf_storage_manager = PDFStorageManager(
+        os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
+        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
+        output_config["pdf_container_name"],
+    )
+    logger.info(
+        "PDF storage container: %s",
+        output_config["pdf_container_name"],
+    )
+
+    # Download the PDFs
+    report_scraping_settings = WebsiteScraping.ReportScraperSettings(
+        SavedDataFrames.ReportTitles(output_dir),
+        download_config.get("start_year"),
+        download_config.get("end_year"),
+        download_config.get("max_per_year"),
+        [Modes.Mode[mode] for mode in download_config.get("modes")],
+        download_config.get("ignored_reports"),
+        refresh,
+        pdf_storage_manager,
+    )
+
+    for agency in download_config.get("agencies"):
+        match agency:
+            case "TSB":
+                WebsiteScraping.TSBReportScraper(report_scraping_settings).collect_all()
+            case "TAIC":
+                WebsiteScraping.TAICReportScraper(
+                    SavedDataFrames.TAICWebsiteReportsTable(output_dir),
+                    report_scraping_settings,
+                ).collect_all()
+            case "ATSB":
+                WebsiteScraping.ATSBReportScraper(
+                    SavedDataFrames.ATSBWebsiteReportsTable(output_dir),
+                    report_scraping_settings,
+                ).collect_all()
+            case _:
+                logger.warning("Unknown agency '%s', skipping", agency)
+
+    atsb_safety_issues_df = SavedDataFrames.ATSBWebsiteSafetyIssues(output_dir)
+    atsb_si_scraper = WebsiteScraping.ATSBSafetyIssueScraper(
+        atsb_safety_issues_df,
+        SavedDataFrames.ReportTitles(output_dir),
+        refresh,
+    )
+
+    atsb_si_scraper.extract_safety_issues_from_website()
+
+    tsb_recs_scraper = WebsiteScraping.TSBRecommendationsScraper(
+        SavedDataFrames.TSBWebsiteRecommendations(output_dir),
+        SavedDataFrames.ReportTitles(output_dir),
+        refresh,
+    )
+    tsb_recs_scraper.extract_recommendations_from_website()
+
+    taic_recs_scraper = WebsiteScraping.TAICRecommendationsScraper(
+        SavedDataFrames.TAICWebsiteRecommendations(output_dir),
+        SavedDataFrames.ReportTitles(output_dir),
+        refresh,
+    )
+    taic_recs_scraper.extract_recommendations_from_website()
+
+
+def extract(output_dir: Path, config: dict, refresh: bool) -> None:
+    """Extract report artifacts from PDFs.
+
+    Args:
+        output_dir (Path): Directory where output artifacts are written.
+        config (dict): Engine configuration settings.
+        refresh (bool): Whether to refresh cached data and reprocess sources.
+    """
+    output_config = config.get("output")
+
+    pdf_storage_manager = PDFStorageManager(
+        os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
+        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
+        output_config["pdf_container_name"],
+    )
+    logger.info(
+        f"PDF storage container: {output_config['pdf_container_name']}",
+    )
+
+    # Parse PDFs into text
+    PDFParsing.process_all_pdfs_into_text(
+        SavedDataFrames.ParsedReports(output_dir),
+        refresh,
+        pdf_storage_manager,
+    )
+
+    # Extract reports into structured data
+    extraction_config = config.get("extraction").get("ai_extraction_config")
+    event_types_csv_path = Path(
+        config.get("data").get("data_local_folder_location")
+    ) / config.get("data").get("event_types_file_name")
+
+    ReportExtracting.process_reports_parallel(
+        SavedDataFrames.ParsedReports(output_dir),
+        SavedDataFrames.ExtractedReports(output_dir),
+        ai_extraction_config=extraction_config,
+        report_titles_dc=SavedDataFrames.ReportTitles(output_dir),
+        event_types_csv_path=event_types_csv_path,
+    )
+
+
+def embed(output_dir: Path, config: dict, refresh: bool) -> None:
+    """Embed extracted reports into the vector database.
+
+    First step is creating the long dataformat dataframe, then embedding the document text from each row.
+    report_text documents are uploaded to a separate table without embeddings (they are too long).
+
+    Args:
+        output_dir (Path): Directory where output artifacts are written.
+        config (dict): Engine configuration settings.
+        refresh (bool): Whether to refresh cached data and reprocess sources.
+    """
+    data_dc = SavedDataFrames.DataForVectorDB(output_dir)
+
+    Combine.create_long_data_format(
+        Combine.LongDataFormatDCs(
+            parsed_reports_dc=SavedDataFrames.ParsedReports(output_dir),
+            extracted_reports_dc=SavedDataFrames.ExtractedReports(output_dir),
+            report_titles_dc=SavedDataFrames.ReportTitles(output_dir),
+            atsb_safety_issues_dc=SavedDataFrames.ATSBWebsiteSafetyIssues(output_dir),
+            tsb_recommendations_dc=SavedDataFrames.TSBWebsiteRecommendations(
+                output_dir
+            ),
+            taic_recommendations_dc=SavedDataFrames.TAICWebsiteRecommendations(
+                output_dir
+            ),
+        ),
+        data_dc,
+    )
+
+    vector_config = config.get("vector")
+    vector_db = Embedding.VectorDB(
+        os.environ["VECTORDB_URI"],
+        vector_config["model"]["name"],
+        vector_config["model"]["context_limit"],
+        vector_config["table_name"],
+        report_text_table_name=vector_config.get("report_text_table_name"),
+    )
+
+    vector_db.upload_report_text_table(data_dc)
+
+    vector_db.process_extracted_reports(data_dc)
+
+
+def upload(container_name: str, output_dir: Path, output_config: dict) -> None:
+    """Upload the latest engine output artifacts to Azure Storage.
+
+    Args:
+        container_name (str): The name of the Azure Storage container to upload to.
+        output_dir (Path): The local directory containing output artifacts.
+        output_config (dict): Output configuration settings.
+    """
+    uploader = EngineOutputUploader(
+        os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
+        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
+        container_name,
+        output_dir,
+    )
+
+    uploader.upload_latest_output()
+
+
+def cli() -> None:
+    """Main CLI entry point for the engine."""
+    parser = argparse.ArgumentParser(
+        description="A engine that will download, extract, and summarize PDFs from the marine accident investigation reports. More information can be found here: https://github.com/1jamesthompson1/TAIC-engine/"
+    )
+    parser.add_argument(
+        "-r",
+        "--refresh",
+        help="Clears the output directory, otherwise functions will be run with what is already there.",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        help="Enables verbose logging output for debugging purposes.",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-t",
+        "--run_type",
+        choices=[
+            "download",
+            "scrape",
+            "extract",
+            "embed",
+            "upload",
+            "all",
+        ],
+        required=True,
+        help="This is function that you want to run.",
+    )
+
+    args = parser.parse_args()
+
+    if args.verbose:
+        configure_logging("DEBUG")
+    else:
+        configure_logging("INFO")
+
+    # Initialize timing tracker
+    timing_results = {}
+    total_start_time = time.time()
+
+    # Get the config settings for the engine.
+    engine_settings = Config.config_reader.get_config()["engine"]
+
+    # Set working directory to output folder
+    output_path = Path(engine_settings.get("output").get("folder_name"))
+
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Define step configurations
+    step_configs = {
+        "download": (
+            "download",
+            download,
+            (
+                engine_settings.get("output").get("container_name"),
+                output_path,
+                args.refresh,
+            ),
+        ),
+        "scrape": ("scrape", scrape, (output_path, engine_settings, args.refresh)),
+        "extract": ("extract", extract, (output_path, engine_settings, args.refresh)),
+        "embed": ("embed", embed, (output_path, engine_settings, args.refresh)),
+        "upload": (
+            "upload",
+            upload,
+            (
+                engine_settings.get("output").get("container_name"),
+                output_path,
+                engine_settings.get("output"),
+            ),
+        ),
+    }
+
+    if args.run_type == "all":
+        for step_name, func, step_args in step_configs.values():
+            run_step(step_name, func, timing_results, *step_args)
+    else:
+        step_name, func, step_args = step_configs[args.run_type]
+        run_step(step_name, func, timing_results, *step_args)
+
+    # Calculate total time
+    total_time = time.time() - total_start_time
+
+    # Print timing summary
+    log_timing_summary(timing_results, total_time)
+
+    # Print API cost summary
+    print_api_cost_summary()
+
+
+if __name__ == "__main__":
+    cli()

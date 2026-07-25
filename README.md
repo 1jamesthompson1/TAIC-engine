@@ -1,67 +1,31 @@
-﻿# TAIC engine
+﻿# TAIC Report Engine
 
-> [!Note] - New version coming soon
-> Work is underway on a version two of this engine (expected integration mid 2026). The new engine will be an almost complete rewrite. Work is being completed in a [separate branch](https://github.com/1jamesthompson1/TAIC-engine/tree/report-extracting-rewrite). Note new [doc website](https://jolly-sand-0d46cc000.7.azurestaticapps.net/) is built off version 2
->
-> The reasons for doing this are to:
->
-> - Simply the extraction process (all AI extraction will now be done in a single step, which is possible due to the new LLMs being able to handle larger contexts)
-> - Improve the data pipeline to be more robust and easier to maintain
-> - Add in new features like metadata extraction and support for new ATSB and TAIC websites
-
-> An AI powered data pipeline that ingests transport accident investigation reports and outputs structured datasets to be used downstream in RAG like applications, like [TAIC smart tools](https://github.com/1jamesthompson1/TAIC_smart_assistant)
+> An AI-powered data pipeline that transforms publicly available transport accident investigation reports into structured datasets for [downstream RAG applications](https://github.com/1jamesthompson1/TAIC-smart-tools).
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![tests](https://github.com/1jamesthompson1/TAIC-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/1jamesthompson1/TAIC-engine/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/1jamesthompson1/TAIC-engine/graph/badge.svg?token=3IMJCA4B49)](https://codecov.io/gh/1jamesthompson1/TAIC-engine)
+[![version](https://img.shields.io/github/v/tag/1jamesthompson1/TAIC-engine?sort=semver&label=version)](https://github.com/1jamesthompson1/TAIC-engine/tags)
+
+## Overview
+
+TAIC Report Engine processes reports from transport accident investigation organisations (TAIC, ATSB, TSB) and extracts safety issues, recommendations, summaries, and chunked reports — all stored in a vector database for RAG like applications (i.e AI smart assistants). The pipeline broadly consists of three stages:  
+1. Scrape all of the reports from the agency websites  
+2. Parse the PDF reports into structured text (using an LLM to read the text and extract the relevant information)  
+3. Merge the structured data with scraped data and store in a vector database for downstream applications.  
+
+Running from scratch (scraping all websites and processing all reports) can take multiple days and cost a few hundred dollars in AI API costs. If you want to get started quickly, we may be able to provide the current 'output' folder with all the data to save you time and money. Please contact TAIC for more information. TAIC staff will find information in internal wiki pages on how to get access to the Azure resources and current output.
+
+## Documentation
+
+Full documentation is available at the [docs site](https://1jamesthompson1.github.io/TAIC-engine/) or can be served locally with `uv run mkdocs serve`.
+
+## About project
 
 
-## What
 
-This github repository contains code for a data pipeline that ingests publicly available transport accident investigation reports from the [TAIC](https://taic.org.nz/reports), [ATSB](https://www.atsb.gov.au/publications/investigation-reports/) and [TSB](https://www.tsb.gc.ca/eng/rapports-reports.html) and outputs structured datasets of safety issues, recommendations, report paragraphs and more.
-
-There is also a [collection](https://github.com/1jamesthompson1/TAIC-engine/tree/d735c0f3a50f4ef24f1e7198730c984fdb3446c7/notebooks) of jupyter notebooks that show the development process of some of the more complex features in the engine.
-
-## Contributing
-
-Get code and install dependencies:
-
-```bash
-# Get the code
-git clone https://github.com/1jamesthompson1/TAIC-engine
-cd TAIC-engine
-
-# Install uv if you haven't already see https://docs.astral.sh/uv/#installation
-curl -Ls https://astral.sh/uv/install.sh | sh
-source $HOME/.local/bin/env # needed to load uv into path (or just restart terminal)
-
-# Install project dependencies
-uv sync --dev
-
-# Setup pre-commits
-uv run pre-commit install
-```
-
-Running from scratch (i.e scraping all websites processing all reports etc) can take multiple days depending on your hardware and internet connection. It is recommended to instead download the current data state from the previous runs. This data is not publicly avialable now. For TAIC staff information can be found in the internal setup wiki.
-
-To install previous data state (Only for TAIC staff with internal setup):
-
-```bash
-uv run azure --latest-output --local output/
-uv run azure --prod-db --local workbench/vectordb/
-```
-
-Engine can then be ran with 
-
-```bash
-uv run engine --help
-```
-
-### About
-
-This project started as a university project for James' final semester of his BSc. The university work was completed in July-October 2023 and finished with a basic engine and viewer app. Since then work has been completed directly with TAIC to bring the engine and viewer from POC -> Prototype -> Production. The legacy 'viewer' app was released in later 2024. With a new [smart tools](https://github.com/1jamesthompson1/TAIC-smart-tools) app developed and deployed in November 2025
+This project started as a university project for James' final semester of his BSc. The university work was completed in July-October 2023 and finished with a basic engine and viewer app. Since then work has been completed directly with TAIC to bring the engine and viewer from POC to Prototype to Production. The legacy viewer app was released in late 2024, with a new [smart tools](https://github.com/1jamesthompson1/TAIC-smart-tools) app developed and deployed in November 2025.
 
 ### More information
 
-
-Most of the work is orgnaised inside a private Azure DevOps repository for TAIC. However GitHub is used for all code storing and PR resolutions. Contact James Thompson for more information.
+Most of the work is organised inside a private Azure DevOps repository for TAIC. However GitHub is used for all code storing and PR resolutions. Contact James Thompson for more information.
