@@ -5,6 +5,7 @@ from various transportation safety agencies (TAIC, ATSB, TSB). It handles HTTP r
 It does the crawling of websitess and extracts report metadata and PDFs which is then uploaded to cloud storage.
 """
 
+import io
 import random
 import re
 from abc import ABC, abstractmethod
@@ -41,6 +42,25 @@ from engine.SavedDataFrames import (
 )
 
 logger = get_logger(__name__)
+
+
+class ScraperRequestError(ValueError):
+    """Raised when a remote resource cannot be fetched successfully."""
+
+    def __init__(self, url: str, status_code: int | None = None) -> None:
+        """Initialize ScraperRequestError with URL and optional status code.
+
+        Args:
+            url: The URL that failed to fetch.
+            status_code: Optional HTTP status code from the failed request.
+        """
+        self.url = url
+        self.status_code = status_code
+        if status_code is None:
+            message = f"Failed to fetch {url}"
+        else:
+            message = f"Failed to fetch {url}, status code: {status_code}"
+        super().__init__(message)
 
 
 @dataclass
@@ -268,11 +288,16 @@ class WebsiteScraper:
             wait=wait_exponential(
                 multiplier=wait_min_s, min=wait_min_s, max=wait_max_s
             ),
-            retry=retry_if_exception_type(hrequests.exceptions.ClientException),
+            retry=retry_if_exception_type(
+                (hrequests.exceptions.ClientException, ScraperRequestError)
+            ),
             reraise=True,
         )
         def _inner() -> hrequests.Response:
-            return hrequests.get(url, headers=merged_headers, **kwargs)
+            response = hrequests.get(url, headers=merged_headers, **kwargs)
+            if not response.ok:
+                raise ScraperRequestError(url, response.status_code)
+            return response
 
         return _inner()
 
@@ -1303,17 +1328,10 @@ class TSBReportScraper(ReportScraper):
         """
         modes = ["aviation", "rail", "marine"]
 
-        @retry(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, min=5, max=15),
-            retry=retry_if_exception_type((ValueError, OSError)),
-            reraise=True,
-        )
         def _read_table(mode: str) -> pd.DataFrame:
             url = f"https://www.tsb.gc.ca/eng/rapports-reports/{mode}/index.html"
             response = self.get(url)
-            response.raise_for_status()
-            return pd.read_html(response.content, flavor="lxml")[0]
+            return pd.read_html(io.BytesIO(response.content), flavor="lxml")[0]
 
         modes_df = [_read_table(mode) for mode in tqdm(modes)]
 
@@ -1614,14 +1632,9 @@ class ATSBSafetyIssueScraper(WebsiteScraper):
             url = "https://www.atsb.gov.au" + row["safety_issue_link"]
             try:
                 response = self.get(url)
-            except hrequests.exceptions.ClientException as e:
+            except (hrequests.exceptions.ClientException, ScraperRequestError) as e:
                 logger.warning(
                     f"Error while trying to scrape safety issue details for {row['safety_issue_id']} from {url}: {e}"
-                )
-                continue
-            if response.status_code != HTTPStatus.OK:
-                logger.warning(
-                    f"Failed to scrape safety issue details for {row['safety_issue_id']} from {url}"
                 )
                 continue
 
@@ -1719,11 +1732,11 @@ Spread across {safety_issue_df["report_id"].nunique()} reports""")
             while True:
                 pbar.set_description(f"Scraping page {current_page} of mode {mode}")
                 url = base_url.format(mode=mode_to_mode_num[mode], page=current_page)
-                response = self.get(url)
-
-                if response.status_code != HTTPStatus.OK:
+                try:
+                    response = self.get(url)
+                except ScraperRequestError as e:
                     pbar.write(
-                        f"Failed to scrape page {current_page} of mode {mode}\nWith error {response.status_code}"
+                        f"Failed to scrape page {current_page} of mode {mode}: {e}"
                     )
                     failed += 1
                     if failed > max_failures:
@@ -1982,16 +1995,14 @@ class TSBRecommendationsScraper(RecommendationScraper):
             DataFrame containing the recommendations table.
         """
         url = self.get_url(element)
-        response = self.get(url)
-
-        if response.status_code != HTTPStatus.OK:
-            logger.warning(
-                f"Failed to scrape recommendations from {url}. Error code {response.status_code}"
-            )
+        try:
+            response = self.get(url)
+        except ScraperRequestError as e:
+            logger.warning(f"Failed to scrape recommendations from {url}: {e}")
             return pd.DataFrame()
 
         tables = pd.read_html(
-            response.content,
+            io.BytesIO(response.content),
             flavor="lxml",
             extract_links="body",
         )
@@ -2023,11 +2034,10 @@ class TSBRecommendationsScraper(RecommendationScraper):
             - made: The date recommendation was made
             - recommendation_context: The context/rationale for the recommendation
         """
-        response = self.get(url)
-
-        if response.status_code != HTTPStatus.OK:
-            msg = f"Failed to scrape recommendations from {url}. Error code {response.status_code}"
-            logger.warning(msg)
+        try:
+            response = self.get(url)
+        except ScraperRequestError as e:
+            logger.warning(str(e))
             return None
 
         soup = BeautifulSoup(response.content, "html.parser")
@@ -2219,11 +2229,10 @@ class TAICRecommendationsScraper(RecommendationScraper):
             - made: The date the recommendation was made
             - agency_id: The agency identifier
         """
-        response = self.get(url)
-
-        if response.status_code != HTTPStatus.OK:
-            msg = f"Failed to scrape recommendation from {url}. Error code {response.status_code}"
-            logger.warning(msg)
+        try:
+            response = self.get(url)
+        except ScraperRequestError as e:
+            logger.warning(str(e))
             return None
 
         soup = BeautifulSoup(response.content, "html.parser")
