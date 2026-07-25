@@ -127,28 +127,28 @@ def _process_future_result(
     """
     try:
         report_text = future.result()
-        if report_text is None:
-            return parsed_reports_df
-
-        batch_reports.append(
-            {
-                "report_id": report_id,
-                "text": report_text,
-            }
-        )
-
-        # Save in batches
-        if len(batch_reports) >= SAVE_BATCH_SIZE:
-            parsed_reports_df = pd.concat(
-                [parsed_reports_df, pd.DataFrame(batch_reports)],
-                ignore_index=True,
-            )
-            parsed_reports_dc.save(parsed_reports_df)
-            logger.debug(f"Saved batch of {len(batch_reports)} reports")
-            batch_reports.clear()
-
     except Exception:
-        logger.exception(f"Error processing {report_id}")
+        logger.exception(f"Failed to process {report_id}")
+        return parsed_reports_df
+
+    if report_text is None:
+        return parsed_reports_df
+
+    batch_reports.append(
+        {
+            "report_id": report_id,
+            "text": report_text,
+        }
+    )
+
+    if len(batch_reports) >= SAVE_BATCH_SIZE:
+        parsed_reports_df = pd.concat(
+            [parsed_reports_df, pd.DataFrame(batch_reports)],
+            ignore_index=True,
+        )
+        parsed_reports_dc.save(parsed_reports_df)
+        logger.debug(f"Saved batch of {len(batch_reports)} reports")
+        batch_reports.clear()
 
     return parsed_reports_df
 
@@ -163,37 +163,48 @@ def pdf_to_text(pdf_manager: PDFStorageManager, report_id: str) -> str | None:
     Returns:
         Extracted text from the PDF
     """
+    temp_pdf_path = None
     try:
-        if not pdf_manager.pdf_exists(report_id):
-            logger.error(f"PDF {report_id} does not exist in storage")
-            return None
-        temp_pdf_path = pdf_manager.stream_pdf_to_temp_file(report_id)
-
-        if temp_pdf_path is None:
-            logger.error(f"Failed to download {report_id} from storage")
-            return None
-
-        # check pdf is not empty
-        if Path(temp_pdf_path).stat().st_size == 0:
-            logger.error(f"Downloaded PDF {report_id} is empty")
-            return None
-
-        text = extract_text_from_pdf(temp_pdf_path)
-
-        if len(text) < MIN_EXTRACTED_TEXT_LENGTH:
-            logger.warning(
-                f"Extracted text from {report_id} is unusually short ({len(text)} characters) and is being ignored"
-            )
-            return None
-        return clean_extracted_text(text)
+        text, temp_pdf_path = _extract_pdf_text(pdf_manager, report_id)
     except Exception:
         logger.exception(f"Error processing {report_id}")
         return None
+    else:
+        return text
     finally:
-        if "temp_pdf_path" in locals() and temp_pdf_path:
-            temp_path = Path(temp_pdf_path)
-            if temp_path.exists():
-                temp_path.unlink()
+        if temp_pdf_path and Path(temp_pdf_path).exists():
+            Path(temp_pdf_path).unlink()
+
+
+def _extract_pdf_text(
+    pdf_manager: PDFStorageManager, report_id: str
+) -> tuple[str | None, str | None]:
+    """Core extraction logic for pdf_to_text.
+
+    Returns:
+        (Extracted text, temp file path) or (None, None) if the PDF cannot be processed.
+    """
+    if not pdf_manager.pdf_exists(report_id):
+        logger.error(f"PDF {report_id} does not exist in storage")
+        return None, None
+    temp_pdf_path = pdf_manager.stream_pdf_to_temp_file(report_id)
+
+    if temp_pdf_path is None:
+        logger.error(f"Failed to download {report_id} from storage")
+        return None, None
+
+    if Path(temp_pdf_path).stat().st_size == 0:
+        logger.error(f"Downloaded PDF {report_id} is empty")
+        return None, temp_pdf_path
+
+    text = extract_text_from_pdf(temp_pdf_path)
+
+    if len(text) < MIN_EXTRACTED_TEXT_LENGTH:
+        logger.warning(
+            f"Extracted text from {report_id} is unusually short ({len(text)} characters) and is being ignored"
+        )
+        return None, temp_pdf_path
+    return clean_extracted_text(text), temp_pdf_path
 
 
 def extract_text_from_pdf(pdf_path: str) -> str:

@@ -270,12 +270,11 @@ def get_report_text(report_id: str) -> str:
     Args:
         report_id (str): The unique identifier for the report.
 
-    Raises:
-        ValueError: If the report ID is not found in the extracted reports.
-
     Returns:
         str: The text content of the report.
 
+    Raises:
+        ValueError: If the report ID is not found in the extracted reports.
     """
     parsed_reports_dc = ParsedReports(_output_dir_from_pytest())
     extracted_reports = parsed_reports_dc.read()
@@ -497,9 +496,9 @@ def test_chunking_into_section(report_id: str, num_sections: int) -> None:
 
     sections = chunk_report_into_sections(report_text)
 
-    assert (
-        len(sections) == num_sections
-    ), f"Expected {num_sections} sections but got {len(sections)}"
+    assert len(sections) == num_sections, (
+        f"Expected {num_sections} sections but got {len(sections)}"
+    )
     assert all(isinstance(section, dict) for section in sections)
     assert all({"text", "section"}.issubset(section) for section in sections)
 
@@ -644,38 +643,37 @@ def test_process_handle_already_processed(
         )
 
     # Assertions: Verify that extract_report was called only for new reports
-    assert (
-        mock_extract.call_count == expected_new_report_count
-    ), f"extract_report should be called {expected_new_report_count} times (for new reports), but was called {mock_extract.call_count} times"
+    assert mock_extract.call_count == expected_new_report_count, (
+        f"extract_report should be called {expected_new_report_count} times (for new reports), but was called {mock_extract.call_count} times"
+    )
 
     # Verify the correct reports were processed by checking the call arguments
     called_report_ids = [
         call_arg[0][0]["report_id"] for call_arg in mock_extract.call_args_list
     ]
-    assert (
-        set(called_report_ids) == set(expected_new_ids)
-    ), f"extract_report should be called for {expected_new_ids}, but was called for {called_report_ids}"
+    assert set(called_report_ids) == set(expected_new_ids), (
+        f"extract_report should be called for {expected_new_ids}, but was called for {called_report_ids}"
+    )
 
     # Assertions: Verify results contain all reports (already processed + new)
     result_ids = set(results_df["report_id"].tolist())
     expected_all_ids = set(already_processed_ids + expected_new_ids)
-    assert (
-        result_ids == expected_all_ids
-    ), f"Results should contain {expected_all_ids}, but contains {result_ids}"
+    assert result_ids == expected_all_ids, (
+        f"Results should contain {expected_all_ids}, but contains {result_ids}"
+    )
 
     # Assertions: Verify that all required columns are present
-    assert (
-        set(results_df.columns)
-        == {
-            "report_id",
-            "safety_issues",
-            "recommendations",
-            "metadata",
-            "sections",
-        }
-    ), f"Results should have columns ['report_id', 'safety_issues', 'recommendations', 'metadata', 'sections'], but has {list(results_df.columns)}"
+    assert set(results_df.columns) == {
+        "report_id",
+        "safety_issues",
+        "recommendations",
+        "metadata",
+        "sections",
+    }, (
+        f"Results should have columns ['report_id', 'safety_issues', 'recommendations', 'metadata', 'sections'], but has {list(results_df.columns)}"
+    )
 
     # Assertions: No duplicate report_ids in results
-    assert (
-        len(results_df) == len(result_ids)
-    ), f"Results should have {len(expected_all_ids)} unique reports, but has {len(results_df)} rows"
+    assert len(results_df) == len(result_ids), (
+        f"Results should have {len(expected_all_ids)} unique reports, but has {len(results_df)} rows"
+    )

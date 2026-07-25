@@ -468,23 +468,20 @@ class OpenAICaller(BaseAICaller):
 
         try:
             if output_structure is not None:
-                try:
-                    response = self.client.responses.parse(
-                        **params,
-                        text_format=output_structure,
-                    )
-                except ValidationError as e:
-                    if "I'm sorry" in str(e):
-                        raise AIRefusalError(
-                            message="No reason given, however caused validation error of JSON"
-                        ) from None
-                    raise
-
+                response = self.client.responses.parse(
+                    **params,
+                    text_format=output_structure,
+                )
             else:
                 response = self.client.responses.create(
                     **params,
                 )
-
+        except ValidationError as e:
+            if "I'm sorry" in str(e):
+                raise AIRefusalError(
+                    message="No reason given, however caused validation error of JSON"
+                ) from None
+            raise
         except openai.BadRequestError as e:
             raise AICallerFailedError(message=str(e)) from e
 

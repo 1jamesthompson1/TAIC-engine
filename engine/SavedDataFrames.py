@@ -71,12 +71,31 @@ class SavedDataFrame(ABC):
 
     @property
     def _effective_columns(self) -> list[str]:
-        """Get expected columns from Row model field names in order.
+        """Expected columns from Row model field names in order.
 
         Returns:
             List of column names in order.
         """
         return list(type(self).Row.model_fields.keys())
+
+    def _validate_row(self, row: pd.Series) -> dict:
+        """Validate a single row against the Row model.
+
+        Args:
+            row: A single row from the dataframe.
+
+        Returns:
+            The validated row as a dictionary.
+        """
+        row_dict = {}
+        for key, value in row.to_dict().items():
+            is_missing = pd.isna(value)
+            if isinstance(is_missing, bool):
+                row_dict[key] = None if is_missing else value
+            else:
+                row_dict[key] = value
+        type(self).Row.model_validate(row_dict)
+        return row_dict
 
     def validate(self, df: pd.DataFrame) -> None:
         """Validate dataframe schema and all row values.
@@ -103,14 +122,7 @@ class SavedDataFrame(ABC):
         # Validate all row values using Row model
         for idx, row in df.iterrows():
             try:
-                row_dict = {}
-                for key, value in row.to_dict().items():
-                    is_missing = pd.isna(value)
-                    if isinstance(is_missing, bool):
-                        row_dict[key] = None if is_missing else value
-                    else:
-                        row_dict[key] = value
-                type(self).Row.model_validate(row_dict)
+                row_dict = self._validate_row(row)
             except PydanticValidationError as e:
                 # Extract the first error for a cleaner message
                 errors = e.errors()
