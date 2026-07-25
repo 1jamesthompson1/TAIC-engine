@@ -122,7 +122,7 @@ class SavedDataFrame(ABC):
         # Validate all row values using Row model
         for idx, row in df.iterrows():
             try:
-                row_dict = self._validate_row(row)
+                self._validate_row(row)
             except PydanticValidationError as e:
                 # Extract the first error for a cleaner message
                 errors = e.errors()
@@ -130,7 +130,7 @@ class SavedDataFrame(ABC):
                     first_error = errors[0]
                     field = first_error.get("loc", ("unknown",))[0]
                     msg_detail = first_error.get("msg", str(first_error))
-                    msg = f"Row {idx}, field '{field}': {msg_detail} and instead got value '{row_dict.get(field)}'"
+                    msg = f"Row {idx}, field '{field}': {msg_detail}"
                 else:
                     msg = f"Row {idx}: validation error"
                 raise ValidationError(msg) from e

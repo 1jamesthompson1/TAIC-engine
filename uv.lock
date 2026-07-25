@@ -4817,7 +4817,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.0.3" },
     { name = "pylance", specifier = ">=8.0.0" },
     { name = "pymupdf-layout" },
-    { name = "pymupdf4llm" },
+    { name = "pymupdf4llm", specifier = ">=1.0.0" },
     { name = "pytest", specifier = ">=7.4.3" },
     { name = "pytest-cov", specifier = ">=6.2.1" },
     { name = "pytest-xdist", specifier = ">=3.5.0" },

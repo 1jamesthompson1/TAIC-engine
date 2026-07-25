@@ -27,6 +27,20 @@ MIN_EXTRACTED_TEXT_LENGTH = 1000
 
 PDF_PAGE_MARKER_REGEX = re.compile(r"<< PDF Page (\d+) start >>")
 
+PAGE_END_MARKER_REGEX = re.compile(r"--- end of page\.page_number=(\d+) ---")
+
+
+def _page_marker(page_number: int) -> str:
+    """Build a page marker string in the format matched by PDF_PAGE_MARKER_REGEX.
+
+    Args:
+        page_number: The page number to include in the marker.
+
+    Returns:
+        A formatted page marker string for the given page number.
+    """
+    return f"<< PDF Page {page_number} start >>"
+
 
 def process_all_pdfs_into_text(
     parsed_reports_dc: ParsedReports,
@@ -221,24 +235,15 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     try:
         text_md = pymupdf4llm.to_markdown(pdf_path, page_separators=True)
 
-        # MOve the end of page markers to be start of page markers ("--- end of page=n ---") to ("--- start of page=(n+1) ---")
-        text_with_start_of_page_markers = re.sub(
-            r"--- end of page=(\d+) ---",
-            lambda match: f"<< PDF Page {int(match.group(1)) + 1} start >>",
+        # Convert page end markers to start markers
+        text_with_page_markers = re.sub(
+            PAGE_END_MARKER_REGEX,
+            lambda match: _page_marker(int(match.group(1)) + 1),
             text_md,
         )
 
         # Add a start of page marker at the very beginning of the document
-        text_with_complete_start_of_page_markers = (
-            "<< PDF Page 0 start >>\n" + text_with_start_of_page_markers
-        )
-
-        # Remove the last page marker as it is not a start of page marker anyomre.
-        return re.sub(
-            r"--- Page \d+ start ---\s*$",
-            "",
-            text_with_complete_start_of_page_markers,
-        )
+        return _page_marker(0) + "\n" + text_with_page_markers
 
     except Exception as e:
         logger.error(f"Error extracting text from {pdf_path}: {e}", exc_info=True)

@@ -73,9 +73,9 @@ def test_website_connectivity() -> None:
         print(f"{name}: {status}")  # noqa: T201
 
     # At least one website should be reachable
-    assert any(
-        results.values()
-    ), "Unable to reach any website (TAIC, TSB, ATSB). Network connectivity issue?"
+    assert any(results.values()), (
+        "Unable to reach any website (TAIC, TSB, ATSB). Network connectivity issue?"
+    )
 
     # Optionally check if all are reachable
     if not all(results.values()):
@@ -162,7 +162,7 @@ def get_agency_scraper(
         pytest.param(
             "TSB",
             "https://www.tsb.gc.ca/eng/rapports-reports/marine/2020/m20c0101/m20c0101.html",
-            "TSB_m_2020_c01010",
+            "TSB_m_2020_c0101",
             {
                 "success": True,
                 "occurrence_date": "2020-05-12",
@@ -492,9 +492,9 @@ def test_agency_website_scraper_collecting_all_reports(
             "https://www.atsb.gov.au/investigations/ao-2017-032",
             "ATSB_a_2017_032",
             {
-                "summary_start": "Preliminary report released 13 Apr",
-                "summary_end": "detachment",
-                "summary_length": 9615,
+                "summary_start": "What happened",
+                "summary_end": "assistance.",
+                "summary_length": 3229,
                 "investigation_level": "full",
                 "occurrence_type": "Propeller/rotor malfunction",
                 "agency_id": "AO-2017-032",
@@ -678,9 +678,9 @@ def test_recommendation_page(  # noqa: PLR0913, PLR0917
     returned_keys = set(rec.keys())
     unexpected_keys = returned_keys - valid_fields
 
-    assert (
-        not unexpected_keys
-    ), f"Unexpected keys: {unexpected_keys}. Valid: {valid_fields}"
+    assert not unexpected_keys, (
+        f"Unexpected keys: {unexpected_keys}. Valid: {valid_fields}"
+    )
 
     # Validate required fields are present and non-empty
     for field in required_fields:

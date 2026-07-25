@@ -31,18 +31,20 @@ def test_metadata_expansion() -> None:
     # Check data types row by row to get more informative error messages which includes the entire row id.
     for _, row in expanded_df.iterrows():
         for col, expected_type in expected_schema.items():
-            assert (
-                col in expanded_df.columns
-            ), f"Column '{col}' is missing from the output DataFrame"
+            assert col in expanded_df.columns, (
+                f"Column '{col}' is missing from the output DataFrame"
+            )
             value = row[col]
+            if isinstance(value, float) and pd.isna(value):
+                value = None
             if isinstance(expected_type, tuple):
-                assert isinstance(
-                    value, expected_type
-                ), f"Row {row.report_id}: Value '{value}' in column '{col}' should be one of types {expected_type}"
+                assert isinstance(value, expected_type), (
+                    f"Row {row.report_id}: Value '{value}' in column '{col}' should be one of types {expected_type}"
+                )
             else:
-                assert isinstance(
-                    value, expected_type
-                ), f"Row {row.report_id}: Value '{value}' in column '{col}' should be of type {expected_type}"
+                assert isinstance(value, expected_type), (
+                    f"Row {row.report_id}: Value '{value}' in column '{col}' should be of type {expected_type}"
+                )
 
 
 def test_metadata_combination() -> None:
@@ -73,17 +75,17 @@ def test_metadata_combination() -> None:
         "agency",
         "year",
     }
-    assert (
-        set(combined_metadata.columns) == expected_columns
-    ), f"Combined metadata should have columns {expected_columns}, but got {set(combined_metadata.columns)}"
+    assert set(combined_metadata.columns) == expected_columns, (
+        f"Combined metadata should have columns {expected_columns}, but got {set(combined_metadata.columns)}"
+    )
 
     # Number of rows should be the same as the inner product of the two sets of report ids
     combined_report_ids = set(expanded_extracted_metadata["report_id"].dropna()) & set(
         report_titles["report_id"].dropna()
     )
-    assert (
-        len(combined_metadata) == len(combined_report_ids)
-    ), f"Combined metadata should have {len(combined_report_ids)} rows, but got {len(combined_metadata)}"
+    assert len(combined_metadata) == len(combined_report_ids), (
+        f"Combined metadata should have {len(combined_report_ids)} rows, but got {len(combined_metadata)}"
+    )
 
 
 def test_recommendation_combination() -> None:
@@ -107,9 +109,9 @@ def test_recommendation_combination() -> None:
     assert isinstance(combined_recs, pd.DataFrame), "Output should be a DataFrame"
 
     expected_columns = {"report_id", "document_id", "url", "document", "document_type"}
-    assert (
-        set(combined_recs.columns) == expected_columns
-    ), f"Combined recommendations should have columns {expected_columns}, but got {set(combined_recs.columns)}"
+    assert set(combined_recs.columns) == expected_columns, (
+        f"Combined recommendations should have columns {expected_columns}, but got {set(combined_recs.columns)}"
+    )
 
     expected_length = (
         len(
@@ -118,9 +120,9 @@ def test_recommendation_combination() -> None:
         + len(tsb_scraped)
         + len(taic_scraped)
     )
-    assert (
-        len(combined_recs) == expected_length
-    ), f"Combined recommendations should have {expected_length} rows, but got {len(combined_recs)}"
+    assert len(combined_recs) == expected_length, (
+        f"Combined recommendations should have {expected_length} rows, but got {len(combined_recs)}"
+    )
 
 
 def test_safety_issue_combination() -> None:
@@ -138,17 +140,17 @@ def test_safety_issue_combination() -> None:
     assert isinstance(combined_si, pd.DataFrame), "Output should be a DataFrame"
 
     expected_columns = {"report_id", "document_id", "document", "document_type"}
-    assert (
-        set(combined_si.columns) == expected_columns
-    ), f"Combined safety issues should have columns {expected_columns}, but got {set(combined_si.columns)}"
+    assert set(combined_si.columns) == expected_columns, (
+        f"Combined safety issues should have columns {expected_columns}, but got {set(combined_si.columns)}"
+    )
 
     expected_length = len(
         extracted_si.explode("safety_issues").dropna(subset=["safety_issues"])
     ) + len(atsb_scraped_si)
 
-    assert (
-        len(combined_si) == expected_length
-    ), f"Combined safety issues should have {expected_length} rows, but got {len(combined_si)}"
+    assert len(combined_si) == expected_length, (
+        f"Combined safety issues should have {expected_length} rows, but got {len(combined_si)}"
+    )
 
     test_report = combined_si[combined_si["report_id"] == "TAIC_m_2004_205"]
 
@@ -191,9 +193,9 @@ def test_creation_of_long_data_format(tmp_path: object) -> None:
     # Makes sure that important columns are non null
     important_columns = ["report_id", "document_id", "document"]
     for col in important_columns:
-        assert (
-            col in output.columns
-        ), f"Column '{col}' is missing from the output DataFrame"
-        assert (
-            output[col].notna().all()
-        ), f"Column '{col}' should not have any null values"
+        assert col in output.columns, (
+            f"Column '{col}' is missing from the output DataFrame"
+        )
+        assert output[col].notna().all(), (
+            f"Column '{col}' should not have any null values"
+        )

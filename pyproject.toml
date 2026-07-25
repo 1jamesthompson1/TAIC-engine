@@ -35,7 +35,7 @@ dependencies = [
     "lxml>=6.0.0",
     "langchain-text-splitters>=1.1.0",
     "pymupdf-layout",
-    "pymupdf4llm",
+    "pymupdf4llm>=1.0.0",
     "marimo>=0.23.10",
     "pylance>=8.0.0",
     "pytz>=2026.2",
@@ -125,7 +125,7 @@ select = [
     "W",
 ]
 
-ignore = ["E501", "ANN204", "RUF105"]  # Ignore line too long, and missing return type for special methods
+ignore = ["E501", "ANN204"]  # Ignore line too long, and missing return type for special methods
 
 preview = true
 

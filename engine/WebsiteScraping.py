@@ -520,8 +520,8 @@ class ReportScraper(WebsiteScraper, ABC):
 
         try:
             webpage = self.get(url)
-        except hrequests.exceptions.ClientException as e:
-            logger.warning(f"Timed out while trying to collect {url}: {e}")
+        except (hrequests.exceptions.ClientException, ScraperRequestError) as e:
+            logger.warning(f"Failed to collect {url}: {e}")
             return False
         except hrequests.exceptions.BrowserTimeoutException:
             logger.warning(f"Failed to collect {url}, timeout error")
