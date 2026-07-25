@@ -1306,12 +1306,13 @@ class TSBReportScraper(ReportScraper):
         @retry(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=1, min=5, max=15),
-            retry=retry_if_exception_type(ValueError),
+            retry=retry_if_exception_type((ValueError, OSError)),
             reraise=True,
         )
         def _read_table(mode: str) -> pd.DataFrame:
             url = f"https://www.tsb.gc.ca/eng/rapports-reports/{mode}/index.html"
             response = self.get(url)
+            response.raise_for_status()
             return pd.read_html(response.content, flavor="lxml")[0]
 
         modes_df = [_read_table(mode) for mode in tqdm(modes)]
