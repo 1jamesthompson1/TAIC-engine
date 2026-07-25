@@ -452,18 +452,20 @@ class EngineOutputUploader(EngineOutputManager):
             except subprocess.CalledProcessError as e:
                 logger.warning(f"Azure CLI upload failed: {e.stderr}")
                 logger.info("Falling back to Python implementation...")
-
+            else:
+                return
         # Fallback to improved Python implementation
-        logger.info(
-            f"Using Python implementation to upload folder {self.folder_to_upload} to {uploaded_folder_name}"
-        )
-        _, failed = self._upload_folder_python_parallel(
-            uploaded_folder_name, start_time
-        )
+        else:
+            logger.info(
+                f"Using Python implementation to upload folder {self.folder_to_upload} to {uploaded_folder_name}"
+            )
+            _, failed = self._upload_folder_python_parallel(
+                uploaded_folder_name, start_time
+            )
 
-        if failed > 0:
-            msg = f"Upload failed with {failed} errors. Please check the logs for details."
-            raise RuntimeError(msg)
+            if failed > 0:
+                msg = f"Upload failed with {failed} errors. Please check the logs for details."
+                raise RuntimeError(msg)
 
     def _upload_folder_python_parallel(
         self, uploaded_folder_name: str, start_time: float

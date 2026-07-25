@@ -253,7 +253,6 @@ class VectorDB:
         self.report_text_table = self.get_or_create_table(
             self.report_text_table_name, schema=schema
         )
-
         self.current_table_model = self.table.embedding_functions[
             "vector"
         ].function.name

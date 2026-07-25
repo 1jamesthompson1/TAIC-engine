@@ -38,6 +38,7 @@ dependencies = [
     "pymupdf4llm",
     "marimo>=0.23.10",
     "pylance>=8.0.0",
+    "pytz>=2026.2",
 ]
 
 [dependency-groups]
@@ -48,7 +49,7 @@ dev = [
     "ipywidgets>=8.1.2",
     "pre-commit>=3.7.1",
     "azure-data-tables>=12.7.0",
-    "ruff>=0.15.0",
+    "ruff==0.15.21",  # Keep in sync with .pre-commit-config.yaml and .github/workflows/ci.yml
     "pypdf>=6.7.0",
     "mkdocs>=1.6.0",
     "mkdocs-material>=9.5.0",
@@ -124,7 +125,7 @@ select = [
     "W",
 ]
 
-ignore = ["E501", "ANN204"]  # Ignore line too long, and missing return type for special methods
+ignore = ["E501", "ANN204", "RUF105"]  # Ignore line too long, and missing return type for special methods
 
 preview = true
 
