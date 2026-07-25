@@ -248,7 +248,7 @@ def embed(output_dir: Path, config: dict, refresh: bool) -> None:
 
     vector_config = config.get("vector")
     vector_db = Embedding.VectorDB(
-        os.environ["db_URI"],  # noqa: SIM112
+        os.environ["VECTORDB_URI"],
         vector_config["model"]["name"],
         vector_config["model"]["context_limit"],
         vector_config["table_name"],
