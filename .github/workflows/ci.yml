@@ -34,6 +34,7 @@ jobs:
       AZURE_TOKEN_CREDENTIALS: AzureCliCredential
       AZURE_STORAGE_ACCOUNT_NAME: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}
       AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
       TEST_VECTORDB_URI: ${{ secrets.TEST_VECTORDB_URI }}
 
     steps:

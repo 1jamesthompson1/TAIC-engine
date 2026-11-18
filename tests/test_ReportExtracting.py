@@ -24,12 +24,22 @@ from engine.ExtractionModels import (
 from engine.ReportExtracting import (
     ai_read_report,
     chunk_report_into_sections,
+    get_ai_model,
     load_event_type_taxonomy,
     process_reports_parallel,
 )
 from engine.SavedDataFrames import ExtractedReports, ParsedReports, ReportTitles
 
 logger = logging.getLogger(__name__)
+
+
+def test_get_ai_model_requires_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OPENAI_MODEL must be configured explicitly."""
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+
+    with pytest.raises(RuntimeError, match="OPENAI_MODEL"):
+        get_ai_model()
+
 
 # Shared comparison helpers used by both singular and full-extraction tests.
 

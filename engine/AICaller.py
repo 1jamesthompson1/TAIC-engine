@@ -162,6 +162,9 @@ class ModelDefinition:
     pricing: dict[str, float]
 
 
+# Prices are USD per 1M tokens for the GlobalStandard short-context tier in
+# australiaeast. They come from the free Azure Retail Prices API (no auth):
+# https://prices.azure.com/api/retail/prices?$filter=serviceName eq 'Foundry Models' and armRegionName eq 'australiaeast'
 MODEL_REGISTRY: dict[str, ModelDefinition] = {
     "gpt-4": ModelDefinition(
         api_model="gpt-4o",
@@ -172,6 +175,11 @@ MODEL_REGISTRY: dict[str, ModelDefinition] = {
         api_model="gpt-5-mini",
         limit=400_000,
         pricing={"input": 0.25, "cached_input": 0.025, "output": 2.00},
+    ),
+    "gpt-5.4": ModelDefinition(
+        api_model="gpt-5.4",
+        limit=400_000,
+        pricing={"input": 2.50, "cached_input": 0.25, "output": 15.00},
     ),
     # Intermittently has problems with not generating as blocked by "I'm sorry I can't respond to that..." error. Otherwise cheap and high reasoning.
     "gpt-5.4-mini": ModelDefinition(
@@ -189,6 +197,46 @@ MODEL_REGISTRY: dict[str, ModelDefinition] = {
         api_model="gpt-5.1-chat",
         limit=400_000,
         pricing={"input": 1.25, "cached_input": 0.125, "output": 10.00},
+    ),
+    "gpt-5.6-luna": ModelDefinition(
+        api_model="gpt-5.6-luna",
+        limit=400_000,
+        pricing={"input": 0.20, "cached_input": 0.02, "output": 1.20},
+    ),
+    "gpt-5.6-terra": ModelDefinition(
+        api_model="gpt-5.6-terra",
+        limit=400_000,
+        pricing={"input": 2.00, "cached_input": 0.20, "output": 12.00},
+    ),
+    "gpt-5.6-sol": ModelDefinition(
+        api_model="gpt-5.6-sol",
+        limit=400_000,
+        pricing={"input": 4.00, "cached_input": 0.40, "output": 20.00},
+    ),
+    "gpt-6-luna": ModelDefinition(
+        api_model="gpt-6-luna",
+        limit=1_050_000,
+        pricing={"input": 0.10, "cached_input": 0.01, "output": 0.50},
+    ),
+    "gpt-6-astra": ModelDefinition(
+        api_model="gpt-6-astra",
+        limit=1_050_000,
+        pricing={"input": 10.00, "cached_input": 1.00, "output": 50.00},
+    ),
+    "gpt-6-sol": ModelDefinition(
+        api_model="gpt-6-sol",
+        limit=1_050_000,
+        pricing={"input": 2.00, "cached_input": 0.20, "output": 10.00},
+    ),
+    "gpt-6.1-terra": ModelDefinition(
+        api_model="gpt-6.1-terra",
+        limit=1_050_000,
+        pricing={"input": 1.00, "cached_input": 0.05, "output": 5.00},
+    ),
+    "gpt-6.1-sol": ModelDefinition(
+        api_model="gpt-6.1-sol",
+        limit=1_050_000,
+        pricing={"input": 2.00, "cached_input": 0.10, "output": 10.00},
     ),
 }
 

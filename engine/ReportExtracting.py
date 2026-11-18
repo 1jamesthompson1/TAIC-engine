@@ -3,6 +3,7 @@
 This includes extracting safety issues, recommendations, and chunking the report into sections based on page numbers. The safety issue and recommendation extracting is done by AI. While chunking is a simple recursive text splitter.
 """
 
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -22,6 +23,22 @@ from engine.Logging import get_logger
 from engine.SavedDataFrames import ExtractedReports, ParsedReports, ReportTitles
 
 logger = get_logger(__name__)
+
+
+def get_ai_model() -> str:
+    """Return the required Azure OpenAI model used for report extraction.
+
+    Returns:
+        str: The model name from OPENAI_MODEL.
+
+    Raises:
+        RuntimeError: If OPENAI_MODEL is not set.
+    """
+    model = os.getenv("OPENAI_MODEL", "").strip()
+    if not model:
+        msg = "OPENAI_MODEL must be set.]"
+        raise RuntimeError(msg)
+    return model
 
 
 class InvalidExtractionConfigError(ValueError):
@@ -163,9 +180,16 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
         msg = f"Failed to build output model for agency '{agency_name}' with report ID '{report_id}'"
         raise RuntimeError(msg) from e
 
+    model = get_ai_model()
+    logger.info(
+        "Extracting report %s with model %s",
+        report_id or "<unknown>",
+        model,
+    )
+
     try:
         response = ai_caller.query(
-            model="gpt-5.4-mini",
+            model=model,
             reasoning="high",
             system=system_prompt,
             user=user_prompt,
@@ -306,6 +330,10 @@ def extract_report(
     else:
         metadata = metadata or {}
 
+    # Record the model that produced this extraction. This is stored in the
+    # pickle and flows through to metadata_json in the vector database.
+    metadata["extraction_model"] = get_ai_model()
+
     # Make sure that atleat the accident type, location and date are simultanously non-None treat it as a failed metadata extraction and asume the report text is actually not scrapped properly.
     required_metadata_fields = [
         "occurrence_type",
@@ -386,6 +414,9 @@ def process_reports_parallel(  # noqa: PLR0912, PLR0913, PLR0917
         >>> # Only new reports are processed, existing data preserved
 
     """
+    # Fail before reading or processing anything if the model is not configured.
+    logger.info("Using AI extraction model: %s", get_ai_model())
+
     reports_df = parsed_reports_dc.read()
 
     if report_titles_dc is not None:
