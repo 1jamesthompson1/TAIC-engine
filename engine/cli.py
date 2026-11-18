@@ -91,7 +91,6 @@ def download(container: str, output_dir: Path, refresh: bool) -> None:
     """
     downloader = EngineOutputDownloader(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
-        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
         container,
         output_dir,
     )
@@ -115,7 +114,6 @@ def scrape(output_dir: Path, config: dict, refresh: bool) -> None:
     logger.info("Setting up PDF storage manager...")
     pdf_storage_manager = PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
-        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
         output_config["pdf_container_name"],
     )
     logger.info(
@@ -188,7 +186,6 @@ def extract(output_dir: Path, config: dict, refresh: bool) -> None:
 
     pdf_storage_manager = PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
-        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
         output_config["pdf_container_name"],
     )
     logger.info(
@@ -270,7 +267,6 @@ def upload(container_name: str, output_dir: Path, output_config: dict) -> None:
     """
     uploader = EngineOutputUploader(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
-        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
         container_name,
         output_dir,
     )

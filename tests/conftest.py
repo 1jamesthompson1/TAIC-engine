@@ -3,6 +3,7 @@
 import contextlib
 import json
 import os
+import warnings
 from collections.abc import Generator
 from pathlib import Path
 
@@ -43,7 +44,24 @@ def load_test_config() -> None:
     pytest.output_config = config["engine"]["output"]
     pytest.vector_config = config["engine"]["vector"]
 
-    dotenv.load_dotenv(override=True)
+    # Tests perform real Azure storage I/O. Refuse to point them at production
+    # containers by mistake; the convention is that test resources start with
+    # the "test" prefix.
+    for container in (
+        pytest.output_config["pdf_container_name"],
+        pytest.output_config["stable_pdf_container_name"],
+        pytest.output_config["storage"]["container"],
+    ):
+        if not str(container).lower().startswith("test"):
+            warnings.warn(
+                f"Test container {container!r} does not start with 'test'. "
+                "Tests perform real storage operations and may modify "
+                "production data.",
+                UserWarning,
+                stacklevel=1,
+            )
+
+    dotenv.load_dotenv(override=False)
 
 
 @pytest.fixture(scope="function")
@@ -71,7 +89,6 @@ def test_pdf_storage_manager() -> PDFStorageManager:
     """
     return PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
-        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
         pytest.output_config["pdf_container_name"],
     )
 
@@ -100,7 +117,6 @@ def stable_pdf_storage_manager() -> PDFStorageManager:
     """
     return PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
-        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
         pytest.output_config["stable_pdf_container_name"],
     )
 
@@ -119,7 +135,6 @@ def cleanup_test_containers() -> Generator[None, None, None]:
     """
     pdf_storage_manager = PDFStorageManager(
         os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
-        os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
         pytest.output_config["pdf_container_name"],
     )
 

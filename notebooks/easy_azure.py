@@ -1,8 +1,11 @@
 """This is designed for TAIC staff to easily download/copy/delete blobs. There are some assumtpions made about storage structure.
 
-Why:
-- In containers, `azcopy login` can fail (no keyring).
-- This script generates a short-lived SAS token and uses `azcopy` with it.
+Authentication:
+- Uses the Azure CLI login (`az login`) to create a short-lived user
+  delegation SAS token for azcopy. No storage account key or SAS secret is
+  stored anywhere.
+- Pass `--identity` on Azure compute with a managed identity attached, or set
+  `AZURE_CLIENT_ID` to select a user-assigned identity.
 
 It supports three operations:
 - Download to local folder: provide '--local'
@@ -11,7 +14,6 @@ It supports three operations:
 
 Expected `.env` (repo root):
 - AZURE_STORAGE_ACCOUNT_NAME
-- AZURE_STORAGE_ACCOUNT_KEY
 
 Usage examples:
 - Download the latest output run:
@@ -65,9 +67,34 @@ def _run(cmd: list[str]) -> int:
     return subprocess.call(cmd)
 
 
-def _generate_sas(
-    *, account: str, key: str, container: str, expiry_hours: int = 1
-) -> str:
+def _az_login_with_identity() -> None:
+    """Log the Azure CLI in with the managed identity attached to this compute.
+
+    Raises:
+        SystemExit: If the Azure CLI is unavailable or the identity login fails.
+    """
+    cmd = ["az", "login", "--identity"]
+    if client_id := os.getenv("AZURE_CLIENT_ID"):
+        cmd.extend(["--username", client_id])
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError as e:
+        msg = "`az` (Azure CLI) not found. Install Azure CLI inside the dev machine."
+        raise SystemExit(msg) from e
+    except subprocess.CalledProcessError as e:
+        msg = f"Azure CLI managed-identity login failed (exit {e.returncode})."
+        raise SystemExit(msg) from e
+
+
+def _generate_sas(*, account: str, container: str, expiry_hours: int = 1) -> str:
+    """Create a short-lived user delegation SAS with the Azure CLI identity.
+
+    Returns:
+        str: User delegation SAS token for the container.
+
+    Raises:
+        SystemExit: If the Azure CLI is unavailable or the SAS request fails.
+    """
     expiry = (datetime.now(UTC) + timedelta(hours=expiry_hours)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
@@ -85,8 +112,9 @@ def _generate_sas(
         "rlwd",
         "--expiry",
         expiry,
-        "--account-key",
-        key,
+        "--auth-mode",
+        "login",
+        "--as-user",
         "--output",
         "tsv",
     ]
@@ -97,7 +125,7 @@ def _generate_sas(
         msg = "`az` (Azure CLI) not found. Install Azure CLI inside the dev machine."
         raise SystemExit(msg) from e
     except subprocess.CalledProcessError as e:
-        msg = f"Failed to generate SAS token (exit {e.returncode})."
+        msg = f"Failed to generate user delegation SAS token (exit {e.returncode})."
         raise SystemExit(msg) from e
 
     if not out:
@@ -108,7 +136,7 @@ def _generate_sas(
 
 
 def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0912, PLR0915
-    """Generate SAS token and execute azcopy operations.
+    """Create an Entra user delegation SAS and run azcopy operations.
 
     Supports download, copy, and delete operations on Azure blob storage.
 
@@ -125,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0912, PLR09
     """
     parser = argparse.ArgumentParser(
         prog="easy_azure",
-        description="Generate SAS and run azcopy (download/copy/delete).",
+        description="Run azcopy with Microsoft Entra authentication (download/copy/delete).",
     )
     parser.add_argument(
         "--latest-output",
@@ -156,6 +184,11 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0912, PLR09
         type=int,
         default=1,
         help="SAS token expiry in hours (default: 1)",
+    )
+    parser.add_argument(
+        "--identity",
+        action="store_true",
+        help="Log the Azure CLI in with the attached managed identity",
     )
     parser.add_argument(
         "--yes",
@@ -192,16 +225,18 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0912, PLR09
     if args.local and args.dst:
         msg = "Only --local or --dst can be specified, not both."
         raise ValueError(msg)
-    if not any([args.local, args.dst, args.upload]):
-        msg = "Either --local, --dst, or --upload must be specified."
+    is_delete = (
+        args.src and args.container and not any([args.local, args.dst, args.upload])
+    )
+    if not any([args.local, args.dst, args.upload, is_delete]):
+        msg = "Either --local, --dst, --upload, or --src (to delete) must be specified."
         raise ValueError(msg)
 
     account = _require_env("AZURE_STORAGE_ACCOUNT_NAME")
-    key = _require_env("AZURE_STORAGE_ACCOUNT_KEY")
 
     if args.latest_output:
         output_container = "engineoutput"
-        manager = EngineOutputManager(account, key, output_container)
+        manager = EngineOutputManager(account, output_container)
         latest_folder = manager._get_latest_output()
         if not latest_folder:
             msg = "No engine output folders found in storage."
@@ -210,12 +245,21 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0912, PLR09
         args.src = latest_folder
 
     if args.prod_db:
-        args.containers = "vectordb"
-        args.src = "production_db"
+        args.container = "vectordb"
+        args.src = "prod"
+
+    if not args.container:
+        msg = "--container is required."
+        raise ValueError(msg)
+    if not args.upload and not args.src:
+        msg = "--src is required."
+        raise ValueError(msg)
+
+    if args.identity and not args.dry_run:
+        _az_login_with_identity()
 
     sas = _generate_sas(
         account=account,
-        key=key,
         container=args.container,
         expiry_hours=args.expiry_hours,
     )

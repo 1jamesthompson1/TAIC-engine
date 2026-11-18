@@ -37,7 +37,7 @@ table = db.open_table("all_document_types")
 
 The database URI is configured via the `VECTORDB_URI` environment variable.
 
-If you are using a Azure hosted LanceDB instance, you can connect with a link of the format 'az://<container_name><path_to_db>' and in your `.env` file have 'AZURE_STORAGE_ACCOUNT_NAME' and 'AZURE_STORAGE_ACCOUNT_KEY' set to your Azure storage account credentials.
+If you are using a Azure hosted LanceDB instance, connect with a URI of the form `az://<container_name>/<path_to_db>`. Authentication uses Microsoft Entra ID: set `AZURE_STORAGE_ACCOUNT_NAME`, then either run `az login` locally or attach the engine's user-assigned managed identity and set `AZURE_CLIENT_ID`. No storage account key is needed. Tests use the `test-vectordb` container; production uses `vectordb`.
 
 ## Querying
 

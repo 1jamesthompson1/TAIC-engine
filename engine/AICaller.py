@@ -9,12 +9,14 @@ from __future__ import annotations
 import os
 import warnings
 from dataclasses import dataclass
+from functools import lru_cache
 from io import StringIO
 from threading import Lock
 from typing import Any
 
 import openai
 import tiktoken
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import ValidationError
@@ -22,6 +24,37 @@ from rich.console import Console
 from rich.table import Table
 
 load_dotenv()
+
+COGNITIVE_SERVICES_SCOPE = "https://cognitiveservices.azure.com/.default"
+
+
+@lru_cache(maxsize=1)
+def get_credential() -> DefaultAzureCredential:
+    """Return the shared non-interactive Microsoft Entra credential.
+
+    Returns:
+        DefaultAzureCredential: Credential used for Azure OpenAI.
+    """
+    return DefaultAzureCredential(exclude_interactive_browser_credential=True)
+
+
+def get_openai_client(endpoint: str | None = None) -> openai.OpenAI:
+    """Return an Azure OpenAI client authenticated with Microsoft Entra ID.
+
+    Args:
+        endpoint: Azure OpenAI endpoint, including /openai/v1/ when applicable.
+
+    Returns:
+        openai.OpenAI: Client for chat, responses, and embeddings.
+    """
+    token_provider = get_bearer_token_provider(
+        get_credential(),
+        COGNITIVE_SERVICES_SCOPE,
+    )
+    client_kwargs: dict[str, object] = {"api_key": token_provider}
+    if endpoint:
+        client_kwargs["base_url"] = endpoint
+    return openai.OpenAI(**client_kwargs)
 
 
 # Custom Exceptions
@@ -31,8 +64,8 @@ class ClientNotAvailableError(Exception):
     def __init__(self) -> None:
         """Initialize ClientNotAvailableError."""
         super().__init__(
-            "OpenAI client is not available. Please set either OPENAI_API_KEY or both "
-            "AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT environment variables."
+            "Azure OpenAI client is not available. Set AZURE_OPENAI_ENDPOINT and "
+            "authenticate with `az login` or a managed identity."
         )
 
 
@@ -102,7 +135,7 @@ class QueryTooLongError(Exception):
         )
 
 
-# Initialize clients only if API keys are available
+# Initialize the client only when an Azure OpenAI endpoint is configured.
 openai_client = None
 
 # Cost tracking (thread-safe for CI environments)
@@ -165,17 +198,11 @@ _PRICING = {
 }
 
 
-# For OpenAI, prioritize Azure OpenAI if credentials are available, otherwise use standard OpenAI
-azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+# Azure OpenAI only. Authentication uses the application's Microsoft Entra
+# identity; there is no API-key fallback.
 azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-openai_api_key = os.getenv("OPENAI_API_KEY")
-
-if azure_api_key and azure_endpoint:
-    # Use Azure OpenAI
-    openai_client = OpenAI(api_key=azure_api_key, base_url=azure_endpoint)
-elif openai_api_key:
-    # Use standard OpenAI
-    openai_client = OpenAI(api_key=openai_api_key)
+if azure_endpoint:
+    openai_client = get_openai_client(azure_endpoint)
 
 
 def track_api_cost(

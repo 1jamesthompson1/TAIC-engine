@@ -15,8 +15,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import tiktoken
-from azure.ai.inference import EmbeddingsClient
-from azure.core.credentials import AzureKeyCredential
 from lancedb.embeddings import EmbeddingFunctionRegistry
 from lancedb.embeddings.base import TextEmbeddingFunction
 from lancedb.embeddings.registry import register
@@ -26,20 +24,77 @@ from lancedb.pydantic import LanceModel, Vector
 from lancedb.table import Table
 from tqdm import tqdm
 
+from engine.AICaller import get_openai_client
 from engine.Logging import get_logger
 from engine.SavedDataFrames import DataForVectorDB
 
 logger = get_logger(__name__)
 
+AZURE_CLI_CREDENTIAL = "azureclicredential"
+AZURE_MANAGED_IDENTITY_CREDENTIAL = "managedidentitycredential"
+
+
+def _lancedb_uses_azure_cli() -> bool:
+    """Return whether LanceDB should authenticate through the Azure CLI.
+
+    CI sets AZURE_TOKEN_CREDENTIALS=AzureCliCredential after azure/login.
+    Production sets AZURE_TOKEN_CREDENTIALS=ManagedIdentityCredential.
+
+    Returns:
+        bool: True when the Azure CLI session should be used.
+    """
+    token_credentials = os.getenv("AZURE_TOKEN_CREDENTIALS", "").strip().lower()
+    if token_credentials == AZURE_MANAGED_IDENTITY_CREDENTIAL:
+        return False
+    if token_credentials == AZURE_CLI_CREDENTIAL:
+        return True
+    # Local development has no managed-identity endpoint. If no user-assigned
+    # identity is selected, assume the developer has run `az login`.
+    return not os.getenv("AZURE_CLIENT_ID")
+
+
+def get_lancedb_storage_options(uri: str) -> dict[str, str]:
+    """Return LanceDB storage options for an Azure Blob Storage URI.
+
+    LanceDB talks to Azure Blob Storage through object_store, which does not use
+    DefaultAzureCredential. On Azure compute it falls back to the metadata
+    service managed-identity endpoint; with the Azure CLI it can use the
+    existing ``az login`` session instead.
+
+    Args:
+        uri: LanceDB URI.
+
+    Returns:
+        dict[str, str]: Storage options for ``lancedb.connect``.
+
+    Raises:
+        ValueError: If AZURE_STORAGE_ACCOUNT_NAME is missing.
+    """
+    if not str(uri).startswith("az://"):
+        return {}
+
+    account_name = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
+    if not account_name:
+        msg = "AZURE_STORAGE_ACCOUNT_NAME must be set"
+        raise ValueError(msg)
+    options = {"account_name": account_name}
+    if _lancedb_uses_azure_cli():
+        options["use_azure_cli"] = "true"
+    elif client_id := os.getenv("AZURE_CLIENT_ID"):
+        # Select the user-assigned managed identity. object_store falls back to
+        # the IMDS managed-identity flow when no key/SAS/bearer token is set.
+        options["client_id"] = client_id
+    return options
+
 
 @register("azure-ai-text")
 class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
-    """An embedding function that uses the AzureAI API.
+    """An embedding function that uses the Azure OpenAI API.
 
-    https://learn.microsoft.com/en-us/python/api/overview/azure/ai-inference-readme?view=azure-python-preview
+    https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/embeddings
 
-    - AZURE_AI_ENDPOINT: The endpoint URL for the AzureAI service.
-    - AZURE_AI_API_KEY: The API key for the AzureAI service.
+    - AZURE_OPENAI_ENDPOINT: The Azure OpenAI endpoint (including /openai/v1/).
+    - Authentication uses the application's Microsoft Entra identity.
 
     Parameters
     ----------
@@ -131,15 +186,15 @@ class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
 
         Args:
             texts: list[str] or np.ndarray of strings to embed.
-            **kwargs: Arbitrary keyword arguments including:
-                input_type: Optional input type for embeddings.
-                truncation: Optional boolean to truncate texts.
+            **kwargs: Arbitrary keyword arguments. ``input_type`` is accepted
+                for LanceDB compatibility but is not sent to Azure OpenAI.
 
         Returns:
             list[np.array]: List of embedding arrays for the provided texts.
 
         Raises:
-            ValueError: If input is numpy array with non-string dtype.
+            ValueError: If input is numpy array with non-string dtype, or the
+                Azure OpenAI endpoint is not configured.
         """
         AzureAITextEmbeddingFunction._init_client()
 
@@ -149,10 +204,14 @@ class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
                 raise ValueError(msg)
             texts = texts.tolist()
 
+        # Azure OpenAI has no input_type parameter; consume it so it is not
+        # forwarded to the embeddings API.
+        kwargs.pop("input_type", None)
+
         batch_size = 96
         embeddings = []
         for i in range(0, len(texts), batch_size):
-            rs = AzureAITextEmbeddingFunction.client.embed(
+            rs = AzureAITextEmbeddingFunction.client.embeddings.create(
                 input=texts[i : i + batch_size],
                 model=self.name,
                 dimensions=self.ndims(),
@@ -163,23 +222,18 @@ class AzureAITextEmbeddingFunction(TextEmbeddingFunction):
 
     @staticmethod
     def _init_client() -> None:
-        """Initialize the Azure AI embeddings client.
+        """Initialize the Azure OpenAI embeddings client.
 
         Raises:
-            ValueError: If required environment variables are not set.
+            ValueError: If AZURE_OPENAI_ENDPOINT is not set.
         """
         if AzureAITextEmbeddingFunction.client is None:
-            if os.environ.get("AZURE_AI_API_KEY") is None:
-                msg = "AZURE_AI_API_KEY not found in environment variables"
-                raise ValueError(msg)
-            if os.environ.get("AZURE_AI_ENDPOINT") is None:
-                msg = "AZURE_AI_ENDPOINT not found in environment variables"
+            endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
+            if not endpoint:
+                msg = "AZURE_OPENAI_ENDPOINT not found in environment variables"
                 raise ValueError(msg)
 
-            AzureAITextEmbeddingFunction.client = EmbeddingsClient(
-                endpoint=os.environ["AZURE_AI_ENDPOINT"],
-                credential=AzureKeyCredential(os.environ["AZURE_AI_API_KEY"]),
-            )
+            AzureAITextEmbeddingFunction.client = get_openai_client(endpoint)
 
 
 class VectorDB:
@@ -215,7 +269,10 @@ class VectorDB:
         self.report_text_table_name = (
             report_text_table_name or f"{table_name}_report_text"
         )
-        self.db = lancedb.connect(db_uri)
+        self.db = lancedb.connect(
+            db_uri,
+            storage_options=get_lancedb_storage_options(db_uri),
+        )
         azure_embeddings = (
             EmbeddingFunctionRegistry.get_instance()
             .get("azure-ai-text")
@@ -602,3 +659,5 @@ class VectorDB:
         logger.info(
             f"Optimized table {self.table_name} by cleaning up old versions and compacting files."
         )
+
+        logger.info("Creating search indices")

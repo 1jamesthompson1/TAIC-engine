@@ -16,7 +16,6 @@ from engine.utils.AzureStorage import PDFStorageManager
 # Create connection to stable container
 stable_manager = PDFStorageManager(
     os.environ["AZURE_STORAGE_ACCOUNT_NAME"],
-    os.environ["AZURE_STORAGE_ACCOUNT_KEY"],
     "test-stable-reportpdfs"
 )
 
@@ -82,9 +81,9 @@ def test_single_pdf_parsing(
     # Check that the extracted text contains the expected number of pages
     page_numbers = PDFParsing.PDF_PAGE_MARKER_REGEX.findall(extracted_text)
 
-    assert (
-        len(page_numbers) == expected_pages
-    ), f"Expected {expected_pages} pages, but found {len(page_numbers)} in {report_id}"
+    assert len(page_numbers) == expected_pages, (
+        f"Expected {expected_pages} pages, but found {len(page_numbers)} in {report_id}"
+    )
 
 
 def test_handling_of_nonexistent_pdf(stable_pdf_storage_manager: object) -> None:

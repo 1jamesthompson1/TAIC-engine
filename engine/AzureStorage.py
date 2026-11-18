@@ -12,15 +12,46 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from functools import lru_cache
 
 import pytz
-from azure.storage.blob import BlobServiceClient
+from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient, ContainerClient
 from tenacity import retry, stop_after_attempt, wait_exponential
 from tqdm import tqdm
 
 from engine.Logging import get_logger
 
 logger = get_logger(__name__)
+
+
+@lru_cache(maxsize=1)
+def get_credential() -> DefaultAzureCredential:
+    """Return the shared non-interactive Microsoft Entra credential.
+
+    Returns:
+        DefaultAzureCredential: Credential used for Azure Storage.
+    """
+    return DefaultAzureCredential(exclude_interactive_browser_credential=True)
+
+
+def build_blob_service_client() -> BlobServiceClient:
+    """Build a BlobServiceClient using Microsoft Entra / managed identity.
+
+    Returns:
+        BlobServiceClient: Configured Blob service client.
+
+    Raises:
+        ValueError: If AZURE_STORAGE_ACCOUNT_NAME is missing.
+    """
+    account_name = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
+    if not account_name:
+        msg = "AZURE_STORAGE_ACCOUNT_NAME must be set"
+        raise ValueError(msg)
+    return BlobServiceClient(
+        account_url=f"https://{account_name}.blob.core.windows.net",
+        credential=get_credential(),
+    )
 
 
 class AzureStorageBase:
@@ -32,32 +63,25 @@ class AzureStorageBase:
     def __init__(
         self,
         storage_account_name: str,
-        storage_account_key: str,
         container_name: str,
     ) -> None:
         """Initialize the Azure storage client.
 
         Args:
             storage_account_name: The Azure storage account name
-            storage_account_key: The Azure storage account key
             container_name: The container name
         """
         self.storage_account_name = storage_account_name
-        self.storage_account_key = storage_account_key
         self.container_name = container_name
         self.container = self._get_container()
 
-    def _get_container(self) -> object:
+    def _get_container(self) -> ContainerClient:
         """Initialize and return the container client.
 
         Returns:
             The container client object
         """
-        connection_string = f"DefaultEndpointsProtocol=https;AccountName={self.storage_account_name};AccountKey={self.storage_account_key}==;EndpointSuffix=core.windows.net"
-
-        blob_service_client = BlobServiceClient.from_connection_string(
-            connection_string
-        )
+        blob_service_client = build_blob_service_client()
         container = blob_service_client.get_container_client(self.container_name)
 
         if not container.exists():
@@ -212,17 +236,15 @@ class PDFStorageManager(AzureStorageBase):
     def __init__(
         self,
         storage_account_name: str,
-        storage_account_key: str,
         container_name: str,
     ) -> None:
         """Initialize the PDF storage manager.
 
         Args:
             storage_account_name: The Azure storage account name
-            storage_account_key: The Azure storage account key
             container_name: The container name
         """
-        super().__init__(storage_account_name, storage_account_key, container_name)
+        super().__init__(storage_account_name, container_name)
         self.pdf_list = [b for b in self.list_blobs() if b.endswith(".pdf")]
 
     @staticmethod
@@ -350,17 +372,15 @@ class EngineOutputManager(AzureStorageBase):
     def __init__(
         self,
         storage_account_name: str,
-        storage_account_key: str,
         container_name: str,
     ) -> None:
         """Initialize the engine output manager.
 
         Args:
             storage_account_name: The Azure storage account name
-            storage_account_key: The Azure storage account key
             container_name: The container name
         """
-        super().__init__(storage_account_name, storage_account_key, container_name)
+        super().__init__(storage_account_name, container_name)
         self.output_date_format = "%Y-%m-%d_%H:%M:%S"
 
     def _get_latest_output(self) -> str | None:
@@ -391,7 +411,6 @@ class EngineOutputUploader(EngineOutputManager):
     def __init__(
         self,
         storage_account_name: str,
-        storage_account_key: str,
         container_name: str,
         folder_to_upload: str,
     ) -> None:
@@ -399,11 +418,10 @@ class EngineOutputUploader(EngineOutputManager):
 
         Args:
             storage_account_name: The Azure storage account name
-            storage_account_key: The Azure storage account key
             container_name: The container name
             folder_to_upload: The local folder to upload
         """
-        super().__init__(storage_account_name, storage_account_key, container_name)
+        super().__init__(storage_account_name, container_name)
 
         self.folder_to_upload = folder_to_upload
 
@@ -418,7 +436,8 @@ class EngineOutputUploader(EngineOutputManager):
         """
         start_time = time.time()
 
-        # Check if Azure CLI is available
+        # Prefer the Azure CLI when it is installed and authenticated. Data-plane
+        # access uses the same Microsoft Entra identity as the rest of the app.
         if shutil.which("az"):
             logger.info(
                 f"Using Azure CLI to upload folder {self.folder_to_upload} to {uploaded_folder_name}"
@@ -437,8 +456,8 @@ class EngineOutputUploader(EngineOutputManager):
                     uploaded_folder_name,
                     "--account-name",
                     self.storage_account_name,
-                    "--account-key",
-                    self.storage_account_key,
+                    "--auth-mode",
+                    "login",
                     "--overwrite",
                     "--max-connections",
                     "10",
@@ -446,26 +465,26 @@ class EngineOutputUploader(EngineOutputManager):
                 ]
 
                 subprocess.run(cmd, capture_output=True, text=True, check=True)
+            except subprocess.CalledProcessError as e:
+                logger.warning(f"Azure CLI upload failed: {e.stderr}")
+            else:
                 logger.info(
                     f"Azure CLI upload completed in {time.time() - start_time:.2f} seconds"
                 )
-            except subprocess.CalledProcessError as e:
-                logger.warning(f"Azure CLI upload failed: {e.stderr}")
-                logger.info("Falling back to Python implementation...")
-            else:
                 return
-        # Fallback to improved Python implementation
-        else:
-            logger.info(
-                f"Using Python implementation to upload folder {self.folder_to_upload} to {uploaded_folder_name}"
-            )
-            _, failed = self._upload_folder_python_parallel(
-                uploaded_folder_name, start_time
-            )
 
-            if failed > 0:
-                msg = f"Upload failed with {failed} errors. Please check the logs for details."
-                raise RuntimeError(msg)
+        # Fall back to the Python implementation when the CLI is unavailable or
+        # the CLI upload failed (for example, no Azure CLI login session).
+        logger.info(
+            f"Using Python implementation to upload folder {self.folder_to_upload} to {uploaded_folder_name}"
+        )
+        _, failed = self._upload_folder_python_parallel(
+            uploaded_folder_name, start_time
+        )
+
+        if failed > 0:
+            msg = f"Upload failed with {failed} errors. Please check the logs for details."
+            raise RuntimeError(msg)
 
     def _upload_folder_python_parallel(
         self, uploaded_folder_name: str, start_time: float
@@ -548,7 +567,6 @@ class EngineOutputDownloader(EngineOutputManager):
     def __init__(
         self,
         storage_account_name: str,
-        storage_account_key: str,
         container_name: str,
         downloaded_folder_name: str,
     ) -> None:
@@ -556,11 +574,10 @@ class EngineOutputDownloader(EngineOutputManager):
 
         Args:
             storage_account_name: The Azure storage account name
-            storage_account_key: The Azure storage account key
             container_name: The container name
             downloaded_folder_name: The local folder to download to
         """
-        super().__init__(storage_account_name, storage_account_key, container_name)
+        super().__init__(storage_account_name, container_name)
         self.downloaded_folder_name = downloaded_folder_name
 
     def download_latest_output(self) -> None:

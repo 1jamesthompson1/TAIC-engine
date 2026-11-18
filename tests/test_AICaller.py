@@ -1,11 +1,20 @@
 """Tests for the AICaller module."""
 
+import openai
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from engine.AICaller import QueryTooLongError, ai_caller
+from engine.AICaller import QueryTooLongError, ai_caller, get_openai_client
 
 REASONING_LEVELS_COUNT = 3
+
+
+def test_get_openai_client_uses_entra_identity() -> None:
+    """The OpenAI client is configured without an API key."""
+    client = get_openai_client("https://example.cognitiveservices.azure.com/openai/v1/")
+
+    assert isinstance(client, openai.OpenAI)
+    assert client.base_url == "https://example.cognitiveservices.azure.com/openai/v1/"
 
 
 @pytest.mark.parametrize(
@@ -72,9 +81,9 @@ def test_varying_reasoning_levels() -> None:
             raw_output=True,
         )
 
-        assert (
-            response.output_text is not None
-        ), f"Response should not be None for reasoning={reasoning_level}"
+        assert response.output_text is not None, (
+            f"Response should not be None for reasoning={reasoning_level}"
+        )
 
         if reasoning_level == "none":
             assert response.usage.output_tokens_details.reasoning_tokens == 0

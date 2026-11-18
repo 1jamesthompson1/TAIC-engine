@@ -36,15 +36,22 @@ uv run pre-commit install
 cp .env.example .env
 ```
 
-Edit `.env` with your Azure credentials and API keys.
+Edit `.env` with the Azure Storage account name, Azure OpenAI endpoint, and (when needed) `AZURE_CLIENT_ID`.
 
-For TAIC developers please see devops wiki for instructions on how to get access to the Azure resources.
+Azure authentication uses Microsoft Entra ID only. There are no storage account keys, SAS tokens, or Azure OpenAI API keys. Run `az login` locally so `DefaultAzureCredential` can use your Azure CLI identity. In production and CI, the engine uses a user-assigned managed identity selected with `AZURE_CLIENT_ID`:
+
+- `id-taicengine-prod` — production engine
+- `id-taicengine-test` — test pipeline and CI
+
+Assign each identity `Storage Blob Data Contributor` on its containers and `Cognitive Services OpenAI User` on the Azure OpenAI resource. Test resources use the `test` prefix (for example `test-vectordb`, `test-reportpdfs`, `testengineoutput`).
+
+For TAIC developers please see the devops wiki for instructions on how to get access to the Azure resources.
 
 ### 5. (Optional) Run the Engine
 
 The engine running will take days to complete and cost hundreds in API costs. Instead one would usually download the latest output from the Azure blob storage and only experiment from there.
 
-Downloading of latest output requires you having the .env file configured with the correct Azure credentials. Then you can run:
+Downloading of latest output requires `AZURE_STORAGE_ACCOUNT_NAME` in `.env`, an authenticated Azure CLI session (`az login`), and `Storage Blob Delegator` on the storage account so the helper can create a short-lived user delegation SAS. Then you can run:
 
 ```bash
 uv run azure --latest-output
