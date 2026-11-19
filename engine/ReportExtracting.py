@@ -453,7 +453,7 @@ def extract_report(  # noqa: PLR0914
             field in occurrence_metadata and occurrence_metadata[field] is None
             for field in required_metadata_fields
         )
-        and occurrence_metadata.get("location", {}).get("standardised_location") is None
+        and occurrence_metadata.get("location", {}).get("standardized_location") is None
     ):
         logger.warning(
             f"Metadata for report {report_id} is missing required fields or has None values. Treating as failed extraction. Extracted metadata: {occurrence_metadata}"

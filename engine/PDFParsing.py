@@ -26,6 +26,11 @@ SAVE_BATCH_SIZE = 50
 # Minimum length of extracted text to consider it valid (to filter out failed extractions)
 MIN_EXTRACTED_TEXT_LENGTH = 1000
 
+# PDF files start with this signature. Some failed downloads return an HTML
+# error page instead, which PyMuPDF would otherwise parse as document text.
+PDF_FILE_SIGNATURE = b"%PDF-"
+PDF_HEADER_CHECK_BYTES = 1024
+
 PDF_PAGE_MARKER_REGEX = re.compile(r"<< PDF Page (\d+) start >>")
 
 PAGE_END_MARKER_REGEX = re.compile(r"--- end of page\.page_number=(\d+) ---")
@@ -242,6 +247,15 @@ def _extract_pdf_text(
 
     if Path(temp_pdf_path).stat().st_size == 0:
         logger.error(f"Downloaded PDF {report_id} is empty")
+        return None, temp_pdf_path
+
+    with Path(temp_pdf_path).open("rb") as pdf_file:
+        header = pdf_file.read(PDF_HEADER_CHECK_BYTES)
+    if PDF_FILE_SIGNATURE not in header:
+        logger.error(
+            f"Downloaded file for {report_id} is not a PDF "
+            f"(starts with {header[:20]!r}); skipping"
+        )
         return None, temp_pdf_path
 
     text = extract_text_from_pdf(temp_pdf_path)

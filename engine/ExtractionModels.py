@@ -125,9 +125,21 @@ class OccurrenceMetadata(BaseModel):
         description="The number of persons injured (non-fatal) in the occurrence. Use 0 to indicate no injuries. Do not count fatalities here - they go in the separate 'fatalities' field.",
     )
 
-    damage_description: Literal["nil"] | str = Field(
-        description="Brief summary of damage to equipment, property, or environment from the report text. The summary should include a few word overview of the damage (e.g. 'lost', 'destroyed', 'substantial damage', 'minor damage' ) followed by a colon and then details separated by semicolons. For example, 'substantial damage: left wing damaged; engine detached.'. If there are multiple items of damage, separate them with semicolons. The overall description should be concise and informative and optimised so that future retrieval is efficient (e.g., using keywords or tags). If there is no damage, use literal 'nil'.",
-        pattern=r"((.+):(.+;?)\.?)|(nil)",
+    damage_description: Literal["nil", "unknown"] | str = Field(
+        description=(
+            "Brief summary of damage to equipment, property, or environment from "
+            "the report text. If the report explicitly states there was no damage, "
+            "use the literal 'nil'. If the report does not provide enough "
+            "information to determine the damage, use the literal 'unknown'. Do "
+            "not use 'unknown' when the report gives any usable damage description. "
+            "For known damage, start with a short severity or damage-type overview "
+            "followed by a colon and then details separated by semicolons, for "
+            "example 'substantial damage: left wing damaged; engine detached.'. "
+            "The overall description should be concise and informative and "
+            "optimised so that future retrieval is efficient (e.g., using keywords "
+            "or tags)."
+        ),
+        pattern=r"(?i)^((.+):(.+;?)\.?|nil|unknown)$",
     )
     who_may_benefit: str | None = Field(
         default=None,

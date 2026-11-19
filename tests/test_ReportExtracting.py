@@ -18,6 +18,7 @@ import pytest
 
 from engine import Modes
 from engine.ExtractionModels import (
+    OccurrenceMetadata,
     RecommendationItem,
     SafetyIssueItem,
 )
@@ -41,6 +42,29 @@ def test_get_ai_model_requires_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(RuntimeError, match="OPENAI_MODEL"):
         get_ai_model()
+
+
+@pytest.mark.parametrize(
+    "damage_description",
+    ["nil", "unknown", "minor damage: left wing damaged."],
+)
+def test_damage_description_accepts_unknown(damage_description: str) -> None:
+    """Damage extraction can explicitly represent unknown damage."""
+    metadata = OccurrenceMetadata.model_validate(
+        {
+            "occurrence_datetime": {
+                "local_datetime": "2024-01-01T00:00",
+                "time_zone": "UTC+00:00",
+                "time_zone_source": "inferred",
+            },
+            "location": {"description": "Somewhere"},
+            "fatalities": 0,
+            "injuries": 0,
+            "damage_description": damage_description,
+        }
+    )
+
+    assert metadata.damage_description == damage_description
 
 
 def test_build_extraction_info(monkeypatch: pytest.MonkeyPatch) -> None:
