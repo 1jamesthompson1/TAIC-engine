@@ -1,31 +1,93 @@
+"""Tests for the AICaller module."""
+
+from types import SimpleNamespace
+
+import openai
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from engine.utils.AICaller import ai_caller
+from engine.AICaller import (
+    OpenAICaller,
+    QueryTooLongError,
+    ai_caller,
+    get_openai_client,
+)
+
+REASONING_LEVELS_COUNT = 3
+
+
+def test_get_openai_client_uses_entra_identity() -> None:
+    """The OpenAI client is configured without an API key."""
+    client = get_openai_client("https://example.cognitiveservices.azure.com/openai/v1/")
+
+    assert isinstance(client, openai.OpenAI)
+    assert client.base_url == "https://example.cognitiveservices.azure.com/openai/v1/"
 
 
 @pytest.mark.parametrize(
     "model, user, expected_response",
     [
         pytest.param("gpt-4", "Hello this is a test", True, id="gpt-4"),
-        pytest.param(
-            "gpt-4",
-            "Hello this is a test" * (10**6),
-            False,
-            id="gpt-4 over limit",
-        ),
         pytest.param("gpt-5-mini", "Hello can you respond?", True, id="gpt-5-mini"),
     ],
 )
-def test_ai_caller(model, user, expected_response):
-    response = ai_caller.query(model=model, system="", user=user, max_tokens=100)
+def test_ai_caller(model: str, user: str, expected_response: bool) -> None:
+    """Test basic AI caller functionality with different models."""
+    response = ai_caller.query(model=model, system="", user=user, max_tokens=1000)
 
-    print(f"Response: '{response}'")
     assert isinstance(response, str) == expected_response
-    return
 
 
-def test_structured_output():
+def test_query_returns_call_info() -> None:
+    """The AI caller can return the parameters it sent to the API."""
+    response = SimpleNamespace(
+        output_text="hello",
+        output_parsed=None,
+        incomplete_details=None,
+        usage=SimpleNamespace(
+            input_tokens=1,
+            output_tokens=1,
+            input_tokens_details=SimpleNamespace(cached_tokens=0),
+        ),
+    )
+    client = SimpleNamespace(
+        responses=SimpleNamespace(create=lambda **params: response),
+    )
+    caller = OpenAICaller(client=client, model="gpt-5-mini", limit=1000)
+
+    result, call_info = caller.query(
+        system="",
+        user="hello",
+        temp=None,
+        reasoning="high",
+        include_call_info=True,
+    )
+
+    assert result == "hello"
+    assert call_info == {
+        "model": "gpt-5-mini",
+        "reasoning": "high",
+        "temperature": None,
+        "max_output_tokens": 32_000,
+        "store": False,
+        "structured_output": None,
+    }
+
+
+def test_ai_over_token_limit() -> None:
+    """Test that exceeding token limit raises an exception."""
+    with pytest.raises(QueryTooLongError):
+        ai_caller.query(
+            model="gpt-4",
+            system="",
+            user="Hello this is a test" * (10**6),
+            max_tokens=100,
+        )
+
+
+def test_structured_output() -> None:
+    """Test structured output with pydantic models."""
+
     class CountrySummary(BaseModel):
         country: str = Field(..., description="Name of the country")
         population: int = Field(..., description="Population of the country")
@@ -49,7 +111,8 @@ def test_structured_output():
         pytest.fail(f"Response validation failed: {e}")
 
 
-def test_varying_reasoning_levels():
+def test_varying_reasoning_levels() -> None:
+    """Test that different reasoning levels produce different token counts."""
     reasoning_tokens = []
     for reasoning_level in ["minimal", "low", "high"]:
         response = ai_caller.query(
@@ -57,14 +120,13 @@ def test_varying_reasoning_levels():
             system="",
             user="Explain the theory of relativity in simple terms.",
             reasoning=reasoning_level,
-            max_tokens=1000,
+            max_tokens=10000,
             raw_output=True,
         )
 
-        assert (
-            response.output_text is not None
-        ), f"Response should not be None for reasoning={reasoning_level}"
-        print(f"Response with reasoning={reasoning_level}:\n{response.output_text}\n")
+        assert response.output_text is not None, (
+            f"Response should not be None for reasoning={reasoning_level}"
+        )
 
         if reasoning_level == "none":
             assert response.usage.output_tokens_details.reasoning_tokens == 0
@@ -74,16 +136,16 @@ def test_varying_reasoning_levels():
                 response.usage.output_tokens_details.reasoning_tokens
             )
 
-    # Make sure that low reasoning uses fewer tokens than high reasoning
-    if len(reasoning_tokens) == 3:
+    if len(reasoning_tokens) == REASONING_LEVELS_COUNT:
         assert (
             reasoning_tokens[0] < reasoning_tokens[1]
             and reasoning_tokens[1] < reasoning_tokens[2]
         ), "Low reasoning should use fewer tokens than high reasoning"
 
 
-def test_ai_caller_invalid_model():
-    with pytest.raises(Exception):
+def test_ai_caller_invalid_model() -> None:
+    """Test that invalid model raises an exception."""
+    with pytest.raises(Exception, match="model"):
         ai_caller.query(
             model="gpt-6",
             system="",

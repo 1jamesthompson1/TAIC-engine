@@ -18,19 +18,6 @@ jobs:
               with:
                   fetch-depth: 0
 
-            - name: Install uv
-              uses: astral-sh/setup-uv@v6
-              with:
-                  enable-cache: true
-
-            - name: Setup Python
-              uses: actions/setup-python@v5
-              with:
-                  python-version-file: .python-version
-
-            - name: Install dependencies
-              run: uv sync --dev
-
             - name: Python Semantic Release
               id: release
               uses: python-semantic-release/python-semantic-release@v10
