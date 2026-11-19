@@ -5,6 +5,7 @@ Uses pymupdf4llm for better structure preservation and markdown output.
 """
 
 import logging
+import multiprocessing
 import re
 from concurrent.futures import Future, ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -93,10 +94,23 @@ def process_all_pdfs_into_text(
         return
 
     batch_reports = []
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all tasks
+    # Use spawn so worker processes do not inherit threads or open connections
+    # from the parent. Forking a multi-threaded process is deprecated in
+    # Python 3.12 and can deadlock, particularly with PyMuPDF and Azure clients.
+    process_context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(
+        max_workers=max_workers,
+        mp_context=process_context,
+    ) as executor:
+        # Submit all tasks. The storage manager is reconstructed in each worker
+        # because Azure client objects are not reliably picklable.
         future_to_report = {
-            executor.submit(pdf_to_text, pdf_storage_manager, report_id): report_id
+            executor.submit(
+                _pdf_to_text_worker,
+                pdf_storage_manager.storage_account_name,
+                pdf_storage_manager.container_name,
+                report_id,
+            ): report_id
             for report_id in reports_to_process
         }
 
@@ -165,6 +179,25 @@ def _process_future_result(
         batch_reports.clear()
 
     return parsed_reports_df
+
+
+def _pdf_to_text_worker(
+    storage_account_name: str,
+    container_name: str,
+    report_id: str,
+) -> str | None:
+    """Process a PDF in a worker process without pickling Azure client objects.
+
+    Args:
+        storage_account_name: Azure storage account name.
+        container_name: Azure container holding the PDFs.
+        report_id: ID of the report/PDF to convert.
+
+    Returns:
+        Extracted text from the PDF, or None if processing failed.
+    """
+    pdf_manager = PDFStorageManager(storage_account_name, container_name)
+    return pdf_to_text(pdf_manager, report_id)
 
 
 def pdf_to_text(pdf_manager: PDFStorageManager, report_id: str) -> str | None:

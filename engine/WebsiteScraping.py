@@ -6,6 +6,7 @@ It does the crawling of websitess and extracts report metadata and PDFs which is
 """
 
 import io
+import logging
 import random
 import re
 from abc import ABC, abstractmethod
@@ -17,8 +18,6 @@ from threading import Lock
 from typing import ClassVar, Literal
 from urllib.parse import urljoin, urlparse
 
-import hrequests
-import hrequests.exceptions
 import pandas as pd
 from bs4 import BeautifulSoup, Tag
 from tenacity import (
@@ -40,6 +39,43 @@ from engine.SavedDataFrames import (
     TAICWebsiteReportsTable,
     TSBWebsiteRecommendations,
 )
+
+try:
+    import hrequests
+    import hrequests.exceptions
+except Exception as exc:
+    # hrequests downloads its native TLS library from GitHub on first import.
+    # That can fail in offline environments or when the GitHub API is rate
+    # limited, so fall back to the standard requests library.
+    import requests
+    import requests.exceptions
+
+    logging.getLogger(__name__).warning(
+        "hrequests is unavailable (%s); falling back to requests", exc
+    )
+
+    class _FallbackHrequestsExceptions:
+        """Exception names used by the scraper, mapped to requests exceptions."""
+
+        ClientException = requests.exceptions.RequestException
+        BrowserTimeoutException = requests.exceptions.Timeout
+
+    class _FallbackHrequests:
+        """Minimal subset of the hrequests API used by this module."""
+
+        Response = requests.Response
+        exceptions = _FallbackHrequestsExceptions
+
+        @staticmethod
+        def get(url: str, **kwargs: object) -> requests.Response:
+            """Perform an HTTP GET with requests.
+
+            Returns:
+                The HTTP response returned by requests.
+            """
+            return requests.get(url, **kwargs)  # type: ignore[arg-type]
+
+    hrequests = _FallbackHrequests()  # type: ignore[assignment]
 
 logger = get_logger(__name__)
 

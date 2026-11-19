@@ -242,6 +242,8 @@ CRITICAL_METADATA_PREFIXES = {
     "occurrence.injuries",
 }
 
+MAX_NON_CRITICAL_FAILURES = 3
+
 
 def _is_critical_metadata_path(path: str) -> bool:
     """Check whether *path* is considered a *critical* metadata field.
@@ -634,11 +636,11 @@ def test_metadata_extraction(
             f"{report_id}:\n" + "\n".join(critical_failures)
         )
 
-    if len(non_critical_failures) > 3:  # noqa: PLR2004
+    if len(non_critical_failures) > MAX_NON_CRITICAL_FAILURES:
         assert not non_critical_failures, (
             f"Too many non-critical metadata mismatches "
-            f"({len(non_critical_failures)} > 2) for report "
-            f"{report_id}:\n" + "\n".join(non_critical_failures)
+            f"({len(non_critical_failures)} > {MAX_NON_CRITICAL_FAILURES}) "
+            f"for report {report_id}:\n" + "\n".join(non_critical_failures)
         )
     elif non_critical_failures:
         logging.warning(
