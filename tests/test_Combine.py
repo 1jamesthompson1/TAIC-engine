@@ -17,6 +17,10 @@ def test_metadata_expansion() -> None:
     expanded_df = Combine.expand_extracted_report_metadata(extracted_reports)
 
     assert isinstance(expanded_df, pd.DataFrame), "Output should be a DataFrame"
+    assert "extraction_info" not in expanded_df.columns, (
+        "extraction_info is extraction provenance only and should not flow "
+        "into the vector database data"
+    )
 
     # Schema to compare against
     expected_schema = {

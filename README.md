@@ -22,8 +22,6 @@ Full documentation is available at the [docs site](https://1jamesthompson1.githu
 
 ## About project
 
-
-
 This project started as a university project for James' final semester of his BSc. The university work was completed in July-October 2023 and finished with a basic engine and viewer app. Since then work has been completed directly with TAIC to bring the engine and viewer from POC to Prototype to Production. The legacy viewer app was released in late 2024, with a new [smart tools](https://github.com/1jamesthompson1/TAIC-smart-tools) app developed and deployed in November 2025.
 
 ### More information

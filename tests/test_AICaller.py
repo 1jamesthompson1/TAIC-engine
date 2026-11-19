@@ -1,10 +1,17 @@
 """Tests for the AICaller module."""
 
+from types import SimpleNamespace
+
 import openai
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from engine.AICaller import QueryTooLongError, ai_caller, get_openai_client
+from engine.AICaller import (
+    OpenAICaller,
+    QueryTooLongError,
+    ai_caller,
+    get_openai_client,
+)
 
 REASONING_LEVELS_COUNT = 3
 
@@ -29,6 +36,42 @@ def test_ai_caller(model: str, user: str, expected_response: bool) -> None:
     response = ai_caller.query(model=model, system="", user=user, max_tokens=1000)
 
     assert isinstance(response, str) == expected_response
+
+
+def test_query_returns_call_info() -> None:
+    """The AI caller can return the parameters it sent to the API."""
+    response = SimpleNamespace(
+        output_text="hello",
+        output_parsed=None,
+        incomplete_details=None,
+        usage=SimpleNamespace(
+            input_tokens=1,
+            output_tokens=1,
+            input_tokens_details=SimpleNamespace(cached_tokens=0),
+        ),
+    )
+    client = SimpleNamespace(
+        responses=SimpleNamespace(create=lambda **params: response),
+    )
+    caller = OpenAICaller(client=client, model="gpt-5-mini", limit=1000)
+
+    result, call_info = caller.query(
+        system="",
+        user="hello",
+        temp=None,
+        reasoning="high",
+        include_call_info=True,
+    )
+
+    assert result == "hello"
+    assert call_info == {
+        "model": "gpt-5-mini",
+        "reasoning": "high",
+        "temperature": None,
+        "max_output_tokens": 32_000,
+        "store": False,
+        "structured_output": None,
+    }
 
 
 def test_ai_over_token_limit() -> None:

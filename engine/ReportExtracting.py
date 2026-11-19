@@ -4,8 +4,13 @@ This includes extracting safety issues, recommendations, and chunking the report
 """
 
 import os
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import UTC, datetime
+from functools import lru_cache
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import regex as re
@@ -39,6 +44,97 @@ def get_ai_model() -> str:
         msg = "OPENAI_MODEL must be set."
         raise RuntimeError(msg)
     return model
+
+
+@lru_cache(maxsize=1)
+def get_code_version_info() -> dict[str, Any]:
+    """Return code-version information for the running extraction code.
+
+    The values are cached because they cannot meaningfully change during a
+    run. When git is unavailable (for example an installed package), the git
+    fields are None.
+
+    Returns:
+        dict[str, Any]: Git commit, branch, dirty state, and package version.
+    """
+    project_root = Path(__file__).resolve().parent.parent
+
+    def run_git(*args: str) -> str | None:
+        """Run git in the project root.
+
+        Args:
+            *args: Git arguments.
+
+        Returns:
+            The stripped command output, or None when git fails.
+        """
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(project_root), *args],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip() or None
+
+    git_commit = run_git("rev-parse", "HEAD")
+    git_branch = run_git("rev-parse", "--abbrev-ref", "HEAD")
+    if git_commit is None:
+        git_dirty = None
+    else:
+        git_dirty = bool(run_git("status", "--porcelain", "--untracked-files=no"))
+
+    try:
+        package_version = version("taic-report-engine")
+    except PackageNotFoundError:
+        package_version = None
+
+    return {
+        "git_commit": git_commit,
+        "git_branch": git_branch,
+        "git_dirty": git_dirty,
+        "package_version": package_version,
+    }
+
+
+def build_extraction_info(
+    extraction_config: dict,
+    ai_call_info: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build provenance metadata for a single report extraction.
+
+    The returned dictionary is stored in the ``extraction_info`` column of
+    ``extracted_reports.pkl``. It records when the extraction finished, the
+    code version that produced it, and the AI parameters used.
+
+    Args:
+        extraction_config: The extraction flags actually used for the report
+            (``safety_issues``, ``recommendations``, and ``metadata``).
+        ai_call_info: Parameters returned by ``AICaller.query`` for this
+            extraction. When omitted, only the model and extraction flags are
+            recorded.
+
+    Returns:
+        dict[str, Any]: Nested extraction provenance ready to be stored in the
+        dataframe. It contains ``extracted_at``, ``code_version``, and
+        ``ai_parameters``.
+    """
+    ai_parameters = dict(ai_call_info or {})
+    ai_parameters.setdefault("model", get_ai_model())
+    ai_parameters["extraction_config"] = dict(extraction_config)
+
+    return {
+        "extracted_at": datetime.now(UTC)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
+        "code_version": get_code_version_info(),
+        "ai_parameters": ai_parameters,
+    }
 
 
 class InvalidExtractionConfigError(ValueError):
@@ -122,7 +218,8 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
     event_type_taxonomy_by_mode: dict[Modes.Mode, list[dict[str, str]]] | None = None,
     report_id: str | None = None,
     agency_id: str | None = None,
-) -> BaseModel:
+    include_call_info: bool = False,
+) -> BaseModel | tuple[BaseModel, dict[str, Any]]:
     """Use AI to read the report and extract safety issues, recommendations, and metadata as needed.
 
     Args:
@@ -136,10 +233,14 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
         report_id: The identifier of the report being processed (e.g., 'TAIC_a_2023_011').
         agency_id: Agency-native occurrence identifier from report titles (for example,
             ATSB short occurrence ID) used to disambiguate multi-occurrence bulletins.
+        include_call_info: If True, return a ``(extracted_data, call_info)``
+            tuple where ``call_info`` records the parameters sent to the AI
+            call.
 
     Returns:
         A BaseModel containing the extracted safety issues, recommendations, and/or metadata,
-        depending on the input flags.
+        depending on the input flags, or a ``(extracted_data, call_info)``
+        tuple when ``include_call_info`` is True.
 
     Raises:
         InvalidExtractionConfigError: If none of safety_issues, recommendations, or metadata is True.
@@ -188,17 +289,20 @@ def ai_read_report(  # noqa: PLR0913, PLR0917
     )
 
     try:
-        response = ai_caller.query(
+        response, call_info = ai_caller.query(
             model=model,
             reasoning="high",
             system=system_prompt,
             user=user_prompt,
             output_structure=output_model,
+            include_call_info=True,
         )
     except Exception as e:
         msg = f"AI extraction failed for agency '{agency_name}': {type(e).__name__}"
         raise RuntimeError(msg) from e
 
+    if include_call_info:
+        return response, call_info
     return response
 
 
@@ -260,7 +364,7 @@ def chunk_report_into_sections(report_text: str) -> list[dict[str, str]]:
     return chunks_with_pages
 
 
-def extract_report(
+def extract_report(  # noqa: PLR0914
     report_row: pd.Series | dict,
     ai_extraction_config: dict,
     event_type_taxonomy_by_mode: dict[Modes.Mode, list[dict[str, str]]] | None = None,
@@ -275,7 +379,8 @@ def extract_report(
 
     Returns:
         dict: Extracted fields with keys 'report_id', 'safety_issues',
-              'recommendations', 'metadata', and 'sections'.
+              'recommendations', 'metadata', 'sections', and
+              'extraction_info'.
 
     Raises:
         ValueError: If extracted metadata appears invalid or incomplete such that
@@ -300,13 +405,14 @@ def extract_report(
         if report_year < atsb_mode_add_dates[Modes.Mode.m]:
             extraction_config["safety_issues"] = True
 
-    extracted_data = ai_read_report(
+    extracted_data, ai_call_info = ai_read_report(
         agency_name=agency,
         report_text=report_text,
         report_mode=report_mode,
         report_id=report_id,
         agency_id=agency_id,
         event_type_taxonomy_by_mode=event_type_taxonomy_by_mode,
+        include_call_info=True,
         **extraction_config,
     )
 
@@ -364,6 +470,7 @@ def extract_report(
         "recommendations": recommendations if len(recommendations) > 0 else None,
         "metadata": metadata,
         "sections": sections,
+        "extraction_info": build_extraction_info(extraction_config, ai_call_info),
     }
 
 
@@ -404,6 +511,8 @@ def process_reports_parallel(  # noqa: PLR0912, PLR0913, PLR0917
             - recommendations: List of extracted recommendations
             - metadata: Dictionary of extracted occurrence and mode-specific metadata
             - sections: Dictionary of report sections
+            - extraction_info: Nested provenance for the extraction
+              (timestamp, code version, and AI parameters)
 
     Example:
         >>> result = process_reports_parallel(

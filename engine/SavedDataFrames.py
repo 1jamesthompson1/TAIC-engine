@@ -7,6 +7,7 @@ for a specific type of data produced by the engine pipeline.
 No manual read/write of pickle files should be done outside of these classes to ensure consistent validation and error handling. Each class defines the expected columns, and row validation using Pydantic models.
 """
 
+import copy
 from abc import ABC
 from datetime import datetime
 from pathlib import Path
@@ -138,6 +139,42 @@ class SavedDataFrame(ABC):
                 msg = f"Row {idx}: {e}"
                 raise ValidationError(msg) from e
 
+    def _add_missing_optional_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add optional schema columns that are absent from an older pickle.
+
+        This allows new optional columns to be introduced without breaking
+        existing saved data. Required columns are left absent so validation
+        still fails with a clear error.
+
+        Args:
+            df: The dataframe loaded from disk.
+
+        Returns:
+            The dataframe with any missing optional columns filled with their
+            default values, in the expected column order.
+        """
+        missing = [name for name in self._effective_columns if name not in df.columns]
+        if not missing:
+            return df
+
+        missing_required = [
+            name for name in missing if type(self).Row.model_fields[name].is_required()
+        ]
+        if missing_required:
+            # Leave required columns absent so validate() reports them clearly.
+            return df
+
+        filled_df = df.copy()
+        for name in missing:
+            field = type(self).Row.model_fields[name]
+            default = field.get_default(call_default_factory=True)
+            filled_df[name] = [copy.deepcopy(default) for _ in range(len(filled_df))]
+            logger.warning(
+                f"Column '{name}' was missing from {self.path}; filled with its default value"
+            )
+
+        return filled_df[self._effective_columns]
+
     def read(self, validate_data: bool = True) -> pd.DataFrame:
         """Read the dataframe from disk with validation.
 
@@ -151,7 +188,7 @@ class SavedDataFrame(ABC):
             msg = f"File not found: {self.path}"
             raise FileNotFoundError(msg)
 
-        loaded_df = pd.read_pickle(self.path)
+        loaded_df = self._add_missing_optional_columns(pd.read_pickle(self.path))
         if validate_data:
             self.validate(loaded_df)
         logger.debug(f"Read {len(loaded_df)} rows from {self.path}")
@@ -247,6 +284,15 @@ class ExtractedReports(SavedDataFrame):
         sections: list[dict[str, str]] = Field(
             default_factory=list,
             description="Report sections chunked by page, with section keys like 'page_1', 'page_2.1', etc.",
+        )
+        extraction_info: dict[str, Any] = Field(
+            default_factory=dict,
+            description=(
+                "Nested provenance for the extraction: extracted_at, "
+                "code_version (git commit/branch/dirty state and package "
+                "version), and ai_parameters (model and extraction flags). "
+                "This column is not sent to LanceDB."
+            ),
         )
 
 

@@ -55,7 +55,8 @@ def expand_extracted_report_metadata(extracted_report: pd.DataFrame) -> pd.DataF
     extracted_report = extracted_report.copy()
 
     extracted_report = extracted_report.drop(
-        columns=["safety_issues", "recommendations", "sections"]
+        columns=["safety_issues", "recommendations", "sections", "extraction_info"],
+        errors="ignore",
     )
 
     extracted_report["metadata_json"] = extracted_report["metadata"].apply(json.dumps)

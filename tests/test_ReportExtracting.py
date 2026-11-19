@@ -23,7 +23,9 @@ from engine.ExtractionModels import (
 )
 from engine.ReportExtracting import (
     ai_read_report,
+    build_extraction_info,
     chunk_report_into_sections,
+    extract_report,
     get_ai_model,
     load_event_type_taxonomy,
     process_reports_parallel,
@@ -39,6 +41,80 @@ def test_get_ai_model_requires_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(RuntimeError, match="OPENAI_MODEL"):
         get_ai_model()
+
+
+def test_build_extraction_info(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Extraction provenance records the model, time, and code version."""
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-5.4-mini")
+    extraction_config = {
+        "safety_issues": True,
+        "recommendations": False,
+        "metadata": True,
+    }
+
+    ai_call_info = {
+        "model": "gpt-5.4-mini",
+        "reasoning": "high",
+        "temperature": None,
+        "max_output_tokens": 50_000,
+        "store": False,
+        "structured_output": "ExtractedReport",
+    }
+    info = build_extraction_info(extraction_config, ai_call_info)
+
+    assert set(info) == {"extracted_at", "code_version", "ai_parameters"}
+    assert info["extracted_at"].endswith("Z")
+    assert set(info["code_version"]) == {
+        "git_commit",
+        "git_branch",
+        "git_dirty",
+        "package_version",
+    }
+    assert info["ai_parameters"] == {
+        **ai_call_info,
+        "extraction_config": extraction_config,
+    }
+
+
+def test_extract_report_records_ai_call_parameters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """extract_report stores the parameters returned by the AI caller."""
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-5.4-mini")
+    call_info = {
+        "model": "gpt-5.4-mini",
+        "reasoning": "high",
+        "temperature": None,
+        "max_output_tokens": 50_000,
+        "store": False,
+        "structured_output": "ExtractedReport",
+    }
+
+    class FakeOutput:
+        def __init__(self) -> None:
+            self.safety_issues = []
+            self.recommendations = []
+            self.metadata = {"occurrence": {}}
+
+    def fake_ai_read_report(**kwargs: object) -> tuple[FakeOutput, dict]:
+        assert kwargs["include_call_info"] is True
+        return FakeOutput(), call_info
+
+    monkeypatch.setattr("engine.ReportExtracting.ai_read_report", fake_ai_read_report)
+
+    result = extract_report(
+        {"report_id": "TAIC_m_2024_001", "text": "Short report text."},
+        {"TAIC": {"safety_issues": True, "recommendations": False, "metadata": True}},
+    )
+
+    assert result["extraction_info"]["ai_parameters"] == {
+        **call_info,
+        "extraction_config": {
+            "safety_issues": True,
+            "recommendations": False,
+            "metadata": True,
+        },
+    }
 
 
 # Shared comparison helpers used by both singular and full-extraction tests.
@@ -636,6 +712,7 @@ def test_process_handle_already_processed(
             "recommendations": [[] for _ in already_processed_ids],
             "metadata": [{} for _ in already_processed_ids],
             "sections": [[] for _ in already_processed_ids],
+            "extraction_info": [{} for _ in already_processed_ids],
         }
     )
 
@@ -666,6 +743,7 @@ def test_process_handle_already_processed(
             "recommendations": [],
             "metadata": {},
             "sections": [],
+            "extraction_info": {},
         }
 
         # Process reports
@@ -703,8 +781,11 @@ def test_process_handle_already_processed(
         "recommendations",
         "metadata",
         "sections",
+        "extraction_info",
     }, (
-        f"Results should have columns ['report_id', 'safety_issues', 'recommendations', 'metadata', 'sections'], but has {list(results_df.columns)}"
+        "Results should have columns ['report_id', 'safety_issues', "
+        "'recommendations', 'metadata', 'sections', 'extraction_info'], "
+        f"but has {list(results_df.columns)}"
     )
 
     # Assertions: No duplicate report_ids in results

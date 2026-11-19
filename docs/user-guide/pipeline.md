@@ -64,8 +64,10 @@ Each pipeline stage saves its results as pickle (`.pkl`) files in the `output/` 
 | `atsb_website_safety_issues.pkl` | Scraped safety issues from ATSB | [`ATSBWebsiteSafetyIssues`](../api/saveddataframes.md#engine.SavedDataFrames.ATSBWebsiteSafetyIssues) |
 | `tsb_website_recommendations.pkl` | Scraped recommendations from TSB | [`TSBWebsiteRecommendations`](../api/saveddataframes.md#engine.SavedDataFrames.TSBWebsiteRecommendations) |
 | `taic_website_recommendations.pkl` | Scraped recommendations from TAIC | [`TAICWebsiteRecommendations`](../api/saveddataframes.md#engine.SavedDataFrames.TAICWebsiteRecommendations) |
-| `extracted_reports.pkl` | AI-extracted safety issues, recommendations, sections | [`ExtractedReports`](../api/saveddataframes.md#engine.SavedDataFrames.ExtractedReports) |
+| `extracted_reports.pkl` | AI-extracted safety issues, recommendations, sections, and extraction provenance | [`ExtractedReports`](../api/saveddataframes.md#engine.SavedDataFrames.ExtractedReports) |
 | `complete_data.pkl` | Merged canonical dataset for vector DB ingestion | [`DataForVectorDB`](../api/saveddataframes.md#engine.SavedDataFrames.DataForVectorDB) |
 | `vector_db_document_ids.pkl` | Document IDs already embedded (dedup) | [`VectorDBDocumentIDs`](../api/saveddataframes.md#engine.SavedDataFrames.VectorDBDocumentIDs) |
+
+Each `extracted_reports.pkl` row has an `extraction_info` column with nested provenance: `extracted_at`, `code_version` (git commit/branch/dirty state and package version), and `ai_parameters` (model and extraction flags). It is provenance only and is dropped by `Combine` before `complete_data.pkl`, so it is not uploaded to LanceDB.
 
 Vector embeddings are stored externally in **LanceDB** (configured via `VECTORDB_URI`), not in the `output/` directory.

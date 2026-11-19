@@ -486,6 +486,7 @@ class OpenAICaller(BaseAICaller):
         output_structure: type | None = None,
         reasoning: str | None = None,
         raw_output: bool = False,
+        include_call_info: bool = False,
     ) -> Any:  # noqa: ANN401
         """Query the OpenAI/Azure OpenAI model.
 
@@ -497,10 +498,14 @@ class OpenAICaller(BaseAICaller):
             output_structure: Optional structured output format.
             reasoning: Reasoning effort level if applicable.
             raw_output: If True, return raw response object, else formatted output.
+            include_call_info: If True, return a ``(response, call_info)``
+                tuple where ``call_info`` records the parameters sent to the
+                API.
 
         Returns:
             The model's response (formatted or raw based on raw_output parameter),
-            or None if an error occurs or query exceeds limits.
+            or a ``(response, call_info)`` tuple when ``include_call_info`` is
+            True.
 
         Raises:
             ClientNotAvailableError: If OpenAI/Azure client is not configured.
@@ -540,6 +545,17 @@ class OpenAICaller(BaseAICaller):
 
         if reasoning is not None:
             params["reasoning"] = {"effort": reasoning}
+
+        call_info = {
+            "model": params["model"],
+            "reasoning": reasoning,
+            "temperature": params["temperature"],
+            "max_output_tokens": params["max_output_tokens"],
+            "store": params["store"],
+            "structured_output": (
+                output_structure.__name__ if output_structure is not None else None
+            ),
+        }
 
         try:
             if output_structure is not None:
@@ -581,12 +597,15 @@ class OpenAICaller(BaseAICaller):
             )
 
         if raw_output:
-            return response
+            result = response
+        elif output_structure is not None:
+            result = response.output_parsed
+        else:
+            result = response.output_text
 
-        if output_structure is not None:
-            return response.output_parsed
-
-        return response.output_text
+        if include_call_info:
+            return result, call_info
+        return result
 
 
 class AICaller:
@@ -602,13 +621,14 @@ class AICaller:
             for name, definition in MODEL_REGISTRY.items()
         }
 
-    def query(
+    def query(  # noqa: PLR0913, PLR0917
         self,
         system: str,
         user: str,
         temp: float | None = None,
         model: str = "gpt-4",
         max_tokens: int = 50_000,
+        include_call_info: bool = False,
         **kwargs: Any,  # noqa: ANN401
     ) -> Any:  # noqa: ANN401
         """Query an AI model.
@@ -618,11 +638,15 @@ class AICaller:
             user: User message/query.
             temp: Temperature parameter (default: None).
             model: Model to use (default: "gpt-4").
-            max_tokens: Maximum tokens in response (default: 16000).
+            max_tokens: Maximum tokens in response (default: 50000).
+            include_call_info: If True, return a ``(response, call_info)``
+                tuple where ``call_info`` records the parameters sent to the
+                API.
             **kwargs: Additional arguments passed to the model's query method.
 
         Returns:
-            The model's response.
+            The model's response, or a ``(response, call_info)`` tuple when
+            ``include_call_info`` is True.
 
         Raises:
             ModelNotFoundError: If the specified model is not available.
@@ -632,7 +656,14 @@ class AICaller:
 
         selected_model = self.models[model]
 
-        return selected_model.query(system, user, temp, max_tokens=max_tokens, **kwargs)
+        return selected_model.query(
+            system,
+            user,
+            temp,
+            max_tokens=max_tokens,
+            include_call_info=include_call_info,
+            **kwargs,
+        )
 
 
 ai_caller = AICaller()
