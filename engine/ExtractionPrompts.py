@@ -88,9 +88,9 @@ Note that some reports will actually have text that is from a short report bulle
         """
         mode_label = report_mode.value if report_mode else "unknown"
         parts = [
-            f"""You are processing report ID: {self.report_id or 'Unknown'}
+            f"""You are processing report ID: {self.report_id or "Unknown"}
 which is a report of mode {mode_label}
-Agency occurrence ID: {self.agency_id or 'Unknown'}
+Agency occurrence ID: {self.agency_id or "Unknown"}
 From investigation agency: {self.agency_name}
 Based on the provided report text, please extract the following information:
 """
@@ -137,6 +137,8 @@ For reference here are some examples of some safety issues.
 "The maintenance provider did not have a robust quality assurance process to ensure maintenance activities were being completed and documented in accordance with their approved maintenance procedures. This increased the risk of maintenance errors not being identified and rectified"
 
 "The safe navigation bridge procedures described in the operator's safety management system were not adequately implemented by the bridge team. As a result, the risk mitigations inherent to those safe navigation procedures were absent, which allowed minor hazards to escalate and have serious consequences"
+
+For inferred safety issues, only include distinct, high-level safety issues that identify a systemic safety factor with the potential to adversely affect future operations. Do not list ordinary factual findings, observations, or individual events as separate safety issues. Group closely related findings into one safety issue. For ATSB reports, base inferred safety issues primarily on the report's findings or safety issues sections, not on the narrative or factual information sections.
 """
 
         if self.agency_name == "TAIC":
@@ -146,20 +148,23 @@ An exact safety issue will start with something like 'safety issue: ...' and wil
         elif self.agency_name == "TSB":
             prompt += """
 
-An inferred safety issue will generally be found in the "findings" section of the report. You are to treat all "findings as to risk" as 'inferred' safety issues, this is due to a slight terminomology difference between TSB and other agencies. Exact Safety issues are not generally stated in TSB reports, the exception being when there is a format like "Safety issue: ...". There are also "Findings as to causes and contributing factors" which are not safety issues, however in some exceptional cases these may be safety issues and you are to use your judgement. """
+For TSB reports, only extract the numbered items in the "Findings as to risk" section as inferred safety issues. Do not extract items from "Findings as to causes and contributing factors", factual information, analysis, or safety action sections. The number of inferred safety issues should equal the number of numbered findings as to risk. Exact safety issues are not generally stated in TSB reports, the exception being when there is a format like "Safety issue: ..."."""
 
         return prompt
 
     def _recommendations_prompt(self) -> str:
         return f"""Recommendation extraction instructions:
-Please extract all recommendations made in the report. Copy the recommendation verbatim. If there is a unique identifier for the recommendation (e.g Recommendation 1, Rec-01, etc) then include that as the recommendation_id. If there is any context or background information related to the recommendation, include that as recommendation_context (this is sometimes present like a paragraph just before or just after the stated recommendations).
+Please extract only formal safety recommendations made in the report. Copy the recommendation verbatim. If there is a unique identifier for the recommendation (e.g Recommendation 1, Rec-01, etc) then include that as the recommendation_id. If there is any context or background information related to the recommendation, include that as recommendation_context (this is sometimes present like a paragraph just before or just after the stated recommendations).
+Do not include safety advisory notices, safety issue descriptions, observations, or other advisory text. For ATSB reports, a safety recommendation is usually labelled "Safety recommendation" (for example SR-xxx); a safety advisory notice (SAN-xxx) is not a recommendation.
+For the recipient, preserve directorates, branches, and parenthetical qualifiers. If the report uses a shortened name or role title, expand it using the full name or organisation defined elsewhere in the report. For example, expand "RailCorp" to "Rail Corporation New South Wales" when that is the defined name, and include the organisation for role titles such as "Director of Civil Aviation, Civil Aviation Authority of New Zealand" or "Chief Executive Officer of Airways Corporation of New Zealand Limited". Do not add country prefixes that are not part of the defined name, and do not substitute a different parent organisation.
 I only want recommendations that are formally made by {self.agency_name} in the report and which are specific to this particular accident (i.e not previous recommendations they have made in relation to other accidents. However recommendations specific to this accident that were made prior to publication should be included). Do not include any recommendations made by other agencies or entities. I want all recommendations regardless of their response status."""
 
     @staticmethod
     def _metadata_prompt(event_type_taxonomy: list[dict[str, str]] | None) -> str:
         prompt = """Metadata extraction instructions:
 Extract metadata according to the schema and each field description.
-Include only the main occurrence participants (not minor/peripheral mentions).
+Include only the main occurrence participants (not minor/peripheral mentions). For marine occurrences, include the vessel(s) involved in the occurrence and any vessel directly participating in the operation at the time, including tugs released before the accident, barges, towed vessels, and support vessels, even if fewer details are available. Do not include vessels that only responded after the occurrence or that are mentioned as background traffic. For each vessel, use only details explicitly associated with that vessel in the report. Do not copy a detail from another vessel (for example, a ship's classification society) to a tug or barge. For vessel classification, only use information explicitly stated for that vessel; otherwise return None. For owner_operator, use an operator explicitly named in the report, including a company described as operating the vessel or fleet; do not infer it from general knowledge. If the report states that one company operates a group of vessels (for example, a tug fleet), use that operator for each vessel in the group unless the report assigns a different operator.
+For occurrence_datetime.time_zone, use the time zone explicitly stated in the report. If the occurrence narrative or summary gives a specific named time (for example, "Atlantic Daylight Time") and a generic footnote says "all times are..." with a different zone, prefer the specific named time in the occurrence narrative or summary. If a named time zone is given, convert it to the correct UTC offset for the occurrence date, including daylight saving. For example, Atlantic Daylight Time is UTC-03:00 and Eastern Daylight Time is UTC-04:00. Do not substitute a nearby province or state time zone.
 IMPORTANT:
 If a data summary is provided in the report that is to be used to decide on which vehicles/vessels should be included or not included for metadata extraction. Not all data may be found in the table and so you should use the table as a guide but also use the rest of the report to find any missing information.
 You are free to make unit conversions as needed. Some fields require more inference than others and will be stated in descriptions. For most of the fields reasonable inference is allowed.
@@ -171,10 +176,13 @@ Vessel propulsion extraction instructions:
 - The primary propulsion for a sailing vessel is wind/sail, even if auxiliary engines are mentioned in the report
 
 Occurrence type hierarchy rule:
-When assigning occurrence_type, you MUST follow this hierarchy:
-- If the occurrence has a consequence/outcome event (e.g., collision with terrain, forced landing) caused by a contributing factor (e.g., fuel starvation, loss of control), you MUST assign the CONSEQUENCE/OUTCOME event type, NOT the contributing factor.
-- Example:
+- If the occurrence ends in a consequence/outcome event (e.g., collision with terrain, forced landing) caused by a contributing factor (e.g., fuel starvation, loss of control), assign the consequence/outcome event type, NOT the contributing factor.
+- Do NOT treat a recovery or response action (e.g., go-around, missed approach, emergency/precautionary descent) as the occurrence type when it was a response to an earlier event. Use the earlier event type instead.
+- Examples:
   * Fuel starvation that causes a forced landing → "Forced / Precautionary landing", NOT "Fuel related"
+  * Loss of control that causes a collision with terrain → "Terrain collisions", NOT "Aircraft control"
+  * Loss of separation followed by a go-around → "Aircraft separation", NOT "Missed approach / Go-around"
+  * Cabin depressurisation followed by an emergency descent → "Systems", NOT "Emergency / Precautionary descent"
 """
         if event_type_taxonomy:
             event_types_list = "\n".join(

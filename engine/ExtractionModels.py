@@ -43,7 +43,7 @@ class RecommendationItem(BaseModel):
     )
     recipient: str | None = Field(
         default=None,
-        description="The recipient of the recommendation. I.e who the recommendation was addressed to. Avoid using acronyms or abbreviations and prefer to use the fully qualified name (i.e the complete name of company that would be most unambiguous outside the context of this particular report, this might require you using information from other parts of the report). If no recipient is given then return None.",
+        description="Use the recipient name as it appears in the recommendation. Preserve any directorate, branch, or parenthetical qualifier. If the recommendation uses an abbreviation or shortened name that the report defines elsewhere, expand it to that defined full name. Do not add country prefixes that are not part of the defined name, and do not substitute a parent organisation for the named recipient. If no recipient is given then return None.",
     )
     recommendation_context: str | None = Field(
         default=None,
@@ -67,7 +67,14 @@ class OccurrenceDateTime(BaseModel):
             "Canonical UTC offset string for the occurrence local time "
             "in the form UTC+HH:MM or UTC-HH:MM "
             "(e.g. 'UTC+13:00', 'UTC-06:00', 'UTC+09:30'). "
-            "This should be the time zone that is used throughout the report."
+            "Use the time zone explicitly stated in the report. If the "
+            "occurrence narrative or summary names a specific time zone and a "
+            "generic footnote gives a different zone, prefer the narrative or "
+            "summary. Convert named time zones to the correct UTC offset for "
+            "the occurrence date, including daylight saving. For example, "
+            "Atlantic Daylight Time is UTC-03:00 and Eastern Daylight Time is "
+            "UTC-04:00. This should be the time zone that is used throughout "
+            "the report."
         ),
         pattern=r"^UTC[+-]\d{2}:\d{2}$",
     )

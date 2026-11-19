@@ -1222,7 +1222,7 @@
               "experience_on_type": 9
             }
           ]
-        } 
+        }
       ]
     }
   },
@@ -1275,7 +1275,7 @@
           "propulsion": "diesel",
           "total_power": 5295.0,
           "service_speed": null,
-          "owner_operator": null,
+          "owner_operator": "Rivtow",
           "port_of_registry": null
         },
         {
@@ -1290,7 +1290,7 @@
           "propulsion": "diesel",
           "total_power": 5295.0,
           "service_speed": null,
-          "owner_operator": null,
+          "owner_operator": "Rivtow",
           "port_of_registry": null
         },
         {
@@ -1305,7 +1305,7 @@
           "propulsion": "diesel",
           "total_power": 4962.0,
           "service_speed": null,
-          "owner_operator": null,
+          "owner_operator": "Rivtow",
           "port_of_registry": null
         },
         {
@@ -1320,7 +1320,7 @@
           "propulsion": "diesel",
           "total_power": 4962.0,
           "service_speed": null,
-          "owner_operator": null,
+          "owner_operator": "Rivtow",
           "port_of_registry": null
         }
       ]

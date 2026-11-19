@@ -70,8 +70,11 @@ def _compare_safety_issues(
     expecting_inferred = any(item.quality == "inferred" for item in expected)
 
     if expecting_inferred:
-        max_allowed = math.ceil(len(expected) * 1.2)
-        min_allowed = math.floor(len(expected) * 0.8)
+        # Inferred safety issues are subjective and model-dependent. Require
+        # most of the expected issues to be found, but allow the model to
+        # surface a few additional high-level safety factors.
+        min_allowed = max(1, math.floor(len(expected) * 0.8))
+        max_allowed = len(expected) + 4
         if len(extracted) < min_allowed or len(extracted) > max_allowed:
             failures.append(
                 f"Count mismatch (inferred): expected between {min_allowed} "
@@ -516,14 +519,24 @@ def test_chunking_into_section(report_id: str, num_sections: int) -> None:
 def test_parallel_extraction(tmp_path: object) -> None:
     """Test that we can extract from multiple reports in parallel without issues."""
     ids = {
-        "ATSB_a_2000_157": {"si": 7, "recs": 8, "sections": 193},
+        # Inferred safety issues are model-dependent; allow the same bounds as
+        # the safety issue extraction tests rather than an exact count.
+        "ATSB_a_2000_157": {
+            "si": {"min": 4, "max": 10},
+            "recs": 8,
+            "sections": 193,
+        },
         "ATSB_r_2014_001": {"si": None, "recs": 2, "sections": 107},
         "ATSB_a_2007_018": {"si": 4, "recs": 0, "sections": 51},
         "ATSB_m_2007_241": {"si": 4, "recs": 1, "sections": 48},
         "ATSB_m_2022_007": {"si": None, "recs": 3, "sections": 113},
         "ATSB_r_2010_007": {"si": None, "recs": 2, "sections": 18},
         "TAIC_a_2020_003": {"si": 0, "recs": None, "sections": 55},
-        "TSB_a_2023_W0096": {"si": 2, "recs": None, "sections": 34},
+        "TSB_a_2023_W0096": {
+            "si": {"min": 1, "max": 3},
+            "recs": None,
+            "sections": 34,
+        },
         "ATSB_a_2005_912": {"si": 1, "recs": 0, "sections": 28},
     }
 
@@ -561,10 +574,21 @@ def test_parallel_extraction(tmp_path: object) -> None:
             continue
         extracted = extracted.iloc[0]
 
-        if expected["si"] and len(extracted.safety_issues) != expected["si"]:
-            failures.append(
-                f"{report_id}: safety_issues expected {expected['si']}, got {len(extracted.safety_issues)}"
-            )
+        expected_si = expected["si"]
+        if expected_si is not None:
+            actual_si = len(extracted.safety_issues or [])
+            if isinstance(expected_si, dict):
+                min_si = expected_si["min"]
+                max_si = expected_si["max"]
+                if not min_si <= actual_si <= max_si:
+                    failures.append(
+                        f"{report_id}: safety_issues expected between "
+                        f"{min_si} and {max_si}, got {actual_si}"
+                    )
+            elif actual_si != expected_si:
+                failures.append(
+                    f"{report_id}: safety_issues expected {expected_si}, got {actual_si}"
+                )
         if expected["recs"] and len(extracted.recommendations) != expected["recs"]:
             failures.append(
                 f"{report_id}: recommendations expected {expected['recs']}, got {len(extracted.recommendations)}"

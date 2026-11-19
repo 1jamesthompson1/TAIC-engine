@@ -38,6 +38,7 @@ cp .env.example .env
 
 Edit `.env` with the Azure Storage account name, Azure OpenAI endpoint, `OPENAI_MODEL`, and (when needed) `AZURE_CLIENT_ID`.
 
+`OPENAI_MODEL` is required. The model and extraction timestamp are recorded in the `extraction_info` column for each report.
 
 Azure authentication uses Microsoft Entra ID only. There are no storage account keys, SAS tokens, or Azure OpenAI API keys. Run `az login` locally so `DefaultAzureCredential` can use your Azure CLI identity. In production and CI, the engine uses a user-assigned managed identity selected with `AZURE_CLIENT_ID`:
 

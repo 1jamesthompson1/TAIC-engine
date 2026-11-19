@@ -36,7 +36,7 @@ def get_ai_model() -> str:
     """
     model = os.getenv("OPENAI_MODEL", "").strip()
     if not model:
-        msg = "OPENAI_MODEL must be set.]"
+        msg = "OPENAI_MODEL must be set."
         raise RuntimeError(msg)
     return model
 

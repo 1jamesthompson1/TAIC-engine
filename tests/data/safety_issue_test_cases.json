@@ -114,7 +114,7 @@
     "report_id": "TAIC_r_2021_101",
     "expected": [
       {
-        "safety_issue": "The number of wagons loaded on the Aratere's outer tracks at the time of the accident exceeded the limits that would have put them in a position to be safely accommodated without presenting difficulty when coupling.",
+        "safety_issue": "The number of wagons loaded on the Aratere's outer tracks at the time of the accident exceeded the limits that could be safely accommodated without presenting difficulty when coupling.",
         "quality": "exact",
         "safety_issue_id": null
       }

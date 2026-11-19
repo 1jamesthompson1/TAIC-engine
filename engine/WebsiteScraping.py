@@ -1250,13 +1250,16 @@ class ATSBReportScraper(ReportScraper):
             return None
 
         summary_heading = None
-        # Try to find h2 with "Executive summary" or "Investigation summary"
-        for candidate in summary_div.find_all("h3"):
+        # Try to find a heading with "Executive summary", "Investigation summary",
+        # "Safety summary", or "Abstract". ATSB uses h3 for newer pages and h4
+        # for some older reports.
+        for candidate in summary_div.find_all(["h3", "h4"]):
             heading = candidate.get_text(strip=True).lower()
             summary_headings = [
                 "executive summary",
                 "investigation summary",
                 "safety summary",
+                "abstract",
             ]
             if any(h in heading for h in summary_headings):
                 summary_heading = candidate
@@ -1265,7 +1268,7 @@ class ATSBReportScraper(ReportScraper):
         if summary_heading is None:
             h2_headings = list(summary_div.find_all("h2"))
             for candidate in h2_headings:
-                if candidate.text.strip().lower() == "summary":
+                if candidate.text.strip().lower() in {"summary", "abstract"}:
                     summary_heading = candidate
                     break
 
@@ -1289,7 +1292,10 @@ class ATSBReportScraper(ReportScraper):
 
         summary_parts = []
         for sibling in summary_heading.find_next_siblings():
-            if sibling.name in {"h1", "h2", "h3"} or sibling.class_ == "show-more":
+            if (
+                sibling.name in {"h1", "h2", "h3", "h4"}
+                or sibling.class_ == "show-more"
+            ):
                 break
             if (
                 sibling.find("h2") is not None
