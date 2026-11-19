@@ -79,6 +79,11 @@ except Exception as exc:
 
 logger = get_logger(__name__)
 
+PDF_STATUS_UNKNOWN = "unknown"
+PDF_STATUS_AVAILABLE = "available"
+PDF_STATUS_MISSING = "missing"
+PDF_STATUS_FAILED = "failed"
+
 
 class ScraperRequestError(ValueError):
     """Raised when a remote resource cannot be fetched successfully."""
@@ -124,6 +129,9 @@ class ReportMetadata:
     agency_id: str | None
     occurrence_date: str | None = None
     publication_date: str | None = None
+    scraped_at: datetime | None = None
+    pdf_status: str = PDF_STATUS_UNKNOWN
+    pdf_checked_at: datetime | None = None
 
     def __repr__(self) -> str:
         """Return string representation of ReportMetadata.
@@ -162,6 +170,8 @@ class ReportScraperSettings:
     pdf_storage_manager: PDFStorageManager
     refresh_metadata: bool = False
     scraper_workers: int = 1
+    repair_pdfs: bool = False
+    pdf_retry_days: int = 60
 
     def __post_init__(self) -> None:
         """Convert refresh_metadata to ignore_metadata for backward compatibility."""
@@ -533,7 +543,7 @@ class ReportScraper(WebsiteScraper, ABC):
             "duration": duration,
         }
 
-    def collect_report(self, report_data: ReportUrlData) -> bool:
+    def collect_report(self, report_data: ReportUrlData) -> bool:  # noqa: PLR0911
         """Collect a single report.
 
         Args:
@@ -548,11 +558,19 @@ class ReportScraper(WebsiteScraper, ABC):
         occurrence_date = report_data.occurrence_date
         publication_date = report_data.publication_date
 
-        if (
-            not self.settings.ignore_metadata
-            and self.report_titles_df.query(f"report_id == '{report_id}'").shape[0] > 0
-        ):
-            return True
+        existing_rows = self.report_titles_df.query(f"report_id == '{report_id}'")
+        existing_row = existing_rows.iloc[0] if not existing_rows.empty else None
+
+        if not self.settings.ignore_metadata and existing_row is not None:
+            if self.settings.pdf_storage_manager.pdf_exists(report_id):
+                if existing_row.get("pdf_status") != PDF_STATUS_AVAILABLE:
+                    self._update_pdf_status(report_id, PDF_STATUS_AVAILABLE)
+                return True
+
+            if not self.settings.repair_pdfs and not self._should_retry_pdf(
+                existing_row, publication_date
+            ):
+                return True
 
         try:
             webpage = self.get(url)
@@ -576,9 +594,8 @@ class ReportScraper(WebsiteScraper, ABC):
         parsed_url = urlparse(url)
         base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
-        outcome = False
         # Download to cloud storage instead of local file
-        outcome = self.download_report(report_id, soup, base_url, agency_id)
+        pdf_status = self.download_report(report_id, soup, base_url, agency_id)
 
         if (
             self.report_titles_df.query("report_id == @report_id").empty
@@ -589,18 +606,17 @@ class ReportScraper(WebsiteScraper, ABC):
                 report_id, url, occurrence_date, publication_date, soup
             )
             self.__add_report_metadata_to_df(metadata)
-        elif outcome is None:
-            outcome = True
 
-        return outcome
+        self._update_pdf_status(report_id, pdf_status)
+        return pdf_status == PDF_STATUS_AVAILABLE
 
-    def download_report(
+    def download_report(  # noqa: PLR0911
         self,
         report_id: str,
         soup: BeautifulSoup,
         base_url: str,
         agency_id: str | None = None,
-    ) -> bool | None:
+    ) -> str:
         """Download report directly to PDF storage container.
 
         Args:
@@ -610,19 +626,19 @@ class ReportScraper(WebsiteScraper, ABC):
             agency_id: Optional agency-specific ID for filtering PDF links.
 
         Returns:
-            True if successful, False if failed, None if no action taken.
+            The resulting PDF status: ``available``, ``missing``, or ``failed``.
         """
         # Check if PDF already exists and we're not refreshing
         if not self.settings.refresh and self.settings.pdf_storage_manager.pdf_exists(
             report_id
         ):
-            return True
+            return PDF_STATUS_AVAILABLE
 
         # Use provided agency_id for PDF link filtering
         # Find PDF links
         pdf_link = self._find_pdf_links(soup, report_id, agency_id)
         if pdf_link is False:
-            return False
+            return PDF_STATUS_MISSING
 
         link = urljoin(base_url, pdf_link)
 
@@ -632,19 +648,97 @@ class ReportScraper(WebsiteScraper, ABC):
                 allow_redirects=True,
                 timeout=30,
             )
-            if response is None:
-                logger.warning(f"{report_id}.pdf download failed: No response")
-                return False
+        except Exception as e:
+            logger.warning(f"{report_id}.pdf download failed: {e}")
+            return PDF_STATUS_FAILED
 
-            # Upload to storage
-            self.settings.pdf_storage_manager.upload_pdf(
+        if response is None:
+            logger.warning(f"{report_id}.pdf download failed: No response")
+            return PDF_STATUS_FAILED
+
+        if not response.content.startswith(b"%PDF"):
+            logger.warning(
+                f"{report_id}.pdf download did not return a PDF "
+                f"(status {response.status_code}, {len(response.content)} bytes)"
+            )
+            return PDF_STATUS_FAILED
+
+        try:
+            uploaded = self.settings.pdf_storage_manager.upload_pdf(
                 report_id, response.content, overwrite=self.settings.refresh
             )
         except Exception as e:
-            logger.warning(f"{report_id}.pdf processing failed: {e}")
-            return False
-        else:
+            logger.warning(f"{report_id}.pdf upload failed: {e}")
+            return PDF_STATUS_FAILED
+
+        if not uploaded:
+            logger.warning(f"{report_id}.pdf upload failed or was skipped")
+            return PDF_STATUS_FAILED
+
+        return PDF_STATUS_AVAILABLE
+
+    def _should_retry_pdf(
+        self, existing_row: pd.Series, publication_date: str | None
+    ) -> bool:
+        """Return whether a report without a PDF should be checked again.
+
+        A report that was previously missing a PDF is only retried after the
+        configured cooldown so that known no-PDF reports do not generate a
+        request on every run. A newer publication date or an explicit repair
+        run bypasses the wait.
+
+        Args:
+            existing_row: The current ``report_titles`` row.
+            publication_date: The publication date from the current listing.
+
+        Returns:
+            True if the report should be re-checked for a PDF.
+        """
+        status = existing_row.get("pdf_status", PDF_STATUS_UNKNOWN)
+        if status != PDF_STATUS_MISSING:
             return True
+
+        checked_at = existing_row.get("pdf_checked_at")
+        if pd.isna(checked_at):
+            return True
+
+        checked_dt = pd.to_datetime(checked_at, errors="coerce")
+        if pd.isna(checked_dt):
+            return True
+
+        published_dt = pd.to_datetime(publication_date, errors="coerce")
+        if pd.notna(published_dt) and published_dt > checked_dt:
+            return True
+
+        now = (
+            pd.Timestamp.now(tz=checked_dt.tz) if checked_dt.tz else pd.Timestamp.now()
+        )
+        return now - checked_dt >= pd.Timedelta(days=self.settings.pdf_retry_days)
+
+    def _update_pdf_status(self, report_id: str, status: str) -> None:
+        """Persist the latest PDF state for a report.
+
+        Args:
+            report_id: The standardized report identifier.
+            status: One of the PDF status constants.
+        """
+        with self._metadata_file_lock:
+            row_indices = self.report_titles_df.index[
+                self.report_titles_df["report_id"] == report_id
+            ].tolist()
+            if not row_indices:
+                return
+
+            row_index = row_indices[0]
+            if (
+                self.report_titles_df.loc[row_index, "pdf_status"] == status
+                and status == PDF_STATUS_AVAILABLE
+            ):
+                return
+
+            self.report_titles_df.loc[row_index, "pdf_status"] = status
+            self.report_titles_df.loc[row_index, "pdf_checked_at"] = datetime.now()
+            self.settings.report_titles_dc.save(self.report_titles_df)
 
     @staticmethod
     def _find_pdf_links(
@@ -660,15 +754,14 @@ class ReportScraper(WebsiteScraper, ABC):
         Returns:
             URL of the PDF link, or False if no suitable link found.
         """
-        # Find all the links that end with .pdf and download them
-        pdf_links = [
-            a["href"]
+        # Find all PDF links. Use the URL path so query strings and uppercase
+        # extensions such as ".PDF" are handled too.
+        pdf_anchors = [
+            a
             for a in soup.find_all("a", href=True)
-            if a["href"].endswith(".pdf")
+            if urlparse(a["href"]).path.lower().endswith(".pdf")
         ]
-
-        # Remove duplicates
-        pdf_links = list(dict.fromkeys(pdf_links))
+        pdf_links = list(dict.fromkeys(a["href"] for a in pdf_anchors))
 
         if len(pdf_links) == 0:
             logger.warning(
@@ -695,13 +788,39 @@ class ReportScraper(WebsiteScraper, ABC):
                 ]
             ]
 
-            # If there are still multiple suitable links try and remove all the ones taht have "interim" or "prelim" in them
+            anchor_by_href = {a["href"]: a for a in pdf_anchors}
+
+            def _link_text(link: str) -> str:
+                anchor = anchor_by_href.get(link)
+                return anchor.get_text(" ", strip=True) if anchor else ""
+
+            # Remove related documents such as appendices, interim reports,
+            # preliminary reports, and foreign-language versions. The main
+            # report is usually the only candidate left.
+            bad_terms = (
+                "interim",
+                "interin",
+                "prelim",
+                "appendix",
+                "appendices",
+                "supplement",
+                "ifr",
+                "inuk",
+                "coroner",
+                "bsu",
+                "german",
+            )
             if len(suitable_pdf_links) > 1:
-                suitable_pdf_links = [
+                main_links = [
                     link
                     for link in suitable_pdf_links
-                    if "interim" not in link.lower() and "prelim" not in link.lower()
+                    if not any(
+                        term in f"{link} {_link_text(link)}".lower()
+                        for term in bad_terms
+                    )
                 ]
+                if main_links:
+                    suitable_pdf_links = main_links
 
             # If there are still multiple suitable links and we have an agency_id,
             # filter by links that contain the agency_id
@@ -713,6 +832,46 @@ class ReportScraper(WebsiteScraper, ABC):
                 ]
                 if len(agency_filtered_links) > 0:
                     suitable_pdf_links = agency_filtered_links
+
+            # Prefer the page's primary "Download report" button over related
+            # documents such as supplementary or foreign reports.
+            if len(suitable_pdf_links) > 1:
+                primary_links = [
+                    link
+                    for link in suitable_pdf_links
+                    if (
+                        "btn--primary"
+                        in (anchor_by_href.get(link).get("class", []) or [])
+                        or "download this investigation report"
+                        in _link_text(link).lower()
+                        or "download report" in _link_text(link).lower()
+                    )
+                ]
+                primary_links = list(dict.fromkeys(primary_links))
+                if len(primary_links) == 1:
+                    suitable_pdf_links = primary_links
+
+            # Score the remaining candidates by how much they look like the
+            # main report, then only accept a unique best candidate.
+            if len(suitable_pdf_links) > 1:
+
+                def _score(link: str) -> int:
+                    key = f"{link} {_link_text(link)}".lower()
+                    score = 0
+                    if "final" in key:
+                        score += 50
+                    if "report" in key:
+                        score += 30
+                    if agency_id is not None and agency_id.lower() in key:
+                        score += 20
+                    return score
+
+                scored = sorted(
+                    ((_score(link), link) for link in suitable_pdf_links),
+                    reverse=True,
+                )
+                if len(scored) == 1 or scored[0][0] > scored[1][0]:
+                    suitable_pdf_links = [scored[0][1]]
 
             if len(suitable_pdf_links) > 1:
                 links_str = "\n".join(suitable_pdf_links)
@@ -761,13 +920,29 @@ class ReportScraper(WebsiteScraper, ABC):
             existing_idx = self.report_titles_df.index[
                 self.report_titles_df["report_id"] == metadata.report_id
             ].tolist()
+            metadata.scraped_at = datetime.now()
+            new_row = metadata.as_report_row()
             if existing_idx:
+                # Preserve PDF state columns; they are updated separately.
+                for column in ("pdf_status", "pdf_checked_at"):
+                    new_row[self.report_titles_df.columns.get_loc(column)] = (
+                        self.report_titles_df.iloc[existing_idx[0]][column]
+                    )
                 # Replace the existing row
-                self.report_titles_df.loc[existing_idx[0]] = metadata.as_report_row()
+                self.report_titles_df.loc[existing_idx[0]] = new_row
             else:
-                # Add as new row
-                self.report_titles_df.loc[len(self.report_titles_df)] = (
-                    metadata.as_report_row()
+                # Add as new row. Use concat rather than the next positional
+                # label because the index can contain gaps after rows are
+                # removed for a repair.
+                self.report_titles_df = pd.concat(
+                    [
+                        self.report_titles_df,
+                        pd.DataFrame(
+                            [new_row],
+                            columns=self.report_titles_df.columns,
+                        ),
+                    ],
+                    ignore_index=True,
                 )
 
             self.settings.report_titles_dc.save(self.report_titles_df)
@@ -795,7 +970,7 @@ class TAICReportScraper(ReportScraper):
         self.website_reports_table_dc = website_reports_table_dc
         self.agency_reports = self.__get_taic_investigations()
 
-    def __get_taic_investigations(self) -> pd.DataFrame:
+    def __get_taic_investigations(self) -> pd.DataFrame:  # noqa: PLR0915
         """TAICs websites provides an investigation table than can be easily read by pandas read_html.
 
         Returns:
@@ -803,6 +978,10 @@ class TAICReportScraper(ReportScraper):
         """
         investigations = self.website_reports_table_dc.read_or_create()
         page_num = 0
+        consecutive_pages_without_new = 0
+        max_pages_without_new = 4
+        max_page_attempts = 3
+        page_attempts = 0
         pbar = tqdm()
 
         def extract_date(report: BeautifulSoup, label: str) -> str | None:
@@ -823,10 +1002,21 @@ class TAICReportScraper(ReportScraper):
                     f"https://taic.org.nz/inquiries-recommendations?type=investigation&field_jurisdiction[11]=11&field_status[260]=260&sort_by=incident&page={page_num}"
                 ).content
             except hrequests.exceptions.ClientException as e:
-                logger.warning(f"Timeout while scraping TAIC investigations: {e}")
+                page_attempts += 1
+                logger.warning(
+                    f"Timeout while scraping TAIC investigations: {e} "
+                    f"(attempt {page_attempts}/{max_page_attempts})"
+                )
+                if page_attempts >= max_page_attempts:
+                    logger.exception(
+                        f"Giving up on TAIC listing page {page_num} after "
+                        f"{max_page_attempts} attempts."
+                    )
+                    break
                 logger.info(f"Retrying page {page_num}")
                 continue
 
+            page_attempts = 0
             soup = BeautifulSoup(new_content, "html.parser")
 
             results_list = soup.find_all("div", class_="search-results__list")
@@ -851,6 +1041,10 @@ class TAICReportScraper(ReportScraper):
                 for report in results_list[0].find_all("div", recursive=False)
             ]
 
+            if not all_reports_on_page:
+                tqdm.write(f"No reports found on page {page_num}, stopping.")
+                break
+
             new_reports = pd.DataFrame(
                 filter(
                     lambda r: r["id"] not in investigations["id"].to_numpy(),
@@ -859,10 +1053,26 @@ class TAICReportScraper(ReportScraper):
             )
 
             if new_reports.empty:
-                tqdm.write(f"No new reports found on page {page_num}, stopping.")
-                break
-
-            investigations = pd.concat([investigations, new_reports], ignore_index=True)
+                # New reports can be published against an older incident and
+                # therefore appear on a later listing page, even when the first
+                # page is fully cached. Keep looking for a short distance
+                # before deciding we have reached the end of the useful pages.
+                consecutive_pages_without_new += 1
+                tqdm.write(
+                    f"No new reports on page {page_num} "
+                    f"({consecutive_pages_without_new}/{max_pages_without_new})."
+                )
+                if consecutive_pages_without_new >= max_pages_without_new:
+                    tqdm.write(
+                        f"No new reports for {max_pages_without_new} consecutive "
+                        f"pages, stopping at page {page_num}."
+                    )
+                    break
+            else:
+                consecutive_pages_without_new = 0
+                investigations = pd.concat(
+                    [investigations, new_reports], ignore_index=True
+                )
 
             page_num += 1
             pbar.update(1)
@@ -1064,6 +1274,12 @@ class ATSBReportScraper(ReportScraper):
         )
 
         dfs = []
+        mode_keys = []
+        mode_key_by_string = {
+            "aviation": Modes.Mode.a.name,
+            "rail": Modes.Mode.r.name,
+            "marine": Modes.Mode.m.name,
+        }
         for mode in (
             pbar := tqdm(
                 [Modes.Mode.as_string(mode).lower() for mode in self.settings.modes]
@@ -1143,11 +1359,11 @@ class ATSBReportScraper(ReportScraper):
             )
 
             dfs.append(mode_investigations)
+            mode_keys.append(mode_key_by_string[mode])
 
         if len(dfs) == 0:
             return investigations
 
-        mode_keys = [m.name for m in self.settings.modes]
         new_investigations = pd.concat(dfs, axis=0, keys=mode_keys).reset_index(
             level=1, drop=True
         )

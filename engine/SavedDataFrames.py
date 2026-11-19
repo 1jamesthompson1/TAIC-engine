@@ -317,6 +317,9 @@ class ReportTitles(SavedDataFrame):
         agency_id: str
         occurrence_date: str | None = None
         publication_date: str | None = None
+        scraped_at: datetime | None = None
+        pdf_status: Literal["unknown", "available", "missing", "failed"] = "unknown"
+        pdf_checked_at: datetime | None = None
 
 
 class ATSBWebsiteSafetyIssues(SavedDataFrame):

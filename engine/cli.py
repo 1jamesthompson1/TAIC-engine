@@ -131,6 +131,7 @@ def scrape(output_dir: Path, config: dict, refresh: bool) -> None:
         download_config.get("ignored_reports"),
         refresh,
         pdf_storage_manager,
+        pdf_retry_days=download_config.get("pdf_retry_days", 60),
     )
 
     for agency in download_config.get("agencies"):

@@ -322,6 +322,142 @@ def test_report_collection(
         assert result == expected
 
 
+def test_find_pdf_links_skips_appendix() -> None:
+    """The main report is preferred over its appendix."""
+    soup = bs4.BeautifulSoup(
+        """
+        <a href="/files/200401353_report.pdf">200401353_report.pdf (PDF)</a>
+        <a href="/files/200401353_appendix.pdf">200401353_appendix.pdf (PDF)</a>
+        """,
+        "html.parser",
+    )
+
+    result = WebsiteScraping.ReportScraper._find_pdf_links(
+        soup, "ATSB_a_2004_353", "200401353"
+    )
+
+    assert result == "/files/200401353_report.pdf"
+
+
+def test_find_pdf_links_skips_interim_and_preliminary() -> None:
+    """Only interim/preliminary documents means there is no final report yet."""
+    soup = bs4.BeautifulSoup(
+        """
+        <a href="/files/AO-2024-054_Preliminary.pdf">AO-2024-054 Preliminary</a>
+        <a href="/files/AO-2024-054_Interim.pdf">AO-2024-054 Interim</a>
+        """,
+        "html.parser",
+    )
+
+    result = WebsiteScraping.ReportScraper._find_pdf_links(
+        soup, "ATSB_a_2024_054", "AO-2024-054"
+    )
+
+    assert result is False
+
+
+def test_find_pdf_links_prefers_primary_download() -> None:
+    """A primary Download report button wins over related documents."""
+    soup = bs4.BeautifulSoup(
+        """
+        <a class="btn btn--primary" href="/files/main.pdf">Download report</a>
+        <a class="btn btn--ghost" href="/files/related.pdf">Related report</a>
+        """,
+        "html.parser",
+    )
+
+    result = WebsiteScraping.ReportScraper._find_pdf_links(
+        soup, "TAIC_m_2024_207", "MO-2024-207"
+    )
+
+    assert result == "/files/main.pdf"
+
+
+def test_find_pdf_links_returns_false_when_still_ambiguous() -> None:
+    """Do not guess between two equally plausible main reports."""
+    soup = bs4.BeautifulSoup(
+        """
+        <a href="/files/report_a.pdf">Report A</a>
+        <a href="/files/report_b.pdf">Report B</a>
+        """,
+        "html.parser",
+    )
+
+    result = WebsiteScraping.ReportScraper._find_pdf_links(
+        soup, "ATSB_a_2007_358", "200700358"
+    )
+
+    assert result is False
+
+
+def test_find_pdf_links_handles_uppercase_and_query_string() -> None:
+    """PDF detection should be case-insensitive and ignore query strings."""
+    soup = bs4.BeautifulSoup(
+        """
+        <a href="/files/REPORT.PDF?download=1">Download report</a>
+        <a href="/files/other.pdf">Other</a>
+        """,
+        "html.parser",
+    )
+
+    result = WebsiteScraping.ReportScraper._find_pdf_links(
+        soup, "TAIC_m_2024_207", "MO-2024-207"
+    )
+
+    assert result == "/files/REPORT.PDF?download=1"
+
+
+def test_find_pdf_links_prefers_final_report_over_plain_report() -> None:
+    """A final report should outrank a generic report link."""
+    soup = bs4.BeautifulSoup(
+        """
+        <a href="/files/200401353_report.pdf">Report</a>
+        <a href="/files/200401353_final_report.pdf">Final report</a>
+        """,
+        "html.parser",
+    )
+
+    result = WebsiteScraping.ReportScraper._find_pdf_links(
+        soup, "ATSB_a_2004_353", "200401353"
+    )
+
+    assert result == "/files/200401353_final_report.pdf"
+
+
+def test_find_pdf_links_prefers_english_tsb_download() -> None:
+    """The English TSB report link wins over the Inuktitut version."""
+    soup = bs4.BeautifulSoup(
+        """
+        <a href="/files/M00H0008.pdf">Download this investigation report in PDF</a>
+        <a href="/files/m00h0008_inuk.pdf">m00h0008_inuk.pdf</a>
+        """,
+        "html.parser",
+    )
+
+    result = WebsiteScraping.ReportScraper._find_pdf_links(
+        soup, "TSB_m_2000_H0008", "M00H0008"
+    )
+
+    assert result == "/files/M00H0008.pdf"
+
+
+def test_find_pdf_links_skips_supplemental_report() -> None:
+    """Supplementary documents should not be selected as the main report."""
+    soup = bs4.BeautifulSoup(
+        """
+        <a href="/files/main_report.pdf">Main report</a>
+        <a href="/files/main_report_supplementary.pdf">Supplementary report</a>
+        """,
+        "html.parser",
+    )
+
+    result = WebsiteScraping.ReportScraper._find_pdf_links(
+        soup, "ATSB_m_2005_222", "MAIR222"
+    )
+
+    assert result == "/files/main_report.pdf"
+
+
 @pytest.mark.parametrize(
     "agency, expected_urls, test_cases",
     [

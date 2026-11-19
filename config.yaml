@@ -3,9 +3,11 @@ engine:
     end_year: 2025
     max_per_year: 100
     start_year: 2000
-    ignored_reports: ['TAIC_m_2022_202', 'TAIC_m_2022_203']
+    ignored_reports: ['TAIC_m_2022_202', 'TAIC_m_2022_203', 'ATSB_a_2011_078']
     modes: ['a', 'r','m']
     agencies: ['ATSB', 'TSB', 'TAIC']
+    # Re-check reports whose page had no PDF after this many days.
+    pdf_retry_days: 60
   output:
     folder_name: "output"
     container_name: "engineoutput"

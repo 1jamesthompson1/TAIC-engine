@@ -285,7 +285,10 @@ class PDFStorageManager(AzureStorageBase):
             True if uploaded, False if skipped
         """
         blob_name = self._report_id_to_blob_name(report_id)
-        return self.upload_blob(blob_name, pdf_data, overwrite)
+        uploaded = self.upload_blob(blob_name, pdf_data, overwrite)
+        if uploaded and blob_name not in self.pdf_list:
+            self.pdf_list.append(blob_name)
+        return uploaded
 
     def download_pdf(self, report_id: str) -> bytes | None:
         """Download a PDF from the container.
