@@ -530,6 +530,93 @@ def test_atsb_report_metadata_scrape(
     assert len(summary) == expected["summary_length"]
 
 
+@pytest.mark.parametrize(
+    "html, expected",
+    [
+        pytest.param(
+            """
+            <div class="atsb-investigation-section--first">
+              <h3><span>Investigation summary</span></h3>
+              <h4>What happened</h4>
+              <p>The aircraft was on approach.</p>
+              <h4>What the ATSB found</h4>
+              <p>The throttle linkage failed.</p>
+              <p class="show-more"></p>
+              <h3>The occurrence</h3>
+              <p>This should not be included.</p>
+            </div>
+            """,
+            "What happened\nThe aircraft was on approach.\n"
+            "What the ATSB found\nThe throttle linkage failed.",
+            id="h3 summary includes h4 subsections",
+        ),
+        pytest.param(
+            """
+            <div class="atsb-investigation-section--first">
+              <h3>Safety summary</h3>
+              <h4>What happened</h4>
+              <p>Summary body.</p>
+              <h3>The occurrence</h3>
+              <p>This should not be included.</p>
+            </div>
+            """,
+            "What happened\nSummary body.",
+            id="safety summary includes h4 subsections",
+        ),
+        pytest.param(
+            """
+            <div class="atsb-investigation-section--first">
+              <h2>Summary</h2>
+              <p>Old summary body.</p>
+              <h2>The occurrence</h2>
+              <p>This should not be included.</p>
+            </div>
+            """,
+            "Old summary body.",
+            id="old h2 summary",
+        ),
+        pytest.param(
+            """
+            <div class="atsb-investigation-section--first">
+              <h2>Preliminary report</h2>
+              <p>Preliminary report body.</p>
+              <h2>The occurrence</h2>
+              <p>This should not be included.</p>
+            </div>
+            """,
+            "Preliminary report body.",
+            id="preliminary report summary",
+        ),
+        pytest.param(
+            """
+            <div class="atsb-investigation-section--first">
+              <h4>Executive summary</h4>
+              <p>Executive summary body.</p>
+              <h4>Next section</h4>
+              <p>This should not be included.</p>
+            </div>
+            """,
+            "Executive summary body.",
+            id="h4 summary stops at next h4",
+        ),
+        pytest.param(
+            """
+            <div class="atsb-investigation-section--first">
+              <p>Only body text.</p>
+            </div>
+            """,
+            "Only body text.",
+            id="no summary heading falls back to section text",
+        ),
+    ],
+)
+def test_atsb_get_summary_structure(html: str, expected: str) -> None:
+    """Test ATSB summary extraction against static page structures."""
+    soup = bs4.BeautifulSoup(html, "html.parser")
+
+    assert WebsiteScraping.ATSBReportScraper.get_summary(soup) == expected
+
+
 def test_atsb_safety_issue_scrape(tmpdir: object) -> None:
     """Test scraping ATSB safety issues from the website."""
     # Copy existing files to temporary directory for automatic cleanup

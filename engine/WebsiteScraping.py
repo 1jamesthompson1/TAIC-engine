@@ -1326,12 +1326,18 @@ class ATSBReportScraper(ReportScraper):
 
         logger.debug(f"Found summary heading: {summary_heading.text.strip()}")
 
+        # Sub-headings below the summary heading (for example the h4
+        # "What happened" sections under an h3 "Investigation summary") are
+        # part of the summary. Only stop at a heading at the same or a higher
+        # level, such as the next h3 section.
+        summary_heading_level = int(summary_heading.name[1])
+
         summary_parts = []
         for sibling in summary_heading.find_next_siblings():
             if (
-                sibling.name in {"h1", "h2", "h3", "h4"}
-                or sibling.class_ == "show-more"
-            ):
+                sibling.name in {"h1", "h2", "h3", "h4", "h5", "h6"}
+                and int(sibling.name[1]) <= summary_heading_level
+            ) or sibling.class_ == "show-more":
                 break
             if (
                 sibling.find("h2") is not None
