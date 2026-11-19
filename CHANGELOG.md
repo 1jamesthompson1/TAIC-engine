@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.0.1 (2026-11-19)
+
+### Bug Fixes
+
+- Handle failed scrapes of the ATSB website
+  ([`ea12af5`](https://github.com/1jamesthompson1/TAIC-engine/commit/ea12af5cb36a06b2b6e8a57c624e897f38a936a7))
+
+
 ## v2.0.0 (2026-11-19)
 
 ### Bug Fixes
