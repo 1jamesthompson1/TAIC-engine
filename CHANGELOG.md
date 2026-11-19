@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v2.0.0 (2026-11-19)
+
+### Bug Fixes
+
+- Small fixes as doing run through ([#340](https://github.com/1jamesthompson1/TAIC-engine/pull/340),
+  [`4ff8762`](https://github.com/1jamesthompson1/TAIC-engine/commit/4ff8762d90d4c138726eeccb3051ee2a706e0ea6))
+
+### Documentation
+
+- Update docs to be more uniform and guide the reader
+  ([#340](https://github.com/1jamesthompson1/TAIC-engine/pull/340),
+  [`4ff8762`](https://github.com/1jamesthompson1/TAIC-engine/commit/4ff8762d90d4c138726eeccb3051ee2a706e0ea6))
+
+### Features
+
+- Engine Version 2 ([#340](https://github.com/1jamesthompson1/TAIC-engine/pull/340),
+  [`4ff8762`](https://github.com/1jamesthompson1/TAIC-engine/commit/4ff8762d90d4c138726eeccb3051ee2a706e0ea6))
+
+
 ## v1.0.1 (2026-06-30)
 
 ### Bug Fixes
