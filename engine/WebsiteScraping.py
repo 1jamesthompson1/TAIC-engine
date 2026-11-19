@@ -1266,6 +1266,9 @@ class ATSBReportScraper(ReportScraper):
 
         Returns:
             DataFrame of ATSB investigations indexed by mode.
+
+        Raises:
+            ScraperRequestError: If ATSB cannot be reached and no cached table is available.
         """
         investigations = self.report_table_dc.read_or_create()
 
@@ -1295,14 +1298,23 @@ class ATSBReportScraper(ReportScraper):
                 try:
                     page = self.get(
                         page_url,
+                        attempts=5,
+                        wait_min_s=2.0,
+                        wait_max_s=30.0,
                     ).content
 
-                except hrequests.exceptions.ClientException as e:
+                except (hrequests.exceptions.ClientException, ScraperRequestError) as e:
+                    logger.warning(f"Failed to scrape {mode} page {page_num}: {e}")
+
+                    if investigations.empty:
+                        raise
+
                     logger.warning(
-                        f"Timeout while trying to scrape {mode} page {page_num}: {e}"
+                        "ATSB is unavailable; continuing with the cached "
+                        f"investigations table ({len(investigations)} rows). "
+                        "New ATSB reports will be picked up on the next run."
                     )
-                    logger.info("Retrying...")
-                    continue
+                    return investigations
 
                 soup = BeautifulSoup(page, "html.parser")
 
@@ -1992,7 +2004,9 @@ Spread across {safety_issue_df["report_id"].nunique()} reports""")
             pbar.set_description(f"Scraping {mode} safety issues")
 
             max_failures = 5
+            max_total_failures = 15
             failed = 0
+            total_failures = 0
             while True:
                 pbar.set_description(f"Scraping page {current_page} of mode {mode}")
                 url = base_url.format(mode=mode_to_mode_num[mode], page=current_page)
@@ -2003,6 +2017,13 @@ Spread across {safety_issue_df["report_id"].nunique()} reports""")
                         f"Failed to scrape page {current_page} of mode {mode}: {e}"
                     )
                     failed += 1
+                    total_failures += 1
+                    if total_failures >= max_total_failures:
+                        pbar.write(
+                            f"Giving up on {mode} safety issues after "
+                            f"{total_failures} failed page requests."
+                        )
+                        break
                     if failed > max_failures:
                         failed = 0
                         current_page += 1
