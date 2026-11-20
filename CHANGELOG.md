@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.0.4 (2026-11-20)
+
+### Bug Fixes
+
+- Handle different TAIC summary formats
+  ([`61673b1`](https://github.com/1jamesthompson1/TAIC-engine/commit/61673b1630ecdb036b3910ba7835b1492f6cad57))
+
+
 ## v2.0.3 (2026-11-20)
 
 ### Bug Fixes
