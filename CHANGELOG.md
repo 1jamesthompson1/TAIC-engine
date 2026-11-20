@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.0.2 (2026-11-20)
+
+### Bug Fixes
+
+- Clean up release to include a uv lock
+  ([`0b1eec5`](https://github.com/1jamesthompson1/TAIC-engine/commit/0b1eec59d23e147425b7ce50102e341453532109))
+
+
 ## v2.0.1 (2026-11-19)
 
 ### Bug Fixes
