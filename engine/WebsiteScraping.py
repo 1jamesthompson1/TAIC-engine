@@ -84,6 +84,8 @@ PDF_STATUS_AVAILABLE = "available"
 PDF_STATUS_MISSING = "missing"
 PDF_STATUS_FAILED = "failed"
 
+TAIC_SUMMARY_BLOCK_TAGS = ("h1", "h2", "h3", "h4", "h5", "h6", "p", "li")
+
 
 class ScraperRequestError(ValueError):
     """Raised when a remote resource cannot be fetched successfully."""
@@ -1114,7 +1116,7 @@ class TAICReportScraper(ReportScraper):
             .to_dict("records")
         ]
 
-    def get_report_metadata(  # noqa: PLR6301
+    def get_report_metadata(
         self,
         report_id: str,
         url: str,
@@ -1143,20 +1145,7 @@ class TAICReportScraper(ReportScraper):
             title = "Unknown Title"
             agency_id = None
 
-        # Get the report text
-        report_text_div = soup.find("div", class_="node--type-investigation")
-        if report_text_div is None:
-            logger.warning(f"Failed to get report text for {report_id}")
-            summary = None
-        else:
-            sections = report_text_div.find_all("section", recursive=False)
-
-            executive_summary_section = sections[0]
-
-            summary = executive_summary_section.find("p").get_text().strip()
-
-            if not summary:
-                summary = None
+        summary = self.get_summary(soup)
 
         return ReportMetadata(
             url=url,
@@ -1170,6 +1159,62 @@ class TAICReportScraper(ReportScraper):
             publication_date=publication_date,
             misc={},
         )
+
+    @staticmethod
+    def get_summary(soup: BeautifulSoup) -> str | None:
+        """Extract the executive summary from a TAIC investigation page.
+
+        Newer TAIC report pages put the executive summary in an ordered list
+        below the figures rather than in the first paragraph. Read every
+        heading, paragraph, and list item in the summary section so that both
+        the old and new page layouts are handled. Figure captions and the
+        decorative section heading are excluded.
+
+        Args:
+            soup: BeautifulSoup object of the report page.
+
+        Returns:
+            The executive summary as newline-separated blocks, or None when the
+            page has no summary content.
+        """
+        report_text_div = soup.find("div", class_="node--type-investigation")
+        if report_text_div is None:
+            return None
+
+        sections = report_text_div.find_all("section", recursive=False)
+        if not sections:
+            return None
+
+        executive_summary_section = sections[0]
+        content = executive_summary_section.find(
+            "div", class_="field--name-field-rich-content"
+        )
+        if content is None:
+            content = executive_summary_section
+
+        summary_parts = []
+        for element in content.find_all(TAIC_SUMMARY_BLOCK_TAGS):
+            if element.find_parent(["figure", "figcaption"]) is not None:
+                continue
+            # Skip nested blocks so a paragraph inside a list item is not
+            # duplicated. Outer blocks already contain the inner text.
+            if element.find_parent(TAIC_SUMMARY_BLOCK_TAGS) is not None:
+                continue
+            if element.find_parent("div", class_="content-block--title") is not None:
+                continue
+
+            text = " ".join(element.get_text(" ", strip=True).split())
+            if text:
+                summary_parts.append(text)
+
+        if not summary_parts:
+            first_paragraph = executive_summary_section.find("p")
+            if first_paragraph is None:
+                return None
+            text = " ".join(first_paragraph.get_text(" ", strip=True).split())
+            return text or None
+
+        return "\n".join(summary_parts)
 
 
 class ATSBReportScraper(ReportScraper):

@@ -753,6 +753,107 @@ def test_atsb_get_summary_structure(html: str, expected: str) -> None:
     assert WebsiteScraping.ATSBReportScraper.get_summary(soup) == expected
 
 
+# Static mockups of the executive summary structures observed on taic.org.nz
+# on 2026-11-20. MO-2024-207 uses the current list-based layout; AO-2000-015
+# uses the older paragraph-based layout. Edge cases are synthetic.
+@pytest.mark.parametrize(
+    "html, expected",
+    [
+        pytest.param(
+            """
+            <div class="node--type-investigation">
+              <section>
+                <div class="content-block content-block--title">
+                  <h2>
+                    <span class="heading heading--english">Executive summary</span>
+                    <span class="heading heading--maori">Tuhinga whakarāpopoto</span>
+                  </h2>
+                </div>
+                <div class="field field--name-field-rich-content">
+                  <div class="field__item">
+                    <p></p>
+                    <figure>
+                      <img src="vessel.jpg">
+                      <figcaption>Figure 1: Pilot vessel, Takitimu II</figcaption>
+                    </figure>
+                    <figure>
+                      <figcaption>Figure 2: Location of accident</figcaption>
+                    </figure>
+                    <br>
+                    <h2>What happened</h2>
+                    <ol>
+                      <li>On 26 December 2024, the pilot vessel ran aground.</li>
+                      <li>The master and deckhand suffered minor injuries.</li>
+                    </ol>
+                    <h2>Why it happened</h2>
+                    <ol>
+                      <li>The master navigated primarily by eye in restricted visibility.</li>
+                    </ol>
+                  </div>
+                </div>
+              </section>
+            </div>
+            """,
+            "What happened\n"
+            "On 26 December 2024, the pilot vessel ran aground.\n"
+            "The master and deckhand suffered minor injuries.\n"
+            "Why it happened\n"
+            "The master navigated primarily by eye in restricted visibility.",
+            id="taic.org.nz-MO-2024-207-2026-11-20-list-layout-with-figures",
+        ),
+        pytest.param(
+            """
+            <div class="node--type-investigation">
+              <section>
+                <div class="field field--name-field-rich-content">
+                  <p>First summary paragraph.</p>
+                  <p>Second summary paragraph.</p>
+                </div>
+              </section>
+            </div>
+            """,
+            "First summary paragraph.\nSecond summary paragraph.",
+            id="taic.org.nz-AO-2000-015-2026-11-20-paragraph-layout",
+        ),
+        pytest.param(
+            """
+            <div class="node--type-investigation">
+              <section>
+                <div class="field field--name-field-rich-content">
+                  <ul>
+                    <li><p>Nested list paragraph.</p></li>
+                  </ul>
+                  <figure><p>Figure caption text.</p></figure>
+                </div>
+              </section>
+            </div>
+            """,
+            "Nested list paragraph.",
+            id="taic.org.nz-MO-2024-207-2026-11-20-nested-blocks-and-figures",
+        ),
+        pytest.param(
+            """
+            <div class="node--type-investigation">
+              <section><div class="field field--name-field-rich-content"></div></section>
+            </div>
+            """,
+            None,
+            id="synthetic-2026-11-20-empty-summary",
+        ),
+        pytest.param(
+            "<html><body><p>Not a report page.</p></body></html>",
+            None,
+            id="synthetic-2026-11-20-non-report-page",
+        ),
+    ],
+)
+def test_taic_get_summary_structure(html: str, expected: str | None) -> None:
+    """Test TAIC summary extraction against static page structures."""
+    soup = bs4.BeautifulSoup(html, "html.parser")
+
+    assert WebsiteScraping.TAICReportScraper.get_summary(soup) == expected
+
+
 def test_atsb_safety_issue_scrape(tmpdir: object) -> None:
     """Test scraping ATSB safety issues from the website."""
     # Copy existing files to temporary directory for automatic cleanup
