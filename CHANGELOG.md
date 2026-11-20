@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.0.3 (2026-11-20)
+
+### Bug Fixes
+
+- Add error handling to the optimization of table
+  ([`4a90370`](https://github.com/1jamesthompson1/TAIC-engine/commit/4a90370134d80e7440379bb6c6a0d6c94571f017))
+
+
 ## v2.0.2 (2026-11-20)
 
 ### Bug Fixes
