@@ -1,9 +1,10 @@
 """Tests for Embedding module."""
 
 import hashlib
-from datetime import datetime
-from unittest.mock import patch
+from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch
 
+import lancedb
 import numpy as np
 import pandas as pd
 import pytest
@@ -69,6 +70,57 @@ def test_lancedb_storage_options_system_identity(
     options = Embedding.get_lancedb_storage_options("az://test-vectordb/test")
 
     assert options == {"account_name": "testaccount"}
+
+
+def test_optimize_tables_failure_does_not_raise() -> None:
+    """Optimization failures must not fail the embedding pipeline."""
+    vdb = object.__new__(Embedding.VectorDB)
+    vdb.table_name = "main"
+    vdb.report_text_table_name = "report_text"
+    vdb.table = MagicMock()
+    vdb.report_text_table = MagicMock()
+    vdb.table.optimize.side_effect = RuntimeError("boom")
+    vdb.report_text_table.optimize.side_effect = RuntimeError("boom")
+
+    vdb._optimize_tables()
+
+    vdb.table.optimize.assert_called_once()
+    vdb.report_text_table.optimize.assert_called_once()
+
+
+def test_tag_tables_failure_does_not_raise() -> None:
+    """Tagging failures must not fail the embedding pipeline."""
+    vdb = object.__new__(Embedding.VectorDB)
+    vdb.table_name = "main"
+    vdb.report_text_table_name = "report_text"
+    vdb.table = MagicMock()
+    vdb.report_text_table = MagicMock()
+    vdb.table.tags.create.side_effect = RuntimeError("boom")
+    vdb.report_text_table.tags.create.side_effect = RuntimeError("boom")
+
+    vdb._tag_tables("engine-run-test")
+
+    vdb.table.tags.create.assert_called_once_with("engine-run-test", vdb.table.version)
+    vdb.report_text_table.tags.create.assert_called_once_with(
+        "engine-run-test", vdb.report_text_table.version
+    )
+
+
+def test_lancedb_optimize_keeps_tagged_versions(tmp_path: object) -> None:
+    """LanceDB optimize must not fail when an old version is tagged."""
+    db = lancedb.connect(str(tmp_path / "lancedb"))
+    table = db.create_table(
+        "tagged_test",
+        pd.DataFrame({"id": [1], "vector": [[0.0, 0.0]]}),
+    )
+    table.add(pd.DataFrame({"id": [2], "vector": [[0.0, 0.0]]}))
+    table.tags.create("old-tag", 1)
+
+    table.add(pd.DataFrame({"id": [3], "vector": [[0.0, 0.0]]}))
+
+    table.optimize(cleanup_older_than=timedelta(0))
+
+    assert "old-tag" in table.tags.list()
 
 
 def test_upload_report_text_table(tmp_path: object) -> None:

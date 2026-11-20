@@ -7,7 +7,7 @@ database and embedding them for search and analysis.
 import os
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import ClassVar
 
 import lancedb
@@ -561,6 +561,50 @@ class VectorDB:
                 future.result()
                 yield future_to_ids[future]
 
+    def _tag_tables(self, tag_name: str) -> None:
+        """Tag the current version of both vector tables.
+
+        Tagging is best-effort: a failure is logged but does not fail the
+        pipeline after the embeddings have already been committed.
+        """
+        for table, table_name in (
+            (self.table, self.table_name),
+            (self.report_text_table, self.report_text_table_name),
+        ):
+            try:
+                table.tags.create(tag_name, table.version)
+                logger.info(
+                    f"Tagged version {table.version} of {table_name} as '{tag_name}'."
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to tag table %s; continuing without a run tag.",
+                    table_name,
+                )
+
+    def _optimize_tables(self) -> None:
+        """Clean up and compact both vector tables.
+
+        LanceDB 0.41's ``optimize`` retains tagged versions instead of raising,
+        so old engine-run and manual tags are preserved. Cleanup is best-effort:
+        a failure is logged but does not fail the pipeline after the embeddings
+        have already been committed.
+        """
+        for table, table_name in (
+            (self.table, self.table_name),
+            (self.report_text_table, self.report_text_table_name),
+        ):
+            try:
+                table.optimize(cleanup_older_than=timedelta(days=14))
+                logger.info(
+                    f"Optimized table {table_name} by cleaning up old versions and compacting files."
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to optimize table %s; continuing without cleanup/compaction.",
+                    table_name,
+                )
+
     def process_extracted_reports(
         self,
         complete_data_dc: DataForVectorDB,
@@ -650,14 +694,5 @@ class VectorDB:
 
         logger.info("Finished embedding all reports.")
         tag_name = f"engine-run-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        self.table.tags.create(tag_name, self.table.version)
-        logger.info(f"Tagged version {self.table.version} as '{tag_name}'.")
-        # Using these deprecated methods as bug in 0.34: https://github.com/lance-format/lance/issues/7653 wiating for 0.35 release to fix it
-        self.table.cleanup_old_versions()
-        self.table.compact_files()
-        # self.table.optimize(cleanup_older_than=timedelta(days=14))  # noqa: ERA001
-        logger.info(
-            f"Optimized table {self.table_name} by cleaning up old versions and compacting files."
-        )
-
-        logger.info("Creating search indices")
+        self._tag_tables(tag_name)
+        self._optimize_tables()
